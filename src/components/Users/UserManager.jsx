@@ -4,15 +4,42 @@ import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
 import { api } from '../../services/api';
 
-export function UserManager({ users = [], onRefresh }) {
+export function UserManager({ users = [], onRefresh, userRole = 'ADMIN' }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [departments, setDepartments] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     role: 'STAFF',
-    department: 'Phòng Kỹ Thuật & IT',
+    department: '',
     phone: '',
   });
+
+  React.useEffect(() => {
+    api.getCategories('DEPARTMENT')
+      .then((res) => {
+        const list = res.data || [];
+        setDepartments(list);
+        if (list.length > 0 && !formData.department) {
+          setFormData((prev) => ({ ...prev, department: list[0].name }));
+        }
+      })
+      .catch((err) => console.error('Error fetching departments:', err));
+  }, []);
+
+  if (userRole !== 'ADMIN') {
+    return (
+      <div className="bg-white p-12 rounded-3xl border border-pastel-200/80 shadow-soft text-center space-y-3">
+        <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+          <Shield size={24} />
+        </div>
+        <h3 className="text-base font-bold text-slate-800">Khu Vực Dành Riêng Cho Quản Trị Viên</h3>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          Chỉ tài khoản Quản trị viên tối cao (ADMIN) mới có quyền truy cập, tiếp nhận nhân sự mới và phân quyền hệ thống.
+        </p>
+      </div>
+    );
+  }
 
   const roleMap = {
     ADMIN: { label: 'Quản trị viên', variant: 'danger' },
@@ -150,17 +177,21 @@ export function UserManager({ users = [], onRefresh }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Phòng ban</label>
+              <label className="block font-semibold text-slate-700 mb-1">Phòng ban công tác</label>
               <select
                 value={formData.department}
                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
               >
-                <option value="Phòng Kỹ Thuật & IT">Phòng Kỹ Thuật & IT</option>
-                <option value="Phòng Kế Toán & Tài Chính">Phòng Kế Toán & Tài Chính</option>
-                <option value="Phòng Hành Chính Nhân Sự">Phòng Hành Chính Nhân Sự</option>
-                <option value="Ban Giám Đốc">Ban Giám Đốc</option>
-                <option value="Phòng Kinh Doanh & Marketing">Phòng Kinh Doanh & Marketing</option>
+                {departments.length === 0 ? (
+                  <option value="">Đang tải phòng ban...</option>
+                ) : (
+                  departments.map((d) => (
+                    <option key={d.id} value={d.name}>
+                      {d.name}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
             <div>

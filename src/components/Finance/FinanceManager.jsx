@@ -25,17 +25,44 @@ import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
 
-export function FinanceManager({ financeList = [], monthlyData, onRefresh }) {
+export function FinanceManager({ financeList = [], monthlyData, onRefresh, userRole = 'ADMIN' }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [categories, setCategories] = useState([]);
   const [formData, setFormData] = useState({
     type: 'REVENUE',
-    category: 'Hợp đồng dịch vụ phần mềm',
+    category: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
     description: '',
     invoice_number: ''
   });
+
+  React.useEffect(() => {
+    api.getCategories('FINANCE_CATEGORY')
+      .then((res) => {
+        const list = res.data || [];
+        setCategories(list);
+        if (list.length > 0 && !formData.category) {
+          setFormData((prev) => ({ ...prev, category: list[0].name }));
+        }
+      })
+      .catch((err) => console.error('Error fetching finance categories:', err));
+  }, []);
+
+  if (userRole === 'STAFF') {
+    return (
+      <div className="bg-white p-12 rounded-3xl border border-pastel-200/80 shadow-soft text-center space-y-3">
+        <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
+          <TrendingDown size={24} />
+        </div>
+        <h3 className="text-base font-bold text-slate-800">Quyền Hạn Bị Giới Hạn</h3>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          Tài khoản Nhân viên (STAFF) không có quyền xem dữ liệu tài chính & doanh thu của doanh nghiệp. Vui lòng liên hệ Quản trị viên nếu cần cấp quyền.
+        </p>
+      </div>
+    );
+  }
 
   const formatVND = (num) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
@@ -306,15 +333,22 @@ export function FinanceManager({ financeList = [], monthlyData, onRefresh }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Hạng mục</label>
-              <input
-                type="text"
-                required
-                placeholder="VD: Hợp đồng bảo trì phần mềm"
+              <label className="block font-semibold text-slate-700 mb-1">Hạng mục thu / chi</label>
+              <select
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
-              />
+              >
+                {categories.length === 0 ? (
+                  <option value="">Đang tải danh mục...</option>
+                ) : (
+                  categories.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Ngày ghi nhận</label>

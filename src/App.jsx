@@ -8,6 +8,7 @@ import { TaskManager } from './components/Tasks/TaskManager';
 import { ContractManager } from './components/Contracts/ContractManager';
 import { AttendanceManager } from './components/Attendance/AttendanceManager';
 import { UserManager } from './components/Users/UserManager';
+import { CategoryManager } from './components/Categories/CategoryManager';
 import { Login } from './components/Auth/Login';
 import { api } from './services/api';
 import { Loader2 } from 'lucide-react';
@@ -113,7 +114,7 @@ export default function App() {
       <Sidebar
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
-        isCloudflare={true}
+        userRole={currentUser?.role || 'STAFF'}
         overdueCount={overdueCount}
       />
 
@@ -146,6 +147,7 @@ export default function App() {
                 <AssetManager
                   assets={assets}
                   users={users}
+                  userRole={currentUser?.role}
                   onRefresh={loadAllData}
                 />
               )}
@@ -154,6 +156,7 @@ export default function App() {
                 <FinanceManager
                   financeList={financeList}
                   monthlyData={monthlyData}
+                  userRole={currentUser?.role}
                   onRefresh={loadAllData}
                 />
               )}
@@ -189,7 +192,14 @@ export default function App() {
               {currentTab === 'users' && (
                 <UserManager
                   users={users}
+                  userRole={currentUser?.role}
                   onRefresh={loadAllData}
+                />
+              )}
+
+              {currentTab === 'categories' && (
+                <CategoryManager
+                  userRole={currentUser?.role}
                 />
               )}
             </>

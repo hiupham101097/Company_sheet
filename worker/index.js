@@ -620,6 +620,11 @@ app.get('/api/users', async (c) => {
 
 app.post('/api/users', async (c) => {
   try {
+    const role = c.req.header('x-user-role') || 'STAFF';
+    if (role !== 'ADMIN') {
+      return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) mới có quyền thêm nhân sự' }, 403);
+    }
+
     const body = await c.req.json();
     const id = `usr_${Date.now()}`;
     await c.env.DB.prepare(`
@@ -637,6 +642,146 @@ app.post('/api/users', async (c) => {
     ).run();
 
     return c.json({ success: true, message: 'Đã thêm nhân sự' });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// ========================
+// 9. CATEGORIES (QUẢN LÝ DANH MỤC ĐỘNG)
+// ========================
+async function ensureCategories(db) {
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        code TEXT,
+        description TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+
+    const count = (await db.prepare('SELECT count(*) as count FROM categories').first())?.count || 0;
+    if (count === 0) {
+      const initialCats = [
+        // Loại tài sản
+        { id: 'cat_ast_1', type: 'ASSET_CATEGORY', name: 'Máy tính xách tay', code: 'LAPTOP', description: 'Máy tính laptop Dell, MacBook, ThinkPad' },
+        { id: 'cat_ast_2', type: 'ASSET_CATEGORY', name: 'Màn hình hiển thị', code: 'MONITOR', description: 'Màn hình văn phòng, đồ họa 4K' },
+        { id: 'cat_ast_3', type: 'ASSET_CATEGORY', name: 'Thiết bị văn phòng', code: 'OFFICE_EQUIP', description: 'Máy in, máy scan, máy chiếu' },
+        { id: 'cat_ast_4', type: 'ASSET_CATEGORY', name: 'Thiết bị mạng', code: 'NETWORK', description: 'Router, Switch, Wifi access point' },
+        { id: 'cat_ast_5', type: 'ASSET_CATEGORY', name: 'Bàn ghế văn phòng', code: 'FURNITURE', description: 'Ghế công thái học, bàn làm việc' },
+        { id: 'cat_ast_6', type: 'ASSET_CATEGORY', name: 'Thiết bị ngoại vi', code: 'PERIPHERAL', description: 'Bàn phím, chuột, tai nghe call center' },
+
+        // Loại thu chi
+        { id: 'cat_fin_1', type: 'FINANCE_CATEGORY', name: 'Hợp đồng dịch vụ phần mềm', code: 'REV_SOFTWARE', description: 'Nguồn thu từ gia công & bảo trì phần mềm' },
+        { id: 'cat_fin_2', type: 'FINANCE_CATEGORY', name: 'Tư vấn kiến trúc Cloud', code: 'REV_CLOUD', description: 'Nguồn thu dịch vụ tư vấn Cloud & DevOps' },
+        { id: 'cat_fin_3', type: 'FINANCE_CATEGORY', name: 'Bảo trì & Vận hành hệ thống', code: 'REV_MAINTAIN', description: 'Phí bảo dưỡng hệ thống định kỳ' },
+        { id: 'cat_fin_4', type: 'FINANCE_CATEGORY', name: 'Mua sắm thiết bị & Tài sản', code: 'EXP_EQUIP', description: 'Chi phí mua sắm laptop, bàn ghế, thiết bị mới' },
+        { id: 'cat_fin_5', type: 'FINANCE_CATEGORY', name: 'Chi phí điện nước & Thuê văn phòng', code: 'EXP_OFFICE', description: 'Tiền thuê sảnh, internet, điện nước' },
+        { id: 'cat_fin_6', type: 'FINANCE_CATEGORY', name: 'Chi phí văn phòng phẩm & Tiếp khách', code: 'EXP_OPERATION', description: 'Văn phòng phẩm, cafe, tiếp đối tác' },
+
+        // Phòng ban doanh nghiệp
+        { id: 'cat_dep_1', type: 'DEPARTMENT', name: 'Ban Giám Đốc', code: 'BOD', description: 'Lãnh đạo & Điều hành chiến lược' },
+        { id: 'cat_dep_2', type: 'DEPARTMENT', name: 'Phòng Kế Toán & Tài Chính', code: 'ACC', description: 'Quản trị dòng tiền, hóa đơn, lương bổng' },
+        { id: 'cat_dep_3', type: 'DEPARTMENT', name: 'Phòng Kỹ Thuật & IT', code: 'IT', description: 'Lập trình, hạ tầng Cloud, quản lý thiết bị' },
+        { id: 'cat_dep_4', type: 'DEPARTMENT', name: 'Phòng Hành Chính Nhân Sự', code: 'HR', description: 'Tuyển dụng, chấm công, phúc lợi' },
+        { id: 'cat_dep_5', type: 'DEPARTMENT', name: 'Phòng Kinh Doanh & Marketing', code: 'SALES', description: 'Phát triển khách hàng, hợp đồng' }
+      ];
+
+      for (const item of initialCats) {
+        await db.prepare(`
+          INSERT INTO categories (id, type, name, code, description)
+          VALUES (?, ?, ?, ?, ?)
+        `).bind(item.id, item.type, item.name, item.code, item.description).run();
+      }
+    }
+  } catch (err) {
+    console.error('ensureCategories error:', err.message);
+  }
+}
+
+// Lấy danh sách danh mục (có thể lọc theo ?type=...)
+app.get('/api/categories', async (c) => {
+  try {
+    await ensureCategories(c.env.DB);
+    const type = c.req.query('type');
+    let query = 'SELECT * FROM categories';
+    let params = [];
+    if (type) {
+      query += ' WHERE type = ?';
+      params.push(type);
+    }
+    query += ' ORDER BY type ASC, created_at ASC';
+
+    const res = await c.env.DB.prepare(query).bind(...params).all();
+    return c.json({ success: true, data: res.results || [] });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// Thêm danh mục mới (Chỉ ADMIN)
+app.post('/api/categories', async (c) => {
+  try {
+    const role = c.req.header('x-user-role') || 'STAFF';
+    if (role !== 'ADMIN') {
+      return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) mới có quyền quản lý danh mục' }, 403);
+    }
+
+    const { type, name, code, description } = await c.req.json();
+    if (!type || !name) {
+      return c.json({ success: false, message: 'Phân loại và tên danh mục là bắt buộc' }, 400);
+    }
+
+    const id = `cat_${Date.now()}`;
+    await c.env.DB.prepare(`
+      INSERT INTO categories (id, type, name, code, description)
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(id, type, name, code || '', description || '').run();
+
+    return c.json({ success: true, message: 'Đã thêm danh mục thành công', data: { id, type, name, code, description } });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// Cập nhật danh mục (Chỉ ADMIN)
+app.put('/api/categories/:id', async (c) => {
+  try {
+    const role = c.req.header('x-user-role') || 'STAFF';
+    if (role !== 'ADMIN') {
+      return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) mới có quyền sửa danh mục' }, 403);
+    }
+
+    const id = c.req.param('id');
+    const { name, code, description } = await c.req.json();
+    await c.env.DB.prepare(`
+      UPDATE categories
+      SET name = COALESCE(?, name),
+          code = COALESCE(?, code),
+          description = COALESCE(?, description)
+      WHERE id = ?
+    `).bind(name, code, description, id).run();
+
+    return c.json({ success: true, message: 'Đã cập nhật danh mục' });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// Xóa danh mục (Chỉ ADMIN)
+app.delete('/api/categories/:id', async (c) => {
+  try {
+    const role = c.req.header('x-user-role') || 'STAFF';
+    if (role !== 'ADMIN') {
+      return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) mới có quyền xóa danh mục' }, 403);
+    }
+
+    const id = c.req.param('id');
+    await c.env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(id).run();
+    return c.json({ success: true, message: 'Đã xóa danh mục' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
   }

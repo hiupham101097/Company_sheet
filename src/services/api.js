@@ -1,9 +1,22 @@
 const API_BASE = '/api';
 
 async function request(endpoint, options = {}) {
+  let userRole = 'STAFF';
+  let userId = '';
+  try {
+    const userStr = localStorage.getItem('currentUser');
+    if (userStr) {
+      const u = JSON.parse(userStr);
+      userRole = u.role || 'STAFF';
+      userId = u.id || '';
+    }
+  } catch {}
+
   const res = await fetch(`${API_BASE}${endpoint}`, {
     headers: {
       'Content-Type': 'application/json',
+      'x-user-role': userRole,
+      'x-user-id': userId,
       ...options.headers,
     },
     ...options,
@@ -19,6 +32,12 @@ async function request(endpoint, options = {}) {
 export const api = {
   // Xác thực đăng nhập
   login: (credentials) => request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+
+  // Quản lý Danh mục động (Categories API)
+  getCategories: (type) => request(type ? `/categories?type=${type}` : '/categories'),
+  createCategory: (data) => request('/categories', { method: 'POST', body: JSON.stringify(data) }),
+  updateCategory: (id, data) => request(`/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCategory: (id) => request(`/categories/${id}`, { method: 'DELETE' }),
 
   // Tổng quan & Báo cáo
   getDashboardSummary: () => request('/reports/dashboard-summary'),

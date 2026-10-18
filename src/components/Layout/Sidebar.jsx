@@ -7,39 +7,57 @@ import {
   FileText,
   CalendarCheck,
   Users,
+  FolderTree,
   Cloud,
-  ChevronRight
+  ChevronRight,
+  Shield
 } from 'lucide-react';
 
-export function Sidebar({ currentTab, setCurrentTab, isCloudflare, overdueCount = 0, onOpenCloudflare }) {
-  const menuItems = [
-    { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard },
-    { id: 'assets', label: 'Tài sản & Thiết bị', icon: Laptop },
-    { id: 'finance', label: 'Doanh thu & Chi phí', icon: TrendingUp },
+export function Sidebar({ currentTab, setCurrentTab, userRole = 'ADMIN', overdueCount = 0 }) {
+  // Toàn bộ menu hệ thống
+  const allMenuItems = [
+    { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'assets', label: 'Tài sản & Thiết bị', icon: Laptop, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'finance', label: 'Doanh thu & Chi phí', icon: TrendingUp, roles: ['ADMIN', 'MANAGER'] },
     {
       id: 'tasks',
       label: 'Công việc & Nhắc hạn',
       icon: CheckSquare,
       badge: overdueCount > 0 ? `${overdueCount}` : null,
-      badgeType: 'danger'
+      badgeType: 'danger',
+      roles: ['ADMIN', 'MANAGER', 'STAFF']
     },
-    { id: 'contracts', label: 'Hợp đồng & Biên bản', icon: FileText },
-    { id: 'attendance', label: 'Chấm công', icon: CalendarCheck },
-    { id: 'users', label: 'Nhân sự', icon: Users },
+    { id: 'contracts', label: 'Hợp đồng & Biên bản', icon: FileText, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'attendance', label: 'Chấm công', icon: CalendarCheck, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'users', label: 'Quản lý Nhân sự', icon: Users, roles: ['ADMIN'] },
+    { id: 'categories', label: 'Quản lý Danh mục', icon: FolderTree, roles: ['ADMIN'] },
   ];
+
+  // Lọc menu theo quyền người dùng hiện tại (RBAC)
+  const menuItems = allMenuItems.filter((item) => item.roles.includes(userRole));
+
+  const roleLabels = {
+    ADMIN: { label: 'Quản Trị Viên (Admin)', color: 'bg-rose-50 text-rose-700 border-rose-200' },
+    MANAGER: { label: 'Quản Lý (Manager)', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    STAFF: { label: 'Nhân Viên (Staff)', color: 'bg-sky-50 text-sky-700 border-sky-200' }
+  };
 
   return (
     <aside className="w-64 bg-white border-r border-pastel-200/70 flex flex-col h-screen sticky top-0 select-none shadow-[2px_0_12px_rgba(78,159,142,0.03)]">
       {/* Brand Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-pastel-100 gap-3 bg-gradient-to-r from-pastel-50/60 to-white">
-        <div className="w-9 h-9 rounded-xl bg-pastel-500 flex items-center justify-center text-white shadow-soft">
-          <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-          </svg>
-        </div>
-        <div>
-          <h1 className="text-sm font-bold tracking-tight text-slate-800 leading-tight">OMNI ASSETS</h1>
-          <p className="text-[11px] text-pastel-600 font-medium">Enterprise Suite</p>
+      <div className="h-16 flex items-center justify-between px-6 border-b border-pastel-100 bg-gradient-to-r from-pastel-50/60 to-white">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-pastel-500 flex items-center justify-center text-white shadow-soft">
+            <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-sm font-bold tracking-tight text-slate-800 leading-tight">OMNI ASSETS</h1>
+            <p className="text-[10px] text-pastel-600 font-bold uppercase tracking-wider">
+              {roleLabels[userRole]?.label?.split(' ')[0] || userRole}
+            </p>
+          </div>
         </div>
       </div>
 

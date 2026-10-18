@@ -19,15 +19,16 @@ import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
 
-export function AssetManager({ assets = [], users = [], onRefresh }) {
+export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'ADMIN' }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [categories, setCategories] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
-    category: 'Máy tính xách tay',
+    category: '',
     serial_number: '',
     purchase_date: new Date().toISOString().split('T')[0],
     price: '',
@@ -36,6 +37,18 @@ export function AssetManager({ assets = [], users = [], onRefresh }) {
     assigned_to_user_id: '',
     notes: ''
   });
+
+  React.useEffect(() => {
+    api.getCategories('ASSET_CATEGORY')
+      .then((res) => {
+        const list = res.data || [];
+        setCategories(list);
+        if (list.length > 0 && !formData.category) {
+          setFormData((prev) => ({ ...prev, category: list[0].name }));
+        }
+      })
+      .catch((err) => console.error('Error fetching asset categories:', err));
+  }, []);
 
   const formatVND = (num) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
@@ -128,13 +141,15 @@ export function AssetManager({ assets = [], users = [], onRefresh }) {
             <FileSpreadsheet size={16} className="text-pastel-600" />
             <span>Xuất Excel</span>
           </button>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-semibold shadow-soft hover:shadow-soft-lg transition-all"
-          >
-            <Plus size={16} />
-            <span>Thêm Tài Sản Mới</span>
-          </button>
+          {userRole !== 'STAFF' && (
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-semibold shadow-soft hover:shadow-soft-lg transition-all"
+            >
+              <Plus size={16} />
+              <span>Thêm Tài Sản Mới</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -234,13 +249,15 @@ export function AssetManager({ assets = [], users = [], onRefresh }) {
                           >
                             <Eye size={15} />
                           </button>
-                          <button
-                            onClick={() => handleDelete(asset.id, asset.name)}
-                            title="Xóa tài sản"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          {userRole === 'ADMIN' && (
+                            <button
+                              onClick={() => handleDelete(asset.id, asset.name)}
+                              title="Xóa tài sản"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -279,12 +296,15 @@ export function AssetManager({ assets = [], users = [], onRefresh }) {
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
               >
-                <option value="Máy tính xách tay">Máy tính xách tay</option>
-                <option value="Màn hình hiển thị">Màn hình hiển thị</option>
-                <option value="Thiết bị văn phòng">Thiết bị văn phòng</option>
-                <option value="Thiết bị mạng">Thiết bị mạng</option>
-                <option value="Bàn ghế văn phòng">Bàn ghế văn phòng</option>
-                <option value="Khác">Khác</option>
+                {categories.length === 0 ? (
+                  <option value="">Đang tải danh mục...</option>
+                ) : (
+                  categories.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
             <div>
