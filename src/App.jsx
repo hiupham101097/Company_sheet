@@ -8,14 +8,22 @@ import { TaskManager } from './components/Tasks/TaskManager';
 import { ContractManager } from './components/Contracts/ContractManager';
 import { AttendanceManager } from './components/Attendance/AttendanceManager';
 import { UserManager } from './components/Users/UserManager';
-import { CloudflareModal } from './components/Cloudflare/CloudflareModal';
+import { Login } from './components/Auth/Login';
 import { api } from './services/api';
 import { Loader2 } from 'lucide-react';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('currentUser');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [currentTab, setCurrentTab] = useState('dashboard');
-  const [loading, setLoading] = useState(true);
-  const [isCloudflareModalOpen, setIsCloudflareModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Global State
   const [summaryData, setSummaryData] = useState(null);
@@ -29,9 +37,11 @@ export default function App() {
   const [attendanceSummary, setAttendanceSummary] = useState(null);
   const [users, setUsers] = useState([]);
 
-  // Tải dữ liệu toàn bộ hệ thống
+  // Tải dữ liệu toàn bộ hệ thống từ Cloudflare D1
   const loadAllData = async () => {
+    if (!currentUser) return;
     try {
+      setLoading(true);
       const [
         sumRes,
         monRes,
@@ -67,18 +77,35 @@ export default function App() {
       setAttendanceSummary(attSumRes.data);
       setUsers(usrRes.data || []);
     } catch (err) {
-      console.error('Lỗi khi tải dữ liệu hệ thống:', err);
+      console.error('Lỗi khi tải dữ liệu từ Cloudflare D1:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadAllData();
-  }, []);
+    if (currentUser) {
+      loadAllData();
+    }
+  }, [currentUser]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('currentUser');
+    setCurrentUser(null);
+  };
+
+  // Nếu chưa đăng nhập -> Hiển thị Màn hình Đăng Nhập
+  if (!currentUser) {
+    return (
+      <Login
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+        }}
+      />
+    );
+  }
 
   const overdueCount = tasks.filter((t) => t.urgency === 'OVERDUE' && t.status !== 'COMPLETED').length;
-  const currentUser = users[0] || null;
 
   return (
     <div className="flex min-h-screen bg-surface-bg text-slate-800">
@@ -86,9 +113,8 @@ export default function App() {
       <Sidebar
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
-        isCloudflare={summaryData?.isCloudflare}
+        isCloudflare={true}
         overdueCount={overdueCount}
-        onOpenCloudflare={() => setIsCloudflareModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -97,15 +123,14 @@ export default function App() {
           urgentReminders={summaryData?.urgentReminders || []}
           onCheckInSuccess={loadAllData}
           currentUser={currentUser}
-          isCloudflare={summaryData?.isCloudflare}
-          onOpenCloudflare={() => setIsCloudflareModalOpen(true)}
+          onLogout={handleLogout}
         />
 
         <main className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto animate-in fade-in duration-200">
-          {loading ? (
+          {loading && !summaryData ? (
             <div className="h-96 flex flex-col items-center justify-center gap-3 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-pastel-500" />
-              <p className="text-xs font-medium">Đang tải dữ liệu hệ thống OMNI ASSETS...</p>
+              <p className="text-xs font-medium">Đang đồng bộ dữ liệu từ Cloudflare D1 Edge Database...</p>
             </div>
           ) : (
             <>
@@ -171,13 +196,6 @@ export default function App() {
           )}
         </main>
       </div>
-
-      {/* Cloudflare Connection & Sync Modal */}
-      <CloudflareModal
-        isOpen={isCloudflareModalOpen}
-        onClose={() => setIsCloudflareModalOpen(false)}
-        onConnected={loadAllData}
-      />
     </div>
   );
 }

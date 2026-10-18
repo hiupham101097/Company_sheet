@@ -17,6 +17,9 @@ async function request(endpoint, options = {}) {
 }
 
 export const api = {
+  // Xác thực đăng nhập
+  login: (credentials) => request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+
   // Tổng quan & Báo cáo
   getDashboardSummary: () => request('/reports/dashboard-summary'),
   getHealth: () => request('/health'),

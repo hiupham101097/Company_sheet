@@ -7,12 +7,11 @@ import {
   LogOut,
   AlertTriangle,
   User,
-  Sparkles,
   Cloud
 } from 'lucide-react';
 import { api } from '../../services/api';
 
-export function Navbar({ urgentReminders = [], onCheckInSuccess, currentUser, onOpenCloudflare, isCloudflare }) {
+export function Navbar({ urgentReminders = [], onCheckInSuccess, currentUser, onLogout }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
 
@@ -46,14 +45,11 @@ export function Navbar({ urgentReminders = [], onCheckInSuccess, currentUser, on
 
       {/* Right Action buttons */}
       <div className="flex items-center gap-3">
-        {/* Cloudflare Quick Button */}
-        <button
-          onClick={onOpenCloudflare}
-          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-pastel-50 hover:bg-pastel-100 text-pastel-700 border border-pastel-200/80 transition-all"
-        >
-          <Cloud size={14} className={isCloudflare ? 'text-emerald-500' : 'text-amber-500'} />
-          <span>{isCloudflare ? 'Cloudflare D1: Đã nối' : 'Nối Cloudflare'}</span>
-        </button>
+        {/* Cloudflare Native Connected Badge */}
+        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <Cloud size={14} className="text-emerald-500" />
+          <span>Cloudflare D1: Connected</span>
+        </div>
 
         {/* Quick Check-in/Check-out Buttons */}
         <div className="hidden sm:flex items-center gap-2 bg-pastel-50 p-1 rounded-xl border border-pastel-200/60">
@@ -146,6 +142,13 @@ export function Navbar({ urgentReminders = [], onCheckInSuccess, currentUser, on
             <p className="text-xs font-bold text-slate-800">{currentUser?.name || 'Nguyễn Văn An'}</p>
             <p className="text-[10px] text-pastel-600 font-semibold">{currentUser?.department || 'Ban Giám Đốc'}</p>
           </div>
+          <button
+            onClick={onLogout}
+            title="Đăng xuất"
+            className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+          >
+            <LogOut size={16} />
+          </button>
         </div>
       </div>
     </header>

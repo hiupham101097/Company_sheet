@@ -91,23 +91,20 @@ export function Sidebar({ currentTab, setCurrentTab, isCloudflare, overdueCount 
 
       {/* Database Status indicator at bottom */}
       <div className="p-4 border-t border-pastel-100 bg-surface-subtle/40">
-        <button
-          onClick={onOpenCloudflare}
-          className="w-full p-3 rounded-xl bg-white hover:bg-pastel-50/50 border border-pastel-200/80 shadow-xs flex items-center gap-3 text-left transition-all group"
-        >
-          <div className="w-8 h-8 rounded-lg bg-pastel-100 group-hover:bg-pastel-200 flex items-center justify-center text-pastel-600 transition-colors">
+        <div className="w-full p-3 rounded-xl bg-white border border-pastel-200/80 shadow-xs flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
             <Cloud size={16} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${isCloudflare ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`}></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <p className="text-xs font-semibold text-slate-700 truncate">Cloudflare D1</p>
             </div>
-            <p className="text-[11px] text-pastel-600 font-medium truncate">
-              {isCloudflare ? 'Edge Connected' : 'Cấu hình kết nối →'}
+            <p className="text-[10px] text-emerald-600 font-semibold truncate">
+              Native Edge Connected
             </p>
           </div>
-        </button>
+        </div>
       </div>
     </aside>
   );
