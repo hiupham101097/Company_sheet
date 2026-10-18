@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Laptop,
   Plus,
   Search,
-  Filter,
   FileSpreadsheet,
-  Edit2,
   Trash2,
   QrCode,
   Eye,
   CheckCircle,
   AlertTriangle,
   Wrench,
-  Clock
+  Clock,
+  Printer,
+  X
 } from 'lucide-react';
 import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
@@ -38,7 +38,7 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
     notes: ''
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     api.getCategories('ASSET_CATEGORY')
       .then((res) => {
         const list = res.data || [];
@@ -54,11 +54,11 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
 
   const statusMap = {
-    IN_USE: { label: 'Đang sử dụng', variant: 'primary', icon: Laptop },
-    AVAILABLE: { label: 'Sẵn sàng cấp', variant: 'success', icon: CheckCircle },
-    MAINTENANCE: { label: 'Đang bảo trì', variant: 'warning', icon: Wrench },
-    BROKEN: { label: 'Bị hỏng', variant: 'danger', icon: AlertTriangle },
-    LIQUIDATED: { label: 'Đã thanh lý', variant: 'default', icon: Clock },
+    IN_USE: { label: 'Đang sử dụng', variant: 'primary', icon: Laptop, dotColor: 'bg-pastel-500' },
+    AVAILABLE: { label: 'Sẵn sàng cấp', variant: 'success', icon: CheckCircle, dotColor: 'bg-emerald-500' },
+    MAINTENANCE: { label: 'Đang bảo trì', variant: 'warning', icon: Wrench, dotColor: 'bg-amber-500' },
+    BROKEN: { label: 'Bị hỏng', variant: 'danger', icon: AlertTriangle, dotColor: 'bg-rose-500' },
+    LIQUIDATED: { label: 'Đã thanh lý', variant: 'default', icon: Clock, dotColor: 'bg-slate-400' },
   };
 
   const filteredAssets = assets.filter((item) => {
@@ -70,6 +70,11 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
     const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const getStatusCount = (st) => {
+    if (st === 'ALL') return assets.length;
+    return assets.filter((a) => a.status === st).length;
+  };
 
   const handleExportExcel = () => {
     const exportData = filteredAssets.map((a) => ({
@@ -94,7 +99,7 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
       setIsAddModalOpen(false);
       setFormData({
         name: '',
-        category: 'Máy tính xách tay',
+        category: categories[0]?.name || 'Máy tính xách tay',
         serial_number: '',
         purchase_date: new Date().toISOString().split('T')[0],
         price: '',
@@ -122,18 +127,18 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
 
   return (
     <div className="space-y-6">
-      {/* Header & Controls */}
+      {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800 tracking-tight">
             Quản Lý Tài Sản & Thiết Bị
           </h2>
-          <p className="text-sm text-slate-500">
-            Tổng số: <span className="font-semibold text-pastel-600">{assets.length}</span> thiết bị trong hệ thống.
+          <p className="text-xs sm:text-sm text-slate-500">
+            Tổng số: <span className="font-bold text-pastel-700">{assets.length}</span> thiết bị trong hệ thống cơ sở vật chất.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <button
             onClick={handleExportExcel}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all"
@@ -144,7 +149,7 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
           {userRole !== 'STAFF' && (
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-semibold shadow-soft hover:shadow-soft-lg transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
             >
               <Plus size={16} />
               <span>Thêm Tài Sản Mới</span>
@@ -153,56 +158,80 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-pastel-200/80 shadow-soft flex flex-col md:flex-row items-center justify-between gap-4">
+      {/* Filter and Search Bar Card */}
+      <div className="bg-white p-4 rounded-3xl border border-pastel-200/90 shadow-soft flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        {/* Search */}
         <div className="relative w-full md:w-80">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Tìm theo tên, mã tài sản, người giữ..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pastel-400 focus:bg-white transition-all"
+            className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50/80 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pastel-400 focus:bg-white transition-all font-medium text-slate-700"
           />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-          {['ALL', 'IN_USE', 'AVAILABLE', 'MAINTENANCE', 'BROKEN'].map((st) => (
-            <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
-                statusFilter === st
-                  ? 'bg-pastel-500 text-white font-semibold shadow-xs'
-                  : 'bg-pastel-50/60 text-slate-600 hover:bg-pastel-100/60'
-              }`}
-            >
-              {st === 'ALL' ? 'Tất cả' : statusMap[st]?.label}
-            </button>
-          ))}
+        {/* Status Filter Chips */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+          {['ALL', 'IN_USE', 'AVAILABLE', 'MAINTENANCE', 'BROKEN'].map((st) => {
+            const isSelected = statusFilter === st;
+            const count = getStatusCount(st);
+            const label = st === 'ALL' ? 'Tất cả' : statusMap[st]?.label;
+
+            return (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-pastel-500 text-white shadow-soft'
+                    : 'bg-pastel-50/60 text-slate-600 hover:bg-pastel-100/60'
+                }`}
+              >
+                <span>{label}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                    isSelected ? 'bg-white/25 text-white' : 'bg-slate-200/70 text-slate-600'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Assets Table Card */}
-      <div className="bg-white rounded-2xl border border-pastel-200/80 shadow-soft overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
+        <div className="table-responsive">
           <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-pastel-50/60 text-slate-700 font-semibold uppercase text-[11px] tracking-wider border-b border-pastel-100">
+            <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
               <tr>
-                <th className="py-3.5 px-4">Mã Tài Sản</th>
-                <th className="py-3.5 px-4">Tên Thiết Bị</th>
-                <th className="py-3.5 px-4">Danh Mục</th>
-                <th className="py-3.5 px-4">Trạng Thái</th>
-                <th className="py-3.5 px-4">Giá Trị</th>
-                <th className="py-3.5 px-4">Người Nắm Giữ</th>
-                <th className="py-3.5 px-4">Vị Trí</th>
-                <th className="py-3.5 px-4 text-right">Thao Tác</th>
+                <th className="py-3.5 px-4 font-bold">Mã Tài Sản</th>
+                <th className="py-3.5 px-4 font-bold">Tên Thiết Bị</th>
+                <th className="py-3.5 px-4 font-bold">Danh Mục</th>
+                <th className="py-3.5 px-4 font-bold">Trạng Thái</th>
+                <th className="py-3.5 px-4 font-bold">Giá Trị</th>
+                <th className="py-3.5 px-4 font-bold">Người Nắm Giữ</th>
+                <th className="py-3.5 px-4 font-bold">Vị Trí</th>
+                <th className="py-3.5 px-4 font-bold text-right">Thao Tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {filteredAssets.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                  <td colSpan={8} className="py-14 text-center text-slate-400">
+                    <Laptop size={32} className="mx-auto text-slate-300 mb-2" />
                     Không tìm thấy tài sản nào phù hợp.
                   </td>
                 </tr>
@@ -211,41 +240,44 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
                   const st = statusMap[asset.status] || { label: asset.status, variant: 'default' };
                   return (
                     <tr key={asset.id} className="hover:bg-pastel-50/40 transition-colors">
-                      <td className="py-3 px-4 font-mono font-semibold text-pastel-700">
+                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700">
                         {asset.code}
                       </td>
-                      <td className="py-3 px-4 font-semibold text-slate-800">
+                      <td className="py-3.5 px-4 font-semibold text-slate-800">
                         {asset.name}
                         {asset.serial_number && (
-                          <span className="block text-[10px] text-slate-400 font-normal">
+                          <span className="block text-[10px] text-slate-400 font-mono font-normal">
                             SN: {asset.serial_number}
                           </span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-slate-500">{asset.category}</td>
-                      <td className="py-3 px-4">
-                        <Badge variant={st.variant}>{st.label}</Badge>
+                      <td className="py-3.5 px-4 text-slate-600">{asset.category}</td>
+                      <td className="py-3.5 px-4">
+                        <Badge variant={st.variant} className="gap-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${st.dotColor || 'bg-slate-400'}`} />
+                          <span>{st.label}</span>
+                        </Badge>
                       </td>
-                      <td className="py-3 px-4 font-semibold text-slate-700">
+                      <td className="py-3.5 px-4 font-bold text-slate-700">
                         {formatVND(asset.price)}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3.5 px-4">
                         {asset.assigned_user_name !== 'Chưa bàn giao' ? (
                           <span className="text-slate-800 font-medium">{asset.assigned_user_name}</span>
                         ) : (
                           <span className="text-slate-400 italic">Chưa bàn giao</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-slate-500">{asset.location || 'Kho'}</td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                      <td className="py-3.5 px-4 text-slate-500">{asset.location || 'Kho'}</td>
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => {
                               setSelectedAsset(asset);
                               setIsDetailModalOpen(true);
                             }}
-                            title="Xem chi tiết & QR"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-600 hover:bg-pastel-50 transition-colors"
+                            title="Xem chi tiết & Thẻ QR"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
                           >
                             <Eye size={15} />
                           </button>
@@ -284,17 +316,17 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
               placeholder="VD: Laptop Dell XPS 15 9530"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 focus:border-pastel-400 outline-none text-slate-800"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Phân loại danh mục</label>
               <select
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
               >
                 {categories.length === 0 ? (
                   <option value="">Đang tải danh mục...</option>
@@ -314,12 +346,12 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
                 placeholder="VD: DLXPS-2024-X"
                 value={formData.serial_number}
                 onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-mono"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Nguyên giá (VNĐ)</label>
               <input
@@ -327,7 +359,7 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
                 placeholder="25000000"
                 value={formData.price}
                 onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-semibold"
               />
             </div>
             <div>
@@ -336,18 +368,18 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
                 type="date"
                 value={formData.purchase_date}
                 onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-medium"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Trạng thái ban đầu</label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
               >
                 <option value="AVAILABLE">Sẵn sàng cấp phát</option>
                 <option value="IN_USE">Đang sử dụng</option>
@@ -359,9 +391,9 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
               <select
                 value={formData.assigned_to_user_id}
                 onChange={(e) => setFormData({ ...formData, assigned_to_user_id: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
               >
-                <option value="">-- Chưa giao ai (Lưu kho) --</option>
+                <option value="">-- Lưu kho (Chưa giao ai) --</option>
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name} ({u.department})
@@ -378,7 +410,7 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
               placeholder="VD: Phòng Kỹ thuật - Bàn số 5"
               value={formData.location}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
             />
           </div>
 
@@ -389,21 +421,21 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
               placeholder="Tình trạng ngoại quan, phụ kiện đi kèm..."
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsAddModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
+              className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-semibold shadow-soft transition-all"
+              className="px-5 py-2.5 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-bold shadow-soft transition-all"
             >
               Lưu Tài Sản
             </button>
@@ -411,7 +443,7 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
         </form>
       </Modal>
 
-      {/* Modal: Xem Chi Tiết & Mã QR Định Danh */}
+      {/* Modal: Xem Chi Tiết & Thẻ QR Định Danh */}
       <Modal
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
@@ -419,15 +451,15 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
       >
         {selectedAsset && (
           <div className="space-y-4 text-xs">
-            {/* Asset QR badge */}
-            <div className="p-4 bg-pastel-50/60 rounded-2xl border border-pastel-200/80 flex items-center gap-4">
-              <div className="w-20 h-20 bg-white p-2 rounded-xl border border-pastel-200 shadow-xs flex items-center justify-center">
-                <QrCode size={56} className="text-pastel-700" />
+            {/* Asset Identity Card */}
+            <div className="p-5 bg-gradient-to-r from-pastel-50/80 via-white to-pastel-50/40 rounded-2xl border border-pastel-200 shadow-soft flex items-center gap-4">
+              <div className="w-20 h-20 bg-white p-2.5 rounded-2xl border border-pastel-200 shadow-xs flex items-center justify-center shrink-0">
+                <QrCode size={52} className="text-pastel-700" />
               </div>
-              <div>
-                <p className="text-[11px] font-mono text-pastel-600 font-bold">{selectedAsset.code}</p>
-                <h4 className="text-sm font-bold text-slate-800">{selectedAsset.name}</h4>
-                <p className="text-slate-500 text-[11px] mt-0.5">{selectedAsset.category}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-mono text-pastel-700 font-bold">{selectedAsset.code}</p>
+                <h4 className="text-base font-bold text-slate-800 truncate">{selectedAsset.name}</h4>
+                <p className="text-slate-500 text-xs mt-0.5">{selectedAsset.category}</p>
                 <Badge variant={statusMap[selectedAsset.status]?.variant || 'default'} className="mt-2">
                   {statusMap[selectedAsset.status]?.label || selectedAsset.status}
                 </Badge>
@@ -437,7 +469,7 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
             <div className="grid grid-cols-2 gap-3 text-slate-700">
               <div className="p-3 bg-slate-50 rounded-xl">
                 <span className="text-[10px] text-slate-400 block uppercase font-bold">Số Serial</span>
-                <span className="font-mono font-medium">{selectedAsset.serial_number || 'Chưa cập nhật'}</span>
+                <span className="font-mono font-semibold text-slate-800">{selectedAsset.serial_number || 'Chưa cập nhật'}</span>
               </div>
               <div className="p-3 bg-slate-50 rounded-xl">
                 <span className="text-[10px] text-slate-400 block uppercase font-bold">Nguyên giá</span>
@@ -449,25 +481,24 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
               </div>
               <div className="p-3 bg-slate-50 rounded-xl">
                 <span className="text-[10px] text-slate-400 block uppercase font-bold">Vị trí hiện tại</span>
-                <span>{selectedAsset.location || 'Kho'}</span>
+                <span className="font-medium text-slate-700">{selectedAsset.location || 'Kho'}</span>
               </div>
             </div>
 
             {selectedAsset.notes && (
               <div className="p-3 bg-slate-50 rounded-xl">
                 <span className="text-[10px] text-slate-400 block uppercase font-bold">Ghi chú</span>
-                <p className="text-slate-600 mt-1">{selectedAsset.notes}</p>
+                <p className="text-slate-600 mt-1 leading-relaxed">{selectedAsset.notes}</p>
               </div>
             )}
 
             <div className="pt-2 flex justify-end">
               <button
-                onClick={() => {
-                  window.print();
-                }}
-                className="px-4 py-2 bg-pastel-500 text-white rounded-xl font-semibold shadow-soft hover:bg-pastel-600 transition-all"
+                onClick={() => window.print()}
+                className="px-5 py-2.5 bg-pastel-500 text-white rounded-xl font-bold shadow-soft hover:bg-pastel-600 transition-all inline-flex items-center gap-2"
               >
-                In Thẻ Thiết Bị
+                <Printer size={15} />
+                <span>In Thẻ Thiết Bị</span>
               </button>
             </div>
           </div>

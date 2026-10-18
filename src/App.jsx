@@ -24,6 +24,7 @@ export default function App() {
   });
 
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Global State
@@ -116,6 +117,8 @@ export default function App() {
         setCurrentTab={setCurrentTab}
         userRole={currentUser?.role || 'STAFF'}
         overdueCount={overdueCount}
+        isOpen={isMobileSidebarOpen}
+        onClose={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main Content Area */}
@@ -125,9 +128,10 @@ export default function App() {
           onCheckInSuccess={loadAllData}
           currentUser={currentUser}
           onLogout={handleLogout}
+          onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
         />
 
-        <main className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto animate-in fade-in duration-200">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
           {loading && !summaryData ? (
             <div className="h-96 flex flex-col items-center justify-center gap-3 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-pastel-500" />

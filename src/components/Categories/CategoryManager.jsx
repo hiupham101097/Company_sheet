@@ -8,8 +8,7 @@ import {
   Laptop,
   TrendingUp,
   Building2,
-  CheckCircle2,
-  AlertCircle
+  X
 } from 'lucide-react';
 import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
@@ -121,7 +120,7 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
             <FolderTree size={22} className="text-pastel-600" />
             <span>Quản Lý Danh Mục Nghiệp Vụ</span>
           </h2>
-          <p className="text-sm text-slate-500">
+          <p className="text-xs sm:text-sm text-slate-500">
             Tất cả danh mục đều được lưu trữ động trên Cloudflare D1 và kết nối đồng bộ qua API.
           </p>
         </div>
@@ -129,7 +128,7 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
         {userRole === 'ADMIN' && (
           <button
             onClick={handleOpenAdd}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-semibold shadow-soft hover:shadow-soft-lg transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
           >
             <Plus size={16} />
             <span>Thêm Danh Mục Mới</span>
@@ -138,7 +137,7 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-pastel-200/70 pb-3 overflow-x-auto">
+      <div className="flex items-center gap-2 border-b border-pastel-200/80 pb-3 overflow-x-auto">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -148,7 +147,7 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all ${
                 isActive
                   ? 'bg-pastel-500 text-white shadow-soft'
                   : 'text-slate-600 hover:bg-pastel-50'
@@ -158,7 +157,7 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
               <span>{tab.label}</span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                  isActive ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'
                 }`}
               >
                 {count}
@@ -169,76 +168,74 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
       </div>
 
       {/* Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-pastel-200/80 shadow-soft flex items-center justify-between">
-        <div className="relative w-80">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+      <div className="bg-white p-4 rounded-3xl border border-pastel-200/90 shadow-soft flex items-center justify-between">
+        <div className="relative w-full sm:w-80">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Tìm danh mục theo tên hoặc mã..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pastel-400 focus:bg-white transition-all text-slate-700"
+            className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50/80 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pastel-400 focus:bg-white transition-all text-slate-800 font-medium"
           />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
-
-        <span className="text-xs text-slate-400">
-          Hiển thị <strong>{filteredCategories.length}</strong> danh mục
-        </span>
       </div>
 
-      {/* Categories Table */}
-      <div className="bg-white rounded-2xl border border-pastel-200/80 shadow-soft overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Categories Table Card */}
+      <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
+        <div className="table-responsive">
           <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-pastel-50/60 text-slate-700 font-semibold uppercase text-[11px] tracking-wider border-b border-pastel-100">
+            <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
               <tr>
-                <th className="py-3 px-4">Tên Danh Mục</th>
-                <th className="py-3 px-4">Mã Quy Chuẩn</th>
-                <th className="py-3 px-4">Mô Tả / Ghi Chú</th>
-                <th className="py-3 px-4">Phân Loại</th>
-                {userRole === 'ADMIN' && <th className="py-3 px-4 text-right">Thao Tác</th>}
+                <th className="py-3.5 px-4 font-bold">Mã Danh Mục</th>
+                <th className="py-3.5 px-4 font-bold">Tên Danh Mục</th>
+                <th className="py-3.5 px-4 font-bold">Mô Tả / Diễn Giải</th>
+                <th className="py-3.5 px-4 font-bold text-right">Thao Tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {filteredCategories.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-400">
-                    Không tìm thấy danh mục nào trong nhóm này.
+                  <td colSpan={4} className="py-12 text-center text-slate-400">
+                    Không tìm thấy danh mục nào phù hợp.
                   </td>
                 </tr>
               ) : (
                 filteredCategories.map((cat) => (
                   <tr key={cat.id} className="hover:bg-pastel-50/40 transition-colors">
-                    <td className="py-3 px-4 font-bold text-slate-800">{cat.name}</td>
-                    <td className="py-3 px-4 font-mono font-semibold text-pastel-700">
-                      {cat.code || 'N/A'}
+                    <td className="py-3.5 px-4 font-mono font-bold text-pastel-700">
+                      {cat.code || cat.id}
                     </td>
-                    <td className="py-3 px-4 text-slate-500 max-w-sm leading-relaxed">
-                      {cat.description || '-'}
-                    </td>
-                    <td className="py-3 px-4">
-                      <Badge variant="primary">{tabs.find((t) => t.id === cat.type)?.label}</Badge>
-                    </td>
-                    {userRole === 'ADMIN' && (
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleOpenEdit(cat)}
-                            title="Sửa danh mục"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-600 hover:bg-pastel-50 transition-colors"
-                          >
-                            <Edit2 size={14} />
-                          </button>
+                    <td className="py-3.5 px-4 font-bold text-slate-800">{cat.name}</td>
+                    <td className="py-3.5 px-4 text-slate-500 max-w-md">{cat.description || '-'}</td>
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleOpenEdit(cat)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
+                          title="Sửa danh mục"
+                        >
+                          <Edit2 size={15} />
+                        </button>
+                        {userRole === 'ADMIN' && (
                           <button
                             onClick={() => handleDelete(cat.id, cat.name)}
-                            title="Xóa danh mục"
                             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title="Xóa danh mục"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={15} />
                           </button>
-                        </div>
-                      </td>
-                    )}
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -251,7 +248,7 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingCategory ? 'Chỉnh Sửa Danh Mục' : `Thêm Danh Mục Mới: ${tabs.find((t) => t.id === activeTab)?.label}`}
+        title={editingCategory ? 'Chỉnh Sửa Danh Mục' : 'Thêm Mới Danh Mục'}
       >
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
@@ -259,48 +256,48 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
             <input
               type="text"
               required
-              placeholder="VD: Màn hình hiển thị hoặc Phòng Nghiên Cứu"
+              placeholder="VD: Máy in & Máy scan"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Mã danh mục (Code)</label>
+            <label className="block font-semibold text-slate-700 mb-1">Mã định danh (Code)</label>
             <input
               type="text"
-              placeholder="VD: MONITOR hoặc RND"
+              placeholder="VD: PRINTER"
               value={formData.code}
               onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-mono"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Mô tả chi tiết</label>
+            <label className="block font-semibold text-slate-700 mb-1">Mô tả / Ghi chú</label>
             <textarea
               rows={3}
-              placeholder="Mô tả phạm vi áp dụng, tiêu chí phân loại..."
+              placeholder="Mục đích sử dụng, phạm vi áp dụng..."
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
+              className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-semibold shadow-soft transition-all"
+              className="px-5 py-2.5 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-bold shadow-soft transition-all"
             >
-              {editingCategory ? 'Lưu Thay Đổi' : 'Thêm Danh Mục'}
+              {editingCategory ? 'Lưu Thay Đổi' : 'Tạo Danh Mục'}
             </button>
           </div>
         </form>

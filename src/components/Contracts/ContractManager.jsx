@@ -3,15 +3,16 @@ import {
   FileText,
   Plus,
   Printer,
-  Trash2,
   Calendar,
   CheckCircle,
   Clock,
   Layers,
-  FileCheck
+  FileCheck,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
+import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
 
 export function ContractManager({ contracts = [], handovers = [], assets = [], users = [], onRefresh }) {
@@ -41,6 +42,35 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
 
   const formatVND = (num) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
+
+  const handleExportContracts = () => {
+    const exportData = contracts.map((c) => ({
+      'Số hợp đồng': c.code,
+      'Tên hợp đồng': c.title,
+      'Đối tác / Khách hàng': c.partner_name,
+      'Giá trị (VNĐ)': c.value,
+      'Ngày bắt đầu': c.start_date,
+      'Ngày kết thúc': c.end_date,
+      'Trạng thái': c.status === 'ACTIVE' ? 'Hiệu lực' : c.status,
+      'Ghi chú': c.notes || ''
+    }));
+    exportToExcel(exportData, 'Danh_Sach_Hop_Dong', 'Hợp Đồng');
+  };
+
+  const handleExportHandovers = () => {
+    const exportData = handovers.map((h) => ({
+      'Số biên bản': h.code,
+      'Loại': h.type === 'HANDOVER' ? 'Bàn giao sử dụng' : 'Thu hồi',
+      'Tài sản bàn giao': h.asset_name,
+      'Mã tài sản': h.asset_code,
+      'Người nhận': h.user_name,
+      'Phòng ban': h.user_department,
+      'Ngày bàn giao': h.handover_date,
+      'Hiện trạng': h.condition,
+      'Ghi chú': h.notes || ''
+    }));
+    exportToExcel(exportData, 'Danh_Sach_Bien_Ban_Ban_Giao', 'Biên Bản');
+  };
 
   const handleCreateContract = async (e) => {
     e.preventDefault();
@@ -89,16 +119,24 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
           <h2 className="text-xl font-bold text-slate-800 tracking-tight">
             Quản Lý Hợp Đồng & Biên Bản Bàn Giao
           </h2>
-          <p className="text-sm text-slate-500">
+          <p className="text-xs sm:text-sm text-slate-500">
             Lưu trữ hợp đồng đối tác, văn bản thỏa thuận và in ấn biên bản bàn giao trang thiết bị.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <button
+            onClick={activeSubTab === 'CONTRACTS' ? handleExportContracts : handleExportHandovers}
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all"
+          >
+            <FileSpreadsheet size={16} className="text-pastel-600" />
+            <span>Xuất Excel</span>
+          </button>
+
           {activeSubTab === 'CONTRACTS' ? (
             <button
               onClick={() => setIsContractModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-semibold shadow-soft hover:shadow-soft-lg transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
             >
               <Plus size={16} />
               <span>Thêm Hợp Đồng</span>
@@ -106,7 +144,7 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
           ) : (
             <button
               onClick={() => setIsHandoverModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-semibold shadow-soft hover:shadow-soft-lg transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
             >
               <Plus size={16} />
               <span>Lập Biên Bản Mới</span>
@@ -115,14 +153,14 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
         </div>
       </div>
 
-      {/* Sub Tabs */}
-      <div className="flex items-center gap-2 border-b border-pastel-200/70 pb-3">
+      {/* Sub-tab Navigation */}
+      <div className="flex items-center gap-2 border-b border-pastel-200/80 pb-3">
         <button
           onClick={() => setActiveSubTab('CONTRACTS')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
             activeSubTab === 'CONTRACTS'
               ? 'bg-pastel-500 text-white shadow-soft'
-              : 'text-slate-600 hover:bg-pastel-50'
+              : 'text-slate-600 hover:bg-pastel-50 hover:text-pastel-700'
           }`}
         >
           <FileText size={15} />
@@ -131,10 +169,10 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
 
         <button
           onClick={() => setActiveSubTab('HANDOVERS')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
             activeSubTab === 'HANDOVERS'
               ? 'bg-pastel-500 text-white shadow-soft'
-              : 'text-slate-600 hover:bg-pastel-50'
+              : 'text-slate-600 hover:bg-pastel-50 hover:text-pastel-700'
           }`}
         >
           <FileCheck size={15} />
@@ -142,100 +180,118 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
         </button>
       </div>
 
-      {/* Content for Contracts */}
-      {activeSubTab === 'CONTRACTS' ? (
-        <div className="bg-white rounded-2xl border border-pastel-200/80 shadow-soft overflow-hidden">
-          <div className="overflow-x-auto">
+      {/* Tab 1: Contracts Table */}
+      {activeSubTab === 'CONTRACTS' && (
+        <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
+          <div className="table-responsive">
             <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-pastel-50/60 text-slate-700 font-semibold uppercase text-[11px] tracking-wider border-b border-pastel-100">
+              <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
                 <tr>
-                  <th className="py-3 px-4">Số Hợp Đồng</th>
-                  <th className="py-3 px-4">Tên Hợp Đồng</th>
-                  <th className="py-3 px-4">Đối Tác</th>
-                  <th className="py-3 px-4">Giá Trị</th>
-                  <th className="py-3 px-4">Thời Hạn</th>
-                  <th className="py-3 px-4">Trạng Thái</th>
-                  <th className="py-3 px-4">Ghi Chú</th>
+                  <th className="py-3.5 px-4 font-bold">Số Hợp Đồng</th>
+                  <th className="py-3.5 px-4 font-bold">Tên Hợp Đồng</th>
+                  <th className="py-3.5 px-4 font-bold">Đối Tác</th>
+                  <th className="py-3.5 px-4 font-bold">Giá Trị</th>
+                  <th className="py-3.5 px-4 font-bold">Thời Hạn</th>
+                  <th className="py-3.5 px-4 font-bold">Trạng Thái</th>
+                  <th className="py-3.5 px-4 font-bold">Ghi Chú</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {contracts.map((ctr) => (
-                  <tr key={ctr.id} className="hover:bg-pastel-50/40 transition-colors">
-                    <td className="py-3 px-4 font-mono font-semibold text-pastel-700">{ctr.code}</td>
-                    <td className="py-3 px-4 font-semibold text-slate-800">{ctr.title}</td>
-                    <td className="py-3 px-4 text-slate-700">{ctr.partner_name}</td>
-                    <td className="py-3 px-4 font-bold text-slate-800">{formatVND(ctr.value)}</td>
-                    <td className="py-3 px-4 text-slate-500">
-                      {ctr.start_date} → {ctr.end_date}
-                    </td>
-                    <td className="py-3 px-4">
-                      <Badge variant={ctr.status === 'ACTIVE' ? 'success' : 'default'}>
-                        {ctr.status === 'ACTIVE' ? 'Hiệu lực' : ctr.status}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-4 text-slate-500 max-w-xs truncate">{ctr.notes || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : (
-        /* Content for Handover Protocols */
-        <div className="bg-white rounded-2xl border border-pastel-200/80 shadow-soft overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-pastel-50/60 text-slate-700 font-semibold uppercase text-[11px] tracking-wider border-b border-pastel-100">
-                <tr>
-                  <th className="py-3 px-4">Số Biên Bản</th>
-                  <th className="py-3 px-4">Loại Biên Bản</th>
-                  <th className="py-3 px-4">Thiết Bị Bàn Giao</th>
-                  <th className="py-3 px-4">Nhân Sự Tiếp Nhận</th>
-                  <th className="py-3 px-4">Ngày Bàn Giao</th>
-                  <th className="py-3 px-4">Tình Trạng</th>
-                  <th className="py-3 px-4 text-right">In / Mẫu Ký</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
-                {handovers.map((h) => (
-                  <tr key={h.id} className="hover:bg-pastel-50/40 transition-colors">
-                    <td className="py-3 px-4 font-mono font-semibold text-pastel-700">{h.code}</td>
-                    <td className="py-3 px-4">
-                      <Badge variant={h.type === 'HANDOVER' ? 'primary' : 'warning'}>
-                        {h.type === 'HANDOVER' ? 'Bàn giao sử dụng' : 'Thu hồi tài sản'}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-slate-800">
-                      {h.asset_name}
-                      {h.asset_code && (
-                        <span className="block text-[10px] text-slate-400 font-normal">
-                          Mã: {h.asset_code}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-slate-700 font-medium">
-                      {h.user_name} ({h.user_department})
-                    </td>
-                    <td className="py-3 px-4 text-slate-500">{h.handover_date}</td>
-                    <td className="py-3 px-4 text-slate-600">{h.condition}</td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => setPreviewHandover(h)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pastel-50 text-pastel-700 hover:bg-pastel-100 font-semibold transition-all text-xs"
-                      >
-                        <Printer size={13} />
-                        <span>Xem & In Biên Bản</span>
-                      </button>
+                {contracts.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                      Chưa có hợp đồng nào được lưu trữ.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  contracts.map((ctr) => (
+                    <tr key={ctr.id} className="hover:bg-pastel-50/40 transition-colors">
+                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700">{ctr.code}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-800">{ctr.title}</td>
+                      <td className="py-3.5 px-4 text-slate-700 font-medium">{ctr.partner_name}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-800">{formatVND(ctr.value)}</td>
+                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
+                        {ctr.start_date} → {ctr.end_date}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <Badge variant={ctr.status === 'ACTIVE' ? 'success' : 'default'}>
+                          {ctr.status === 'ACTIVE' ? 'Hiệu lực' : ctr.status}
+                        </Badge>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">{ctr.notes || '-'}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* Modal: Thêm Hợp Đồng */}
+      {/* Tab 2: Handovers Table */}
+      {activeSubTab === 'HANDOVERS' && (
+        <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
+          <div className="table-responsive">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
+                <tr>
+                  <th className="py-3.5 px-4 font-bold">Số Biên Bản</th>
+                  <th className="py-3.5 px-4 font-bold">Loại Biên Bản</th>
+                  <th className="py-3.5 px-4 font-bold">Thiết Bị Bàn Giao</th>
+                  <th className="py-3.5 px-4 font-bold">Nhân Sự Tiếp Nhận</th>
+                  <th className="py-3.5 px-4 font-bold">Ngày Bàn Giao</th>
+                  <th className="py-3.5 px-4 font-bold">Tình Trạng</th>
+                  <th className="py-3.5 px-4 font-bold text-right">In Ấn</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {handovers.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                      Chưa có biên bản bàn giao nào.
+                    </td>
+                  </tr>
+                ) : (
+                  handovers.map((item) => (
+                    <tr key={item.id} className="hover:bg-pastel-50/40 transition-colors">
+                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700">{item.code}</td>
+                      <td className="py-3.5 px-4">
+                        <Badge variant={item.type === 'HANDOVER' ? 'primary' : 'warning'}>
+                          {item.type === 'HANDOVER' ? 'Bàn giao sử dụng' : 'Thu hồi tài sản'}
+                        </Badge>
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-slate-800">
+                        {item.asset_name}
+                        {item.asset_code && (
+                          <span className="block text-[10px] text-slate-400 font-mono font-normal">
+                            Mã: {item.asset_code}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-700 font-medium">
+                        {item.user_name} <span className="text-slate-400 font-normal">({item.user_department})</span>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">{item.handover_date}</td>
+                      <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate">{item.condition}</td>
+                      <td className="py-3.5 px-4 text-right">
+                        <button
+                          onClick={() => setPreviewHandover(item)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pastel-50 text-pastel-700 hover:bg-pastel-100 font-bold transition-all text-xs"
+                        >
+                          <Printer size={13} />
+                          <span>Xem & In Biên Bản</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Thêm Hợp Đồng Mới */}
       <Modal
         isOpen={isContractModalOpen}
         onClose={() => setIsContractModalOpen(false)}
@@ -250,11 +306,11 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
               placeholder="VD: Hợp đồng cung cấp giải pháp chuyển đổi số"
               value={contractForm.title}
               onChange={(e) => setContractForm({ ...contractForm, title: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Đối tác / Khách hàng *</label>
               <input
@@ -263,7 +319,7 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
                 placeholder="VD: Công ty TNHH Giải Pháp Alpha"
                 value={contractForm.partner_name}
                 onChange={(e) => setContractForm({ ...contractForm, partner_name: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
               />
             </div>
             <div>
@@ -273,12 +329,12 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
                 placeholder="VD: 150000000"
                 value={contractForm.value}
                 onChange={(e) => setContractForm({ ...contractForm, value: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-semibold"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Ngày bắt đầu</label>
               <input
@@ -286,7 +342,7 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
                 required
                 value={contractForm.start_date}
                 onChange={(e) => setContractForm({ ...contractForm, start_date: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
               />
             </div>
             <div>
@@ -296,7 +352,7 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
                 required
                 value={contractForm.end_date}
                 onChange={(e) => setContractForm({ ...contractForm, end_date: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
               />
             </div>
           </div>
@@ -308,21 +364,21 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
               placeholder="Điều kiện thanh toán, cam kết tiến độ..."
               value={contractForm.notes}
               onChange={(e) => setContractForm({ ...contractForm, notes: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsContractModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
+              className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-semibold shadow-soft transition-all"
+              className="px-5 py-2.5 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-bold shadow-soft transition-all"
             >
               Lưu Hợp Đồng
             </button>
@@ -330,7 +386,7 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
         </form>
       </Modal>
 
-      {/* Modal: Lập Biên Bản Bàn Giao */}
+      {/* Modal: Lập Biên Bản Bàn Giao Mới */}
       <Modal
         isOpen={isHandoverModalOpen}
         onClose={() => setIsHandoverModalOpen(false)}
@@ -343,7 +399,7 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
               required
               value={handoverForm.asset_id}
               onChange={(e) => setHandoverForm({ ...handoverForm, asset_id: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
             >
               <option value="">-- Chọn tài sản / thiết bị --</option>
               {assets.map((a) => (
@@ -354,14 +410,14 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Nhân sự tiếp nhận *</label>
               <select
                 required
                 value={handoverForm.user_id}
                 onChange={(e) => setHandoverForm({ ...handoverForm, user_id: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
               >
                 <option value="">-- Chọn người nhận --</option>
                 {users.map((u) => (
@@ -376,7 +432,7 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
               <select
                 value={handoverForm.type}
                 onChange={(e) => setHandoverForm({ ...handoverForm, type: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
               >
                 <option value="HANDOVER">Bàn giao sử dụng</option>
                 <option value="RETURN">Thu hồi tài sản về kho</option>
@@ -391,7 +447,7 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
               required
               value={handoverForm.handover_date}
               onChange={(e) => setHandoverForm({ ...handoverForm, handover_date: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-medium"
             />
           </div>
 
@@ -401,21 +457,21 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
               rows={2}
               value={handoverForm.condition}
               onChange={(e) => setHandoverForm({ ...handoverForm, condition: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsHandoverModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
+              className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-semibold shadow-soft transition-all"
+              className="px-5 py-2.5 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-bold shadow-soft transition-all"
             >
               Hoàn Tất & Tạo Biên Bản
             </button>
@@ -423,7 +479,7 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
         </form>
       </Modal>
 
-      {/* Modal: Xem & In Biên Bản Bàn Giao Chuẩn Doanh Nghiệp */}
+      {/* Modal: Xem & In Biên Bản Bàn Giao Chuẩn Doanh Nghiệp A4 */}
       <Modal
         isOpen={Boolean(previewHandover)}
         onClose={() => setPreviewHandover(null)}
@@ -432,75 +488,100 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
       >
         {previewHandover && (
           <div className="space-y-4">
-            {/* Khung biên bản chuẩn văn bản */}
+            {/* Khung biên bản chuẩn văn bản A4 */}
             <div
               id="printable-handover"
-              className="bg-white p-6 border border-slate-300 rounded-xl shadow-xs text-slate-800 space-y-4 print:p-0 print:border-none"
+              className="bg-white p-8 border border-slate-200 rounded-2xl shadow-xs text-slate-900 space-y-5 print:p-0 print:border-none print:shadow-none"
             >
+              {/* Quốc hiệu tiêu ngữ */}
               <div className="text-center space-y-1">
-                <p className="font-bold text-xs uppercase tracking-wider">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
-                <p className="text-xs font-semibold underline underline-offset-4">Độc lập - Tự do - Hạnh phúc</p>
-                <h3 className="text-base font-bold text-slate-900 pt-4 uppercase">
-                  BIÊN BẢN BÀN GIAO TRANG THIẾT BỊ LÀM VIỆC
-                </h3>
-                <p className="text-[11px] font-mono text-slate-500">Mã văn bản: {previewHandover.code}</p>
+                <p className="font-bold text-xs uppercase tracking-widest text-slate-800">
+                  CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+                </p>
+                <p className="text-xs font-semibold text-slate-700 underline underline-offset-4">
+                  Độc lập - Tự do - Hạnh phúc
+                </p>
+                <div className="pt-4">
+                  <h3 className="text-lg font-bold text-slate-900 uppercase tracking-tight">
+                    BIÊN BẢN BÀN GIAO TRANG THIẾT BỊ LÀM VIỆC
+                  </h3>
+                  <p className="text-xs font-mono text-slate-500 mt-1">Mã văn bản: {previewHandover.code}</p>
+                </div>
               </div>
 
-              <div className="text-xs leading-relaxed space-y-2 pt-2">
+              {/* Nội dung chi tiết */}
+              <div className="text-xs leading-relaxed space-y-3 pt-2 text-slate-800">
                 <p>
-                  Hôm nay, ngày <span className="font-semibold">{previewHandover.handover_date}</span>, tại văn phòng công ty, chúng tôi gồm có:
+                  Hôm nay, ngày <span className="font-bold">{previewHandover.handover_date}</span>, tại văn phòng công ty, chúng tôi gồm có:
                 </p>
 
-                <div className="p-3 bg-slate-50 rounded-xl space-y-1">
-                  <p className="font-bold text-slate-700">I. ĐẠI DIỆN BÊN GIAO (BỘ PHẬN IT / QUẢN LÝ TÀI SẢN):</p>
-                  <p>• Họ và tên: <strong>Nguyễn Văn An</strong> - Chức vụ: Quản trị hệ thống</p>
+                <div className="p-3.5 bg-slate-50 rounded-xl space-y-1 border border-slate-100">
+                  <p className="font-bold text-slate-900 uppercase text-[11px]">
+                    I. ĐẠI DIỆN BÊN GIAO (BỘ PHẬN IT / QUẢN LÝ TÀI SẢN):
+                  </p>
+                  <p className="text-slate-700">
+                    • Họ và tên: <strong>Nguyễn Văn An</strong> - Chức vụ: Quản trị hệ thống & Trang thiết bị
+                  </p>
                 </div>
 
-                <div className="p-3 bg-slate-50 rounded-xl space-y-1">
-                  <p className="font-bold text-slate-700">II. ĐẠI DIỆN BÊN NHẬN (NHÂN SỰ TIẾP NHẬN):</p>
-                  <p>• Họ và tên: <strong>{previewHandover.user_name}</strong></p>
-                  <p>• Bộ phận: <strong>{previewHandover.user_department}</strong></p>
+                <div className="p-3.5 bg-slate-50 rounded-xl space-y-1 border border-slate-100">
+                  <p className="font-bold text-slate-900 uppercase text-[11px]">
+                    II. ĐẠI DIỆN BÊN NHẬN (NHÂN SỰ TIẾP NHẬN):
+                  </p>
+                  <p className="text-slate-700">• Họ và tên: <strong>{previewHandover.user_name}</strong></p>
+                  <p className="text-slate-700">• Bộ phận công tác: <strong>{previewHandover.user_department}</strong></p>
                 </div>
 
                 <div className="pt-2">
-                  <p className="font-bold text-slate-700">III. NỘI DUNG BÀN GIAO:</p>
-                  <p className="mt-1">
-                    Bên Giao bàn giao cho Bên Nhận trang thiết bị phục vụ công tác chuyên môn:
+                  <p className="font-bold text-slate-900 uppercase text-[11px]">III. NỘI DUNG BÀN GIAO:</p>
+                  <p className="mt-1 text-slate-700">
+                    Bên Giao bàn giao cho Bên Nhận trang thiết bị phục vụ công tác chuyên môn theo bảng kê:
                   </p>
-                  <ul className="list-disc list-inside mt-1 space-y-1 pl-2">
-                    <li>Tên trang thiết bị: <strong>{previewHandover.asset_name}</strong></li>
-                    <li>Mã quản lý: <strong>{previewHandover.asset_code || 'TS-QC-2024'}</strong></li>
-                    <li>Tình trạng kỹ thuật: {previewHandover.condition}</li>
-                  </ul>
+                  <div className="mt-2 p-3.5 bg-pastel-50/60 rounded-xl border border-pastel-200">
+                    <ul className="space-y-1.5 pl-1">
+                      <li>• Tên trang thiết bị: <strong className="text-slate-900">{previewHandover.asset_name}</strong></li>
+                      <li>• Mã quản lý nội bộ: <strong className="font-mono text-pastel-800">{previewHandover.asset_code || 'TS-QC-2024'}</strong></li>
+                      <li>• Tình trạng kỹ thuật: <span className="text-slate-700">{previewHandover.condition}</span></li>
+                    </ul>
+                  </div>
                 </div>
 
-                <p className="text-[11px] text-slate-500 italic pt-2">
-                  Bên Nhận cam kết sử dụng trang thiết bị đúng mục đích, bảo quản cẩn thận và bàn giao lại khi có yêu cầu hoặc khi chấm dứt hợp đồng lao động.
+                <p className="text-[11px] text-slate-500 italic pt-2 leading-relaxed">
+                  Bên Nhận cam kết sử dụng trang thiết bị đúng mục đích công việc, bảo quản cẩn thận, không tự ý chuyển nhượng và hoàn trả lại khi có quyết định điều chuyển hoặc chấm dứt hợp đồng lao động.
                 </p>
 
-                {/* Chữ ký 2 bên */}
+                {/* Phần chữ ký đại diện */}
                 <div className="grid grid-cols-2 gap-4 text-center pt-8 pb-4">
-                  <div>
-                    <p className="font-bold text-slate-800">ĐẠI DIỆN BÊN GIAO</p>
+                  <div className="space-y-1">
+                    <p className="font-bold text-slate-900">ĐẠI DIỆN BÊN GIAO</p>
                     <p className="text-[10px] text-slate-400 italic">(Ký và ghi rõ họ tên)</p>
-                    <div className="h-16"></div>
-                    <p className="font-semibold text-slate-700">Nguyễn Văn An</p>
+                    <div className="h-20 flex items-end justify-center">
+                      <p className="font-bold text-slate-800">Nguyễn Văn An</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-bold text-slate-800">ĐẠI DIỆN BÊN NHẬN</p>
+
+                  <div className="space-y-1">
+                    <p className="font-bold text-slate-900">ĐẠI DIỆN BÊN NHẬN</p>
                     <p className="text-[10px] text-slate-400 italic">(Ký và ghi rõ họ tên)</p>
-                    <div className="h-16"></div>
-                    <p className="font-semibold text-slate-700">{previewHandover.user_name}</p>
+                    <div className="h-20 flex items-end justify-center">
+                      <p className="font-bold text-slate-800">{previewHandover.user_name}</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Action Print */}
-            <div className="flex justify-end gap-2 pt-2">
+            {/* Print Action button */}
+            <div className="flex justify-end gap-2.5 pt-2">
+              <button
+                onClick={() => setPreviewHandover(null)}
+                className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all text-xs"
+              >
+                Đóng
+              </button>
               <button
                 onClick={() => window.print()}
-                className="px-5 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-semibold shadow-soft flex items-center gap-2 transition-all"
+                className="px-5 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft flex items-center gap-2 transition-all"
               >
                 <Printer size={15} />
                 <span>In Biên Bản (Khổ A4)</span>

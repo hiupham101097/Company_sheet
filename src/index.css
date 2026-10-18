@@ -3,9 +3,32 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --color-pastel-50: #F5FAF7;
+    --color-pastel-100: #E6F4EE;
+    --color-pastel-200: #CEE8DD;
+    --color-pastel-300: #A8D7C6;
+    --color-pastel-400: #75BFAB;
+    --color-pastel-500: #4E9F8E;
+    --color-pastel-600: #3D8274;
+    --color-pastel-700: #33695E;
+    --color-surface-bg: #F8FAF9;
+    --color-surface-card: #FFFFFF;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
-    @apply bg-surface-bg text-slate-800 font-sans;
+    @apply bg-surface-bg text-slate-800 font-sans min-h-screen;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  input, select, textarea, button {
+    font-family: inherit;
   }
 }
 
@@ -16,18 +39,87 @@
 }
 ::-webkit-scrollbar-track {
   background: #f1f5f4;
+  border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb {
   background: #c3ddd2;
   border-radius: 9999px;
+  transition: background 0.2s ease;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #9bc5b6;
+  background: #4E9F8E;
 }
 
-/* Glassmorphism soft effect */
+/* Glassmorphism Styles */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(227, 236, 231, 0.8);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(206, 232, 221, 0.6);
+}
+
+.glass-dropdown {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 10px 25px -5px rgba(78, 159, 142, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+}
+
+/* Card hover animation */
+.card-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(78, 159, 142, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+}
+
+/* Table scroll wrapper */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Professional Print Stylesheet for Official A4 Protocols */
+@media print {
+  /* Hide all dashboard chrome, sidebar, navbar, buttons */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #printable-handover,
+  #printable-handover * {
+    visibility: visible;
+  }
+
+  #printable-handover {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+  }
+
+  .no-print,
+  button,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 20mm 15mm 20mm 15mm;
+  }
 }

@@ -4,12 +4,10 @@ import {
   Plus,
   Clock,
   AlertTriangle,
-  Calendar,
   User,
   CheckCircle2,
   Trash2,
-  FileSpreadsheet,
-  Filter
+  FileSpreadsheet
 } from 'lucide-react';
 import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
@@ -105,12 +103,12 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
           <h2 className="text-xl font-bold text-slate-800 tracking-tight">
             Quản Lý Công Việc & Nhắc Hạn
           </h2>
-          <p className="text-sm text-slate-500">
+          <p className="text-xs sm:text-sm text-slate-500">
             Theo dõi phân công nhiệm vụ, cảnh báo công việc sắp đến hạn và xử lý công việc quá hạn.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <button
             onClick={handleExportExcel}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all"
@@ -120,7 +118,7 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-semibold shadow-soft hover:shadow-soft-lg transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
           >
             <Plus size={16} />
             <span>Giao Việc Mới</span>
@@ -128,44 +126,46 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
         </div>
       </div>
 
-      {/* Tabs Filter */}
-      <div className="flex items-center gap-2 border-b border-pastel-200/70 pb-3 overflow-x-auto">
+      {/* Filter Tabs Bar */}
+      <div className="flex items-center gap-2 border-b border-pastel-200/80 pb-3 overflow-x-auto">
         {[
-          { id: 'ALL', label: 'Tất cả công việc', count: tasks.length },
-          { id: 'MY_TASKS', label: 'Việc được giao cho tôi', count: tasks.filter((t) => t.assigned_to_user_id === currentUserId).length },
+          { id: 'ALL', label: 'Tất cả', count: tasks.length },
+          { id: 'MY_TASKS', label: 'Việc của tôi', count: tasks.filter((t) => t.assigned_to_user_id === currentUserId).length },
           { id: 'UPCOMING', label: 'Sắp tới hạn (≤3 ngày)', count: upcomingCount, badgeColor: 'bg-amber-100 text-amber-700' },
           { id: 'OVERDUE', label: 'Quá hạn', count: overdueCount, badgeColor: 'bg-rose-100 text-rose-700 font-bold' },
-          { id: 'COMPLETED', label: 'Đã hoàn thành', count: tasks.filter((t) => t.status === 'COMPLETED').length },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setFilterTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-              filterTab === tab.id
-                ? 'bg-pastel-500 text-white shadow-soft'
-                : 'text-slate-600 hover:bg-pastel-50'
-            }`}
-          >
-            <span>{tab.label}</span>
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] ${
-                filterTab === tab.id
-                  ? 'bg-white/20 text-white'
-                  : tab.badgeColor || 'bg-slate-100 text-slate-600'
+          { id: 'COMPLETED', label: 'Đã hoàn thành', count: tasks.filter((t) => t.status === 'COMPLETED').length }
+        ].map((tab) => {
+          const isSelected = filterTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setFilterTab(tab.id)}
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all ${
+                isSelected
+                  ? 'bg-pastel-500 text-white shadow-soft'
+                  : 'text-slate-600 hover:bg-pastel-50'
               }`}
             >
-              {tab.count}
-            </span>
-          </button>
-        ))}
+              <span>{tab.label}</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] ${
+                  isSelected ? 'bg-white/25 text-white' : tab.badgeColor || 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Task List */}
+      {/* Task Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredTasks.length === 0 ? (
-          <div className="col-span-2 py-16 text-center bg-white rounded-2xl border border-pastel-200/80">
-            <CheckCircle2 size={36} className="mx-auto text-pastel-400" />
-            <p className="text-xs text-slate-500 mt-2">Không có công việc nào trong danh mục này.</p>
+          <div className="col-span-full py-16 text-center bg-white rounded-3xl border border-pastel-200/80">
+            <CheckCircle2 size={36} className="mx-auto text-pastel-400 mb-2" />
+            <p className="text-xs font-semibold text-slate-700">Không có công việc nào trong danh mục này.</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Nhấn "Giao Việc Mới" để thiết lập nhiệm vụ cho nhân sự</p>
           </div>
         ) : (
           filteredTasks.map((task) => {
@@ -176,61 +176,62 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
             return (
               <div
                 key={task.id}
-                className={`p-5 rounded-2xl bg-white border transition-all ${
+                className={`p-5 rounded-3xl bg-white border card-hover flex flex-col justify-between ${
                   isOverdue
-                    ? 'border-rose-200 shadow-xs ring-1 ring-rose-100'
+                    ? 'border-rose-300 shadow-xs ring-1 ring-rose-200'
                     : isUpcoming
-                    ? 'border-amber-200 shadow-xs'
-                    : 'border-pastel-200/80 shadow-soft'
-                } flex flex-col justify-between`}
+                    ? 'border-amber-300 shadow-xs ring-1 ring-amber-100'
+                    : 'border-pastel-200/90 shadow-soft'
+                }`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
                       <button
                         onClick={() => handleToggleStatus(task)}
-                        className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+                        className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center transition-all shrink-0 ${
                           isDone
                             ? 'bg-pastel-500 border-pastel-500 text-white'
                             : 'border-slate-300 hover:border-pastel-500 bg-white'
                         }`}
+                        title={isDone ? 'Đánh dấu chưa xong' : 'Đánh dấu hoàn thành'}
                       >
                         {isDone && <CheckCircle2 size={14} />}
                       </button>
-
                       <div>
                         <h4
-                          className={`text-sm font-bold text-slate-800 ${
+                          className={`text-sm font-bold text-slate-800 leading-snug ${
                             isDone ? 'line-through text-slate-400' : ''
                           }`}
                         >
                           {task.title}
                         </h4>
                         {task.description && (
-                          <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                          <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed">
                             {task.description}
                           </p>
                         )}
                       </div>
                     </div>
-
-                    <Badge variant={priorityMap[task.priority]?.variant || 'default'}>
+                    <Badge variant={priorityMap[task.priority]?.variant || 'default'} className="shrink-0">
                       {priorityMap[task.priority]?.label}
                     </Badge>
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-full bg-pastel-100 text-pastel-700 flex items-center justify-center font-bold text-[10px]">
                       {task.assigned_user_name?.slice(0, 1) || 'U'}
                     </div>
-                    <span className="font-medium text-slate-700">{task.assigned_user_name}</span>
+                    <span className="font-semibold text-slate-700 text-xs truncate max-w-[140px]">
+                      {task.assigned_user_name}
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-3">
                     <div
-                      className={`flex items-center gap-1 font-semibold text-[11px] ${
+                      className={`flex items-center gap-1 font-semibold text-[11px] font-mono ${
                         isOverdue
                           ? 'text-rose-600'
                           : isUpcoming
@@ -240,13 +241,14 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
                     >
                       <Clock size={13} />
                       <span>{task.due_date}</span>
-                      {isOverdue && <span className="font-bold">(Quá hạn)</span>}
-                      {isUpcoming && <span className="font-bold">(Sắp tới)</span>}
+                      {isOverdue && <span className="font-bold font-sans">(Quá hạn)</span>}
+                      {isUpcoming && <span className="font-bold font-sans">(Sắp tới)</span>}
                     </div>
 
                     <button
                       onClick={() => handleDelete(task.id)}
-                      className="p-1 rounded text-slate-300 hover:text-rose-600 transition-colors"
+                      className="p-1 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      title="Xóa công việc"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -273,18 +275,18 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
               placeholder="VD: Kiểm kê định kỳ thiết bị phòng IT"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Người thực hiện *</label>
               <select
                 required
                 value={formData.assigned_to_user_id}
                 onChange={(e) => setFormData({ ...formData, assigned_to_user_id: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
               >
                 <option value="">-- Chọn nhân sự phụ trách --</option>
                 {users.map((u) => (
@@ -299,7 +301,7 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
               <select
                 value={formData.priority}
                 onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
               >
                 <option value="LOW">Thấp</option>
                 <option value="MEDIUM">Trung bình</option>
@@ -316,7 +318,7 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
               required
               value={formData.due_date}
               onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-medium"
             />
           </div>
 
@@ -327,21 +329,21 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
               placeholder="Yêu cầu chi tiết, chỉ tiêu bàn giao hoặc link tài liệu..."
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
+              className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-semibold shadow-soft transition-all"
+              className="px-5 py-2.5 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-bold shadow-soft transition-all"
             >
               Tạo Công Việc
             </button>
