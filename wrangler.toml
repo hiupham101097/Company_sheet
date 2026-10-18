@@ -1,9 +1,12 @@
 name = "company-sheet"
 compatibility_date = "2024-09-23"
 
-# Cloudflare Pages / Static Assets output
-pages_build_output_dir = "dist"
-
+# Assets Directory
 [assets]
 directory = "dist"
-binding = "ASSETS"
+
+# Cloudflare D1 Database Binding
+[[d1_databases]]
+binding = "DB"
+database_name = "company_assets_db"
+database_id = "f3eb46fc-b6e0-4c24-9e87-032ce24abb7d"
