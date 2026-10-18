@@ -532,6 +532,10 @@ app.get('/api/attendance', async (c) => {
 app.post('/api/attendance/check', async (c) => {
   try {
     const { user_id, action, notes } = await c.req.json();
+    if (!user_id) {
+      return c.json({ success: false, message: 'Mã nhân viên là bắt buộc' }, 400);
+    }
+
     const today = new Date().toISOString().split('T')[0];
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -547,6 +551,8 @@ app.post('/api/attendance/check', async (c) => {
       }
       const isLate = now.getHours() > 8 || (now.getHours() === 8 && now.getMinutes() > 30);
       const id = `att_${Date.now()}`;
+      const noteText = notes || (isLate ? 'Đi muộn sau 08:30' : 'Đúng giờ');
+
       await c.env.DB.prepare(`
         INSERT INTO attendance (id, user_id, date, check_in, check_out, total_hours, status, notes)
         VALUES (?, ?, ?, ?, NULL, 0, ?, ?)
@@ -556,25 +562,28 @@ app.post('/api/attendance/check', async (c) => {
         today,
         timeStr,
         isLate ? 'LATE' : 'ON_TIME',
-        notes || (isLate ? 'Đi muộn sau 08:30' : 'Đúng giờ')
+        noteText
       ).run();
 
-      return c.json({ success: true, message: 'Check-in thành công!' });
+      return c.json({ success: true, message: 'Điểm danh vào (Check-in) thành công!' });
     }
 
     if (action === 'CHECK_OUT') {
       if (!existing) {
-        return c.json({ success: false, message: 'Chưa có bản ghi Check-in hôm nay' }, 400);
+        return c.json({ success: false, message: 'Chưa có bản ghi Check-in hôm nay để tính giờ tan ca' }, 400);
       }
-      const [inH, inM] = existing.check_in.split(':').map(Number);
+      const checkInTime = existing.check_in || '08:30';
+      const [inH, inM] = checkInTime.split(':').map(Number);
       const hours = Math.max(0, Number(((now.getHours() * 60 + now.getMinutes() - (inH * 60 + inM)) / 60).toFixed(1)));
+      const checkoutNote = notes ? `${existing.notes || ''} - ${notes}` : (existing.notes || null);
+
       await c.env.DB.prepare(`
         UPDATE attendance
-        SET check_out = ?, total_hours = ?, notes = COALESCE(?, notes)
+        SET check_out = ?, total_hours = ?, notes = ?
         WHERE id = ?
-      `).bind(timeStr, hours, notes, existing.id).run();
+      `).bind(timeStr, hours, checkoutNote, existing.id).run();
 
-      return c.json({ success: true, message: 'Check-out thành công!' });
+      return c.json({ success: true, message: `Điểm danh ra (Check-out) thành công! Tổng giờ làm: ${hours}h` });
     }
 
     return c.json({ success: false, message: 'Hành động không hợp lệ' }, 400);
