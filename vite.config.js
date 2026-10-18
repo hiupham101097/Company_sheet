@@ -13,4 +13,17 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    outDir: 'dist',
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-charts': ['recharts'],
+          'vendor-utils': ['xlsx', 'clsx', 'tailwind-merge', 'lucide-react']
+        }
+      }
+    }
+  }
 });
