@@ -70,13 +70,11 @@ export function Sidebar({
       >
         {/* Brand Header */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-pastel-100 bg-gradient-to-r from-pastel-50/70 to-white">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-pastel-500 flex items-center justify-center text-white shadow-soft">
-              <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-white border border-pastel-200/90 p-1 flex items-center justify-center shadow-soft shrink-0">
+              <img src="/logo.png" alt="OMNI ASSETS" className="w-full h-full object-contain" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-sm font-bold tracking-tight text-slate-800 leading-tight">OMNI ASSETS</h1>
               <p className="text-[10px] text-pastel-600 font-bold uppercase tracking-wider">
                 {roleLabels[userRole]?.label?.split(' ')[0] || userRole}

@@ -62,11 +62,9 @@ export function Login({ onLoginSuccess }) {
     <div className="min-h-screen bg-gradient-to-br from-pastel-50 via-white to-pastel-100 flex items-center justify-center p-4 selection:bg-pastel-200 selection:text-pastel-900 font-sans">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-soft-lg border border-pastel-200/80 p-8 space-y-6">
         {/* Logo and Header */}
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-pastel-500 text-white flex items-center justify-center mx-auto shadow-soft">
-            <svg className="w-7 h-7 fill-current" viewBox="0 0 24 24">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
+        <div className="text-center space-y-3">
+          <div className="w-16 h-16 rounded-2xl bg-white border border-pastel-200/90 p-1.5 flex items-center justify-center mx-auto shadow-soft">
+            <img src="/logo.png" alt="OMNI ASSETS" className="w-full h-full object-contain" />
           </div>
           <h2 className="text-xl font-bold text-slate-800 tracking-tight">OMNI ASSETS</h2>
           <p className="text-xs text-pastel-600 font-semibold tracking-wide uppercase">
