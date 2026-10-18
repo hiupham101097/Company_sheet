@@ -199,14 +199,14 @@ app.put('/api/assets/:id', async (c) => {
           notes = COALESCE(?, notes)
       WHERE id = ?
     `).bind(
-      body.name,
-      body.category,
-      body.serial_number,
-      body.price,
-      body.status,
-      body.location,
-      body.assigned_to_user_id,
-      body.notes,
+      body.name !== undefined ? body.name : null,
+      body.category !== undefined ? body.category : null,
+      body.serial_number !== undefined ? body.serial_number : null,
+      body.price !== undefined ? body.price : null,
+      body.status !== undefined ? body.status : null,
+      body.location !== undefined ? body.location : null,
+      body.assigned_to_user_id !== undefined ? body.assigned_to_user_id : null,
+      body.notes !== undefined ? body.notes : null,
       id
     ).run();
 
@@ -397,7 +397,12 @@ app.put('/api/tasks/:id', async (c) => {
           title = COALESCE(?, title),
           priority = COALESCE(?, priority)
       WHERE id = ?
-    `).bind(body.status, body.title, body.priority, id).run();
+    `).bind(
+      body.status !== undefined ? body.status : null,
+      body.title !== undefined ? body.title : null,
+      body.priority !== undefined ? body.priority : null,
+      id
+    ).run();
 
     return c.json({ success: true, message: 'Đã cập nhật công việc' });
   } catch (err) {
@@ -763,7 +768,12 @@ app.put('/api/categories/:id', async (c) => {
           code = COALESCE(?, code),
           description = COALESCE(?, description)
       WHERE id = ?
-    `).bind(name, code, description, id).run();
+    `).bind(
+      name !== undefined ? name : null,
+      code !== undefined ? code : null,
+      description !== undefined ? description : null,
+      id
+    ).run();
 
     return c.json({ success: true, message: 'Đã cập nhật danh mục' });
   } catch (err) {
