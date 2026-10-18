@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CalendarCheck,
   CheckCircle2,
@@ -16,6 +16,12 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (users.length > 0 && (!selectedUser || !users.some((u) => u.id === selectedUser))) {
+      setSelectedUser(users[0].id);
+    }
+  }, [users, selectedUser]);
+
   const statusMap = {
     ON_TIME: { label: 'Đúng giờ', variant: 'success' },
     LATE: { label: 'Đi muộn', variant: 'warning' },
@@ -24,6 +30,10 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
   };
 
   const handleAction = async (action) => {
+    if (!selectedUser) {
+      alert('Vui lòng chọn nhân viên cần điểm danh');
+      return;
+    }
     try {
       setLoading(true);
       const res = await api.checkAttendance({

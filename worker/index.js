@@ -531,14 +531,35 @@ app.get('/api/attendance', async (c) => {
 
 app.post('/api/attendance/check', async (c) => {
   try {
-    const { user_id, action, notes } = await c.req.json();
+    const body = await c.req.json().catch(() => ({}));
+    const { user_id, action, notes } = body;
     if (!user_id) {
       return c.json({ success: false, message: 'Mã nhân viên là bắt buộc' }, 400);
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    // Kiểm tra nhân viên có tồn tại trong CSDL không
+    const targetUser = await c.env.DB
+      .prepare('SELECT id, name FROM users WHERE id = ?')
+      .bind(user_id)
+      .first();
+
+    if (!targetUser) {
+      return c.json({
+        success: false,
+        message: `Mã nhân sự "${user_id}" không tồn tại trên hệ thống. Vui lòng đăng nhập lại.`
+      }, 400);
+    }
+
+    // Chuẩn hóa ngày và giờ theo múi giờ Việt Nam (Asia/Ho_Chi_Minh - UTC+7)
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()); // YYYY-MM-DD
+    const timeStr = new Intl.DateTimeFormat('vi-VN', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(new Date()); // HH:mm
+    const [curHour, curMin] = timeStr.split(':').map(Number);
+    const isLate = curHour > 8 || (curHour === 8 && curMin > 30);
 
     const existing = await c.env.DB
       .prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?')
@@ -547,11 +568,13 @@ app.post('/api/attendance/check', async (c) => {
 
     if (action === 'CHECK_IN') {
       if (existing) {
-        return c.json({ success: false, message: 'Nhân viên đã điểm danh vào hôm nay' }, 400);
+        return c.json({
+          success: false,
+          message: `Nhân viên ${targetUser.name} đã điểm danh vào lúc ${existing.check_in || 'hôm nay'}${existing.check_out ? ` (Đã tan ca lúc ${existing.check_out})` : ''}`
+        }, 400);
       }
-      const isLate = now.getHours() > 8 || (now.getHours() === 8 && now.getMinutes() > 30);
       const id = `att_${Date.now()}`;
-      const noteText = notes || (isLate ? 'Đi muộn sau 08:30' : 'Đúng giờ');
+      const noteText = (notes && String(notes).trim()) ? String(notes).trim() : (isLate ? 'Đi muộn sau 08:30' : 'Đúng giờ');
 
       await c.env.DB.prepare(`
         INSERT INTO attendance (id, user_id, date, check_in, check_out, total_hours, status, notes)
@@ -565,17 +588,27 @@ app.post('/api/attendance/check', async (c) => {
         noteText
       ).run();
 
-      return c.json({ success: true, message: 'Điểm danh vào (Check-in) thành công!' });
+      return c.json({
+        success: true,
+        message: `Điểm danh vào (Check-in) thành công lúc ${timeStr}! (${isLate ? 'Đi muộn' : 'Đúng giờ'})`
+      });
     }
 
     if (action === 'CHECK_OUT') {
       if (!existing) {
-        return c.json({ success: false, message: 'Chưa có bản ghi Check-in hôm nay để tính giờ tan ca' }, 400);
+        return c.json({
+          success: false,
+          message: `Chưa có bản ghi Check-in ngày ${today} của ${targetUser.name} để tính giờ tan ca`
+        }, 400);
       }
       const checkInTime = existing.check_in || '08:30';
-      const [inH, inM] = checkInTime.split(':').map(Number);
-      const hours = Math.max(0, Number(((now.getHours() * 60 + now.getMinutes() - (inH * 60 + inM)) / 60).toFixed(1)));
-      const checkoutNote = notes ? `${existing.notes || ''} - ${notes}` : (existing.notes || null);
+      const [inH, inM] = checkInTime.includes(':') ? checkInTime.split(':').map(Number) : [8, 30];
+      const totalMinutes = Math.max(0, (curHour * 60 + curMin) - (inH * 60 + inM));
+      const hours = Number((totalMinutes / 60).toFixed(1));
+      const extraNote = (notes && String(notes).trim()) ? String(notes).trim() : null;
+      const checkoutNote = extraNote
+        ? `${existing.notes ? existing.notes + ' - ' : ''}${extraNote}`
+        : (existing.notes || 'Tan ca bình thường');
 
       await c.env.DB.prepare(`
         UPDATE attendance
@@ -583,12 +616,15 @@ app.post('/api/attendance/check', async (c) => {
         WHERE id = ?
       `).bind(timeStr, hours, checkoutNote, existing.id).run();
 
-      return c.json({ success: true, message: `Điểm danh ra (Check-out) thành công! Tổng giờ làm: ${hours}h` });
+      return c.json({
+        success: true,
+        message: `Điểm danh ra (Check-out) thành công lúc ${timeStr}! Tổng giờ làm: ${hours}h`
+      });
     }
 
     return c.json({ success: false, message: 'Hành động không hợp lệ' }, 400);
   } catch (err) {
-    return c.json({ success: false, message: err.message }, 500);
+    return c.json({ success: false, message: err.message || 'Lỗi xử lý điểm danh' }, 500);
   }
 });
 
