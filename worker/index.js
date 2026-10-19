@@ -37,6 +37,117 @@ app.post('/api/auth/login', async (c) => {
   }
 });
 
+// Đăng ký Doanh nghiệp Mới & Tạo User Quản Trị Viên (Super Admin)
+app.post('/api/auth/register-company', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const {
+      company_name,
+      tax_id,
+      industry,
+      company_address,
+      company_phone,
+      company_email,
+      admin_name,
+      admin_email,
+      admin_password,
+      admin_phone,
+      admin_title
+    } = body;
+
+    // Validate required fields
+    if (!company_name || !company_name.trim()) {
+      return c.json({ success: false, message: 'Vui lòng nhập tên doanh nghiệp' }, 400);
+    }
+    if (!admin_name || !admin_name.trim()) {
+      return c.json({ success: false, message: 'Vui lòng nhập họ và tên Quản trị viên' }, 400);
+    }
+    if (!admin_email || !admin_email.trim()) {
+      return c.json({ success: false, message: 'Vui lòng nhập email quản trị' }, 400);
+    }
+    if (!admin_password || admin_password.trim().length < 6) {
+      return c.json({ success: false, message: 'Mật khẩu phải có tối thiểu 6 ký tự' }, 400);
+    }
+
+    const cleanEmail = admin_email.trim().toLowerCase();
+
+    // Check if user email already exists
+    const existing = await c.env.DB
+      .prepare('SELECT id FROM users WHERE lower(email) = ?')
+      .bind(cleanEmail)
+      .first();
+
+    if (existing) {
+      return c.json({
+        success: false,
+        message: `Email "${cleanEmail}" đã được sử dụng. Vui lòng chọn email khác hoặc đăng nhập.`
+      }, 400);
+    }
+
+    // Create Admin User
+    const adminId = `adm_${Date.now()}`;
+    const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(admin_name.trim())}`;
+    const departmentName = admin_title?.trim() || 'Ban Giám Đốc';
+
+    await c.env.DB.prepare(`
+      INSERT INTO users (id, name, email, password, role, department, phone, avatar, status)
+      VALUES (?, ?, ?, ?, 'ADMIN', ?, ?, ?, 'ACTIVE')
+    `).bind(
+      adminId,
+      admin_name.trim(),
+      cleanEmail,
+      admin_password.trim(),
+      departmentName,
+      admin_phone ? admin_phone.trim() : (company_phone ? company_phone.trim() : ''),
+      avatar
+    ).run();
+
+    // Ensure system_settings table exists & update company profile
+    await initSettingsTable(c.env.DB);
+    const now = new Date().toISOString();
+
+    const settingsUpdates = [
+      ['company_name', company_name.trim()],
+      ['system_title', `Hệ Thống Quản Trị & Vận Hành - ${company_name.trim()}`],
+      ['company_email', (company_email && company_email.trim()) ? company_email.trim() : cleanEmail],
+      ['company_phone', (company_phone && company_phone.trim()) ? company_phone.trim() : (admin_phone ? admin_phone.trim() : '1900 6868')],
+      ['company_address', (company_address && company_address.trim()) ? company_address.trim() : ''],
+      ['tax_id', (tax_id && tax_id.trim()) ? tax_id.trim() : ''],
+      ['system_announcement', `Chào mừng ${company_name.trim()} gia nhập hệ thống quản trị vận hành OMNI ASSETS!`]
+    ];
+
+    for (const [k, v] of settingsUpdates) {
+      await c.env.DB.prepare(`
+        INSERT INTO system_settings (key, value, category, description, updated_at)
+        VALUES (?, ?, 'GENERAL', '', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+      `).bind(k, v, now).run();
+    }
+
+    const newUser = {
+      id: adminId,
+      name: admin_name.trim(),
+      email: cleanEmail,
+      role: 'ADMIN',
+      department: departmentName,
+      phone: admin_phone || '',
+      avatar,
+      status: 'ACTIVE'
+    };
+
+    return c.json({
+      success: true,
+      message: `Đăng ký thành công doanh nghiệp ${company_name.trim()} và Quản trị viên ${admin_name.trim()}!`,
+      data: {
+        user: newUser,
+        token: `jwt_${adminId}_${Date.now()}`
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message || 'Lỗi khi đăng ký doanh nghiệp' }, 500);
+  }
+});
+
 // ========================
 // 2. DASHBOARD & REPORTS
 // ========================

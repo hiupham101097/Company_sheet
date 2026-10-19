@@ -30,8 +30,9 @@ async function request(endpoint, options = {}) {
 }
 
 export const api = {
-  // Xác thực đăng nhập
+  // Xác thực đăng nhập & Đăng ký doanh nghiệp
   login: (credentials) => request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+  registerCompany: (data) => request('/auth/register-company', { method: 'POST', body: JSON.stringify(data) }),
 
   // Quản lý Danh mục động (Categories API)
   getCategories: (type) => request(type ? `/categories?type=${type}` : '/categories'),
