@@ -257,13 +257,13 @@ export function FinanceManager({ financeList = [], monthlyData, onRefresh, userR
           <table className="w-full text-left text-xs text-slate-600">
             <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
               <tr>
-                <th className="py-3.5 px-4 font-bold">Số Chứng Từ</th>
-                <th className="py-3.5 px-4 font-bold">Ngày</th>
-                <th className="py-3.5 px-4 font-bold">Loại</th>
-                <th className="py-3.5 px-4 font-bold">Hạng Mục</th>
-                <th className="py-3.5 px-4 font-bold">Số Tiền</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Chứng Từ</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Loại</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Hạng Mục</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Tiền</th>
                 <th className="py-3.5 px-4 font-bold">Diễn Giải</th>
-                <th className="py-3.5 px-4 font-bold text-right">Thao Tác</th>
+                <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">Thao Tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
@@ -276,21 +276,21 @@ export function FinanceManager({ financeList = [], monthlyData, onRefresh, userR
               ) : (
                 filteredList.map((item) => (
                   <tr key={item.id} className="hover:bg-pastel-50/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-pastel-700">
+                    <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">
                       {item.invoice_number}
                     </td>
-                    <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">{item.date}</td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-3.5 px-4 text-slate-500 font-mono text-xs whitespace-nowrap">{item.date}</td>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
                       <Badge variant={item.type === 'REVENUE' ? 'success' : 'danger'}>
                         {item.type === 'REVENUE' ? '+ Thu' : '- Chi'}
                       </Badge>
                     </td>
                     <td className="py-3.5 px-4 text-slate-800 font-semibold">{item.category}</td>
-                    <td className={`py-3.5 px-4 font-bold ${item.type === 'REVENUE' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {item.type === 'REVENUE' ? '+' : '-'} {formatVND(item.amount)}
+                    <td className={`py-3.5 px-4 font-bold whitespace-nowrap ${item.type === 'REVENUE' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      <span className="inline-block whitespace-nowrap">{item.type === 'REVENUE' ? '+' : '-'} {formatVND(item.amount)}</span>
                     </td>
                     <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">{item.description}</td>
-                    <td className="py-3.5 px-4 text-right">
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
                       <button
                         onClick={() => handleDelete(item.id)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
@@ -314,38 +314,38 @@ export function FinanceManager({ financeList = [], monthlyData, onRefresh, userR
         title="Ghi Nhận Giao Dịch Thu / Chi Mới"
       >
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Loại giao dịch *</label>
+              <label className="block font-semibold text-slate-700 mb-1.5">Loại giao dịch *</label>
               <select
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-semibold text-xs shadow-xs"
               >
-                <option value="REVENUE">Thu (Doanh thu)</option>
-                <option value="EXPENSE">Chi (Chi phí)</option>
+                <option value="REVENUE">📈 Khoản Thu (Doanh thu)</option>
+                <option value="EXPENSE">📉 Khoản Chi (Chi phí)</option>
               </select>
             </div>
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Số tiền (VNĐ) *</label>
+              <label className="block font-semibold text-slate-700 mb-1.5">Số tiền (VNĐ) *</label>
               <input
                 type="number"
                 required
                 placeholder="VD: 50000000"
                 value={formData.amount}
                 onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-semibold"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-semibold text-xs shadow-xs"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Hạng mục thu / chi</label>
+              <label className="block font-semibold text-slate-700 mb-1.5">Hạng mục thu / chi</label>
               <select
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium text-xs shadow-xs"
               >
                 {categories.length === 0 ? (
                   <option value="">Đang tải danh mục...</option>
@@ -359,52 +359,52 @@ export function FinanceManager({ financeList = [], monthlyData, onRefresh, userR
               </select>
             </div>
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Ngày ghi nhận</label>
+              <label className="block font-semibold text-slate-700 mb-1.5">Ngày ghi nhận *</label>
               <input
                 type="date"
                 required
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-medium"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-medium text-xs shadow-xs"
               />
             </div>
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Mã hóa đơn / Chứng từ</label>
+            <label className="block font-semibold text-slate-700 mb-1.5">Mã hóa đơn / Chứng từ</label>
             <input
               type="text"
               placeholder="VD: HD-2024-099"
               value={formData.invoice_number}
               onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-mono"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-mono text-xs shadow-xs"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Diễn giải nội dung</label>
+            <label className="block font-semibold text-slate-700 mb-1.5">Diễn giải nội dung</label>
             <textarea
               rows={3}
               placeholder="Chi tiết nguồn thu, đối tác hoặc mục đích chi tiêu..."
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 text-xs shadow-xs"
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
+          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
+              className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs shadow-xs transition-all"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-bold shadow-soft transition-all"
+              className="px-6 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-soft transition-all flex items-center gap-1.5"
             >
-              Lưu Giao Dịch
+              <span>Lưu Giao Dịch</span>
             </button>
           </div>
         </form>

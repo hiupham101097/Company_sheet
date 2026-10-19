@@ -217,14 +217,14 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
           <table className="w-full text-left text-xs text-slate-600">
             <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
               <tr>
-                <th className="py-3.5 px-4 font-bold">Mã Tài Sản</th>
-                <th className="py-3.5 px-4 font-bold">Tên Thiết Bị</th>
-                <th className="py-3.5 px-4 font-bold">Danh Mục</th>
-                <th className="py-3.5 px-4 font-bold">Trạng Thái</th>
-                <th className="py-3.5 px-4 font-bold">Giá Trị</th>
-                <th className="py-3.5 px-4 font-bold">Người Nắm Giữ</th>
-                <th className="py-3.5 px-4 font-bold">Vị Trí</th>
-                <th className="py-3.5 px-4 font-bold text-right">Thao Tác</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Mã Tài Sản</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Tên Thiết Bị</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Danh Mục</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Trạng Thái</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Giá Trị</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Người Nắm Giữ</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Vị Trí</th>
+                <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">Thao Tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
@@ -240,7 +240,7 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
                   const st = statusMap[asset.status] || { label: asset.status, variant: 'default' };
                   return (
                     <tr key={asset.id} className="hover:bg-pastel-50/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700">
+                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">
                         {asset.code}
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-slate-800">
@@ -251,25 +251,25 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
                           </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600">{asset.category}</td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap">{asset.category}</td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <Badge variant={st.variant} className="gap-1.5">
                           <span className={`w-1.5 h-1.5 rounded-full ${st.dotColor || 'bg-slate-400'}`} />
                           <span>{st.label}</span>
                         </Badge>
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-700">
+                      <td className="py-3.5 px-4 font-bold text-slate-700 whitespace-nowrap">
                         {formatVND(asset.price)}
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         {asset.assigned_user_name !== 'Chưa bàn giao' ? (
                           <span className="text-slate-800 font-medium">{asset.assigned_user_name}</span>
                         ) : (
                           <span className="text-slate-400 italic">Chưa bàn giao</span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-500">{asset.location || 'Kho'}</td>
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">{asset.location || 'Kho'}</td>
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => {
@@ -425,19 +425,19 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
+          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsAddModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
+              className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs shadow-xs transition-all"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-bold shadow-soft transition-all"
+              className="px-6 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-soft transition-all flex items-center gap-1.5"
             >
-              Lưu Tài Sản
+              <span>Lưu Tài Sản</span>
             </button>
           </div>
         </form>

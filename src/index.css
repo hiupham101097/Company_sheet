@@ -77,11 +77,39 @@
   box-shadow: 0 10px 25px -5px rgba(78, 159, 142, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
 }
 
-/* Table scroll wrapper */
+/* Table scroll wrapper & anti-wrap styling */
 .table-responsive {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive table {
+  min-width: 860px;
+}
+
+.table-responsive th {
+  white-space: nowrap !important;
+}
+
+.cell-nowrap {
+  white-space: nowrap !important;
+}
+
+.cell-code {
+  white-space: nowrap !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+}
+
+.cell-date {
+  white-space: nowrap !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.cell-amount {
+  white-space: nowrap !important;
+  font-weight: 700;
 }
 
 /* Mascot Floating & Glowing Keyframes */

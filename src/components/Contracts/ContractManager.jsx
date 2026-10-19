@@ -187,12 +187,12 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
                 <tr>
-                  <th className="py-3.5 px-4 font-bold">Số Hợp Đồng</th>
-                  <th className="py-3.5 px-4 font-bold">Tên Hợp Đồng</th>
-                  <th className="py-3.5 px-4 font-bold">Đối Tác</th>
-                  <th className="py-3.5 px-4 font-bold">Giá Trị</th>
-                  <th className="py-3.5 px-4 font-bold">Thời Hạn</th>
-                  <th className="py-3.5 px-4 font-bold">Trạng Thái</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Hợp Đồng</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Tên Hợp Đồng</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Đối Tác</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Giá Trị</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Thời Hạn</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Trạng Thái</th>
                   <th className="py-3.5 px-4 font-bold">Ghi Chú</th>
                 </tr>
               </thead>
@@ -206,14 +206,14 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
                 ) : (
                   contracts.map((ctr) => (
                     <tr key={ctr.id} className="hover:bg-pastel-50/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700">{ctr.code}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">{ctr.code}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-800">{ctr.title}</td>
-                      <td className="py-3.5 px-4 text-slate-700 font-medium">{ctr.partner_name}</td>
-                      <td className="py-3.5 px-4 font-bold text-slate-800">{formatVND(ctr.value)}</td>
-                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
+                      <td className="py-3.5 px-4 text-slate-700 font-medium whitespace-nowrap">{ctr.partner_name}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">{formatVND(ctr.value)}</td>
+                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">
                         {ctr.start_date} → {ctr.end_date}
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <Badge variant={ctr.status === 'ACTIVE' ? 'success' : 'default'}>
                           {ctr.status === 'ACTIVE' ? 'Hiệu lực' : ctr.status}
                         </Badge>
@@ -235,13 +235,13 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
                 <tr>
-                  <th className="py-3.5 px-4 font-bold">Số Biên Bản</th>
-                  <th className="py-3.5 px-4 font-bold">Loại Biên Bản</th>
-                  <th className="py-3.5 px-4 font-bold">Thiết Bị Bàn Giao</th>
-                  <th className="py-3.5 px-4 font-bold">Nhân Sự Tiếp Nhận</th>
-                  <th className="py-3.5 px-4 font-bold">Ngày Bàn Giao</th>
-                  <th className="py-3.5 px-4 font-bold">Tình Trạng</th>
-                  <th className="py-3.5 px-4 font-bold text-right">In Ấn</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Biên Bản</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Loại Biên Bản</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Thiết Bị Bàn Giao</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Nhân Sự Tiếp Nhận</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày Bàn Giao</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Tình Trạng</th>
+                  <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">In Ấn</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
@@ -254,13 +254,13 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
                 ) : (
                   handovers.map((item) => (
                     <tr key={item.id} className="hover:bg-pastel-50/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700">{item.code}</td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">{item.code}</td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <Badge variant={item.type === 'HANDOVER' ? 'primary' : 'warning'}>
                           {item.type === 'HANDOVER' ? 'Bàn giao sử dụng' : 'Thu hồi tài sản'}
                         </Badge>
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-800">
+                      <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">
                         {item.asset_name}
                         {item.asset_code && (
                           <span className="block text-[10px] text-slate-400 font-mono font-normal">
@@ -268,12 +268,12 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
                           </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-700 font-medium">
+                      <td className="py-3.5 px-4 text-slate-700 font-medium whitespace-nowrap">
                         {item.user_name} <span className="text-slate-400 font-normal">({item.user_department})</span>
                       </td>
-                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">{item.handover_date}</td>
+                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">{item.handover_date}</td>
                       <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate">{item.condition}</td>
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <button
                           onClick={() => setPreviewHandover(item)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pastel-50 text-pastel-700 hover:bg-pastel-100 font-bold transition-all text-xs"
@@ -368,19 +368,19 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
+          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsContractModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
+              className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs shadow-xs transition-all"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-bold shadow-soft transition-all"
+              className="px-6 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-soft transition-all flex items-center gap-1.5"
             >
-              Lưu Hợp Đồng
+              <span>Lưu Hợp Đồng</span>
             </button>
           </div>
         </form>
@@ -461,19 +461,19 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
+          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsHandoverModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
+              className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs shadow-xs transition-all"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-bold shadow-soft transition-all"
+              className="px-6 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-soft transition-all flex items-center gap-1.5"
             >
-              Hoàn Tất & Tạo Biên Bản
+              <span>Hoàn Tất & Tạo Biên Bản</span>
             </button>
           </div>
         </form>

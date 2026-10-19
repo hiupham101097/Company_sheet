@@ -14,9 +14,10 @@ export function Badge({ children, variant = 'default', className = '' }) {
 
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${variantStyles[variant] || variantStyles.default} ${className}`}
+      className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border whitespace-nowrap shrink-0 transition-colors ${variantStyles[variant] || variantStyles.default} ${className}`}
     >
       {children}
     </span>
   );
 }
+

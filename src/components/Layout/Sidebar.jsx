@@ -77,8 +77,8 @@ export function Sidebar({
             </div>
             <div className="min-w-0">
               <h1 className="text-sm font-bold tracking-tight text-slate-800 leading-tight">OMNI ASSETS</h1>
-              <p className="text-[10px] text-pastel-600 font-bold uppercase tracking-wider">
-                {roleLabels[userRole]?.label?.split(' ')[0] || userRole}
+              <p className="text-[10px] text-pastel-600 font-bold uppercase tracking-wider truncate">
+                {userRole === 'ADMIN' ? 'Quản Trị Viên' : userRole === 'MANAGER' ? 'Quản Lý Cấp Cao' : 'Nhân Viên'}
               </p>
             </div>
           </div>

@@ -195,10 +195,10 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
           <table className="w-full text-left text-xs text-slate-600">
             <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
               <tr>
-                <th className="py-3.5 px-4 font-bold">Mã Danh Mục</th>
-                <th className="py-3.5 px-4 font-bold">Tên Danh Mục</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Mã Danh Mục</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Tên Danh Mục</th>
                 <th className="py-3.5 px-4 font-bold">Mô Tả / Diễn Giải</th>
-                <th className="py-3.5 px-4 font-bold text-right">Thao Tác</th>
+                <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">Thao Tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
@@ -211,12 +211,12 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
               ) : (
                 filteredCategories.map((cat) => (
                   <tr key={cat.id} className="hover:bg-pastel-50/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-pastel-700">
+                    <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">
                       {cat.code || cat.id}
                     </td>
-                    <td className="py-3.5 px-4 font-bold text-slate-800">{cat.name}</td>
+                    <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">{cat.name}</td>
                     <td className="py-3.5 px-4 text-slate-500 max-w-md">{cat.description || '-'}</td>
-                    <td className="py-3.5 px-4 text-right">
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => handleOpenEdit(cat)}
@@ -285,19 +285,19 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
+          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-all"
+              className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs shadow-xs transition-all"
             >
               Hủy
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-pastel-500 hover:bg-pastel-600 text-white font-bold shadow-soft transition-all"
+              className="px-6 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-soft transition-all flex items-center gap-1.5"
             >
-              {editingCategory ? 'Lưu Thay Đổi' : 'Tạo Danh Mục'}
+              <span>{editingCategory ? 'Lưu Thay Đổi' : 'Tạo Danh Mục'}</span>
             </button>
           </div>
         </form>

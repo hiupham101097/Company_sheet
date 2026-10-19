@@ -231,14 +231,14 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
           <table className="w-full text-left text-xs text-slate-600">
             <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
               <tr>
-                <th className="py-3.5 px-4">Ngày</th>
-                <th className="py-3.5 px-4">Nhân Sự</th>
-                <th className="py-3.5 px-4">Phòng Ban</th>
-                <th className="py-3.5 px-4">Giờ Vào</th>
-                <th className="py-3.5 px-4">Giờ Ra</th>
-                <th className="py-3.5 px-4">Tổng Giờ Làm</th>
-                <th className="py-3.5 px-4">Trạng Thái</th>
-                <th className="py-3.5 px-4">Ghi Chú</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Nhân Sự</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Phòng Ban</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Giờ Vào</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Giờ Ra</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Tổng Giờ Làm</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Trạng Thái</th>
+                <th className="py-3.5 px-4 font-bold">Ghi Chú</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
@@ -253,19 +253,19 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
                   const st = statusMap[att.status] || { label: att.status, variant: 'default' };
                   return (
                     <tr key={att.id} className="hover:bg-pastel-50/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono text-slate-600 font-medium">{att.date}</td>
-                      <td className="py-3.5 px-4 font-bold text-slate-800">{att.user_name}</td>
-                      <td className="py-3.5 px-4 text-slate-500">{att.user_department}</td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700">{att.check_in || '--:--'}</td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-600">{att.check_out || '--:--'}</td>
-                      <td className="py-3.5 px-4 font-bold text-slate-700">
+                      <td className="py-3.5 px-4 font-mono text-slate-600 font-medium whitespace-nowrap">{att.date}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">{att.user_name}</td>
+                      <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">{att.user_department}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">{att.check_in || '--:--'}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-slate-600 whitespace-nowrap">{att.check_out || '--:--'}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-700 whitespace-nowrap">
                         {att.total_hours > 0 ? (
-                          <span className="px-2 py-0.5 rounded-md bg-pastel-100 text-pastel-800 text-[11px]">
+                          <span className="px-2 py-0.5 rounded-md bg-pastel-100 text-pastel-800 text-[11px] whitespace-nowrap">
                             {att.total_hours}h
                           </span>
                         ) : '-'}
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <Badge variant={st.variant} className="gap-1.5">
                           <span className={`w-1.5 h-1.5 rounded-full ${st.dot || 'bg-slate-400'}`} />
                           <span>{st.label}</span>
