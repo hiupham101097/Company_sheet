@@ -90,10 +90,57 @@ export function AIAssistantWidget({
       });
 
       if (res.success && res.data) {
+        let finalReply = res.data.reply;
+
+        // Nếu máy chủ Cloudflare bị Google hạn chế theo IP datacenter ("User location is not supported"),
+        // Trình duyệt tại máy người dùng (IP Việt Nam) sẽ tự động gọi trực tiếp Gemini API (CORS được hỗ trợ 100%)
+        if (res.data.needClientGemini && res.data.geminiApiKey) {
+          try {
+            const geminiModel = res.data.geminiModel || 'gemini-3.8-flash';
+            const clientGeminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${res.data.geminiApiKey}`;
+            const geminiRes = await fetch(clientGeminiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    role: 'user',
+                    parts: [
+                      { text: `${res.data.systemPrompt || ''}\n\n---\nNgười dùng hỏi: "${query}"` }
+                    ]
+                  }
+                ],
+                generationConfig: {
+                  temperature: 0.7,
+                  maxOutputTokens: 3072,
+                  thinkingConfig: {
+                    thinkingBudget: 0
+                  }
+                }
+              })
+            });
+
+            if (geminiRes.ok) {
+              const geminiJson = await geminiRes.json();
+              const candidate = geminiJson.candidates?.[0];
+              const parts = candidate?.content?.parts || [];
+              const textParts = parts.filter(p => typeof p.text === 'string' && !p.thought).map(p => p.text);
+              const fullText = textParts.length > 0 ? textParts.join('\n\n') : parts.map(p => p.text).filter(Boolean).join('\n\n');
+              if (fullText && fullText.trim()) {
+                finalReply = fullText.trim();
+              }
+            } else {
+              console.warn('Direct Gemini call failed with status:', geminiRes.status);
+            }
+          } catch (geminiClientErr) {
+            console.warn('Direct client Gemini fetch error:', geminiClientErr);
+          }
+        }
+
         const botMsg = {
           id: `bot_${Date.now()}`,
           sender: 'bot',
-          text: res.data.reply,
+          text: finalReply,
           suggestions: res.data.suggestions || [],
           navigateTab: res.data.navigateTab || null,
           time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })

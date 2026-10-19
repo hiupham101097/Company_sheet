@@ -1472,43 +1472,50 @@ app.post('/api/ai/chat', async (c) => {
     const graceMin = settingsMap.late_grace_minutes || '15';
     const workDays = settingsMap.work_days || 'Thứ 2 - Thứ 6';
 
-    const geminiApiKey = c.env.GEMINI_API_KEY || settingsMap.gemini_api_key || '';
-    const geminiModel = c.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    const geminiApiKey = (settingsMap.gemini_api_key || c.env?.GEMINI_API_KEY || '').trim();
+    const geminiModel = (settingsMap.gemini_model || c.env?.GEMINI_MODEL || 'gemini-3.8-flash').trim();
+
+    // Lấy ngày giờ hiện tại theo giờ Việt Nam
+    const nowVN = new Date();
+    const currentDateStr = nowVN.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' });
+    const currentTimeStr = nowVN.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' });
 
     // System Prompt for Gemini with live corporate context
-    const systemPrompt = `Bạn là OMNI-Bot, linh vật trợ lý AI thông minh, nhiệt tình và thân thiện của hệ thống quản lý doanh nghiệp OMNI ASSETS.
-Nhiệm vụ của bạn là hỗ trợ, giải đáp mọi thắc mắc và hướng dẫn người dùng thao tác xử lý công việc hiệu quả trên trang web này.
+    const systemPrompt = `Bạn là OMNI-Bot, trợ lý AI thông minh, linh hoạt, thân thiện và am hiểu sâu sắc của hệ thống quản lý doanh nghiệp OMNI ASSETS.
+Nhiệm vụ của bạn là tư vấn, giải đáp mọi thắc mắc và hướng dẫn người dùng xử lý công việc hiệu quả trên trang web này.
 
-Bối cảnh hệ thống thực tế hiện tại:
+Bối cảnh thời gian & hệ thống thực tế:
+- Thời gian hiện tại: ${currentTimeStr}, ${currentDateStr} (Giờ Việt Nam GMT+7).
 - Tên công ty: ${settingsMap.company_name || 'OMNI ASSETS & LOGISTICS'}
 - Người đang trò chuyện: ${userName || 'Nhân sự'} (Vai trò hệ thống: ${userRole || 'STAFF'})
 - Tab người dùng đang đứng: '${activeTab || 'dashboard'}'
 - Quy định giờ làm việc: Vào ca lúc ${workStart}, Tan ca lúc ${workEnd}, Ân hạn đi muộn ${graceMin} phút, Lịch làm việc ${workDays}.
 - Tài sản: Đang quản lý ${assetsCount?.count || 0} tài sản (${assetsCount?.maint_count || 0} thiết bị đang bảo trì).
-- Công việc: Có ${tasksRes?.results?.length || 0} công việc đang xử lý (gồm các việc gần nhất).
-- Danh sách các phân hệ chính trên trang web:
-  1. 'dashboard' (Tổng quan): Bảng thống kê toàn diện về tài sản, doanh thu, việc cần làm, nhắc hạn.
-  2. 'assets' (Tài sản & Thiết bị): Thêm mới, bàn giao máy móc, bảo trì, sửa chữa, theo dõi serial và tình trạng.
-  3. 'finance' (Doanh thu & Chi phí): Ghi nhận thu/chi, phân tích dòng tiền, tính lợi nhuận ròng.
-  4. 'tasks' (Công việc & Nhắc hạn): Giao việc cho nhân viên, quản lý deadline, cảnh báo việc quá hạn.
-  5. 'contracts' (Hợp đồng & Biên bản): Quản lý hợp đồng đối tác và Lập/In Biên bản bàn giao tài sản chuẩn A4 có chữ ký 2 bên.
-  6. 'attendance' (Chấm công): Check-in ca sáng, Check-out ca chiều, tự động tính số giờ làm và ghi nhận đi muộn.
-  7. 'users' (Quản lý Nhân sự): Danh sách nhân viên, gán quyền (ADMIN: toàn quyền, MANAGER: quản lý, STAFF: nhân viên).
-  8. 'categories' (Quản lý Danh mục): Quản lý động danh mục tài sản, phòng ban, phân loại thu chi.
-  9. 'settings' (Cài đặt hệ thống): Chỉnh giờ ca làm việc, ân hạn đi muộn, thông tin công ty, hotline.
+- Công việc: Có ${tasksRes?.results?.length || 0} công việc đang theo dõi trong hệ thống.
+- Các phân hệ trên trang web:
+  1. 'dashboard' (Tổng quan): Bảng điều khiển tài sản, thu chi, cảnh báo nhắc hạn.
+  2. 'assets' (Tài sản & Thiết bị): Quản lý máy móc, cấp phát, bảo trì, serial thiết bị.
+  3. 'finance' (Doanh thu & Chi phí): Dòng tiền thu chi, lợi nhuận ròng.
+  4. 'tasks' (Công việc & Phân công): Giao việc theo phòng ban, hạn chót, nhắc hạn tự động 06:00 sáng.
+  5. 'contracts' (Hợp đồng & Biên bản): Hợp đồng đối tác, Lập & In Biên bản bàn giao chuẩn A4.
+  6. 'attendance' (Chấm công): Check-in, Check-out 1 lần/ngày, tính giờ làm, phạt đi muộn.
+  7. 'users' (Quản lý Nhân sự & Phòng ban): Danh sách nhân viên, gán phòng ban, phân quyền (ADMIN, MANAGER, STAFF).
+  8. 'categories' (Quản lý Danh mục): Quản lý danh mục phòng ban doanh nghiệp, loại tài sản, thu chi.
+  9. 'settings' (Cài đặt hệ thống): Giờ làm việc, ân hạn đi muộn, hotline, thông tin doanh nghiệp.
 
-Yêu cầu định dạng câu trả lời:
-- Luôn xưng hô thân thiện: "Mình / Tôi là OMNI-Bot", gọi người dùng là "${userName || 'bạn'}".
-- Dùng tiếng Việt chuẩn mực, rõ ràng, gạch đầu dòng (•), in đậm (**text**) để người dùng dễ đọc.
-- Trả lời đúng trọng tâm câu hỏi của người dùng, đưa ra hướng dẫn từng bước cụ thể.
-- Nhắc đến tab chức năng cụ thể trên thanh menu để người dùng biết chỗ bấm vào.`;
+Phong cách phản hồi của AI:
+- Bạn là trí tuệ nhân tạo thực sự, tư duy sắc sảo, tự nhiên, hiểu ngữ cảnh và trả lời trực tiếp vào trọng tâm câu hỏi.
+- TUYỆT ĐỐI KHÔNG dùng văn mẫu cố định, không lặp lại nguyên si tài liệu hướng dẫn nếu người dùng chỉ hỏi ngắn gọn hoặc hỏi chuyện đời thường, kiến thức, tính toán.
+- Trả lời bằng tiếng Việt văn minh, trình bày mạch lạc, sử dụng gạch đầu dòng (•) và in đậm (**từ khóa**) giúp người dùng dễ theo dõi.
+- Nếu người dùng cần hướng dẫn thao tác trên web, hãy chỉ rõ tên menu/nút bấm cụ thể.
+- Nếu người dùng chào hỏi hoặc hỏi bất cứ điều gì (ngày giờ, quản trị kinh doanh, kỹ thuật, excel, cuộc sống), hãy trả lời thông minh, dí dỏm và hữu ích.`;
 
     let answer = '';
     let suggestions = [];
     let navigateTab = null;
 
     // Gợi ý tab điều hướng theo ngữ cảnh câu hỏi
-    if (q.includes('chấm công') || q.includes('điểm danh') || q.includes('check-in') || q.includes('muộn')) {
+    if (q.includes('chấm công') || q.includes('điểm danh') || q.includes('check-in') || q.includes('checkin') || q.includes('muộn')) {
       navigateTab = 'attendance';
       suggestions = ['Xem bảng chấm công', 'Cài đặt lại giờ ca làm việc', 'Quy định làm thêm giờ (OT)'];
     } else if (q.includes('tài sản') || q.includes('thiết bị') || q.includes('máy tính') || q.includes('laptop')) {
@@ -1522,136 +1529,94 @@ Yêu cầu định dạng câu trả lời:
       suggestions = ['Xem Báo cáo tài chính', 'Thêm khoản thu mới', 'Thêm chi phí phát sinh'];
     } else if (q.includes('công việc') || q.includes('task') || q.includes('quá hạn') || q.includes('deadline')) {
       navigateTab = 'tasks';
-      suggestions = ['Xem danh sách công việc', 'Tạo công việc mới', 'Lọc việc cần làm gấp'];
-    } else if (q.includes('phân quyền') || q.includes('vai trò') || q.includes('role') || q.includes('nhân sự')) {
+      suggestions = ['Xem danh sách công việc', 'Tạo công việc mới', 'Lọc việc theo phòng ban'];
+    } else if (q.includes('phòng ban') || q.includes('bộ phận') || q.includes('department')) {
+      navigateTab = 'categories';
+      suggestions = ['Xem Danh mục phòng ban', 'Phân công việc theo phòng ban', 'Danh sách nhân sự phòng ban'];
+    } else if (q.includes('phân quyền') || q.includes('vai trò') || q.includes('role') || q.includes('nhân sự') || q.includes('nhân viên')) {
       navigateTab = 'users';
-      suggestions = ['Mở Quản lý nhân sự', 'Thêm nhân viên mới', 'Cài đặt hệ thống'];
+      suggestions = ['Mở Quản lý nhân sự', 'Thêm nhân viên mới', 'Gắn nhân viên vào phòng ban'];
     } else if (q.includes('cài đặt') || q.includes('setting') || q.includes('đổi giờ') || q.includes('công ty')) {
       navigateTab = 'settings';
       suggestions = ['Mở Cài đặt hệ thống', 'Quy định giờ chấm công', 'Đổi thông tin công ty'];
     } else {
-      suggestions = ['Quy định giờ chấm công', 'Cách xuất biên bản bàn giao A4', 'Kiểm tra việc quá hạn', 'Hướng dẫn thêm tài sản'];
+      suggestions = ['Quy định giờ chấm công', 'Cách xuất biên bản bàn giao A4', 'Giao việc cho phòng ban', 'Hướng dẫn quản lý tài sản'];
     }
+
+    let debugInfo = { keyLen: geminiApiKey.length, model: geminiModel };
 
     // 1. Gọi trực tiếp Google Gemini API bằng Key được cấu hình
     if (geminiApiKey) {
       try {
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
+        debugInfo.url = geminiUrl.replace(geminiApiKey, 'KEY_MASKED');
         const geminiReq = await fetch(geminiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-goog-api-key': geminiApiKey
+          },
           body: JSON.stringify({
             contents: [
               {
                 role: 'user',
                 parts: [
-                  { text: `${systemPrompt}\n\nCâu hỏi của người dùng: "${message}"` }
+                  { text: `${systemPrompt}\n\n---\nNgười dùng hỏi: "${message}"` }
                 ]
               }
             ],
             generationConfig: {
-              temperature: 0.6,
-              maxOutputTokens: 1200
+              temperature: 0.7,
+              maxOutputTokens: 3072,
+              thinkingConfig: {
+                thinkingBudget: 0
+              }
             }
           })
         });
 
+        debugInfo.status = geminiReq.status;
+        debugInfo.statusText = geminiReq.statusText;
+
         if (geminiReq.ok) {
           const geminiData = await geminiReq.json();
-          const generatedText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (generatedText && generatedText.trim()) {
-            answer = generatedText.trim();
+          const candidate = geminiData.candidates?.[0];
+          debugInfo.candidate = candidate;
+          const parts = candidate?.content?.parts || [];
+          const textParts = parts.filter(p => typeof p.text === 'string' && !p.thought).map(p => p.text);
+          const fullText = textParts.length > 0 ? textParts.join('\n\n') : parts.map(p => p.text).filter(Boolean).join('\n\n');
+          if (fullText && fullText.trim()) {
+            answer = fullText.trim();
           }
+        } else {
+          const errText = await geminiReq.text();
+          debugInfo.errText = errText;
+          console.error(`Gemini API call failed with status ${geminiReq.status}:`, errText);
         }
       } catch (geminiError) {
+        debugInfo.exception = geminiError?.message || String(geminiError);
         console.error('Gemini API fetch error:', geminiError);
       }
     }
 
-    // 2. Dự phòng nội bộ nếu Gemini chưa trả lời
+    const needClientGemini = !answer;
+
+    // 2. Dự phòng thông minh nếu Gemini tạm thời chưa phản hồi
     if (!answer) {
-      if (q.includes('chấm công') || q.includes('điểm danh') || q.includes('check-in') || q.includes('check in') || q.includes('muộn') || q.includes('giờ làm')) {
-      answer = `⏰ **Quy định Chấm công & Giờ làm việc:**\n\n` +
-        `• **Giờ vào ca chuẩn:** \`${workStart}\` (Ân hạn đi muộn: **+${graceMin} phút**)\n` +
-        `• **Giờ tan ca:** \`${workEnd}\`\n` +
-        `• **Lịch làm việc:** ${workDays}\n\n` +
-        `💡 **Cách chấm công:**\n` +
-        `1. Nhấn nút **Check-in** trên thanh trên cùng (Navbar) khi bắt đầu ca.\n` +
-        `2. Nếu vào ca sau \`${workStart}\` (quá ${graceMin} phút ân hạn), hệ thống sẽ tự động ghi nhận **Đi muộn**.\n` +
-        `3. Khi hết giờ làm việc, nhấn **Check-out** để hệ thống tổng hợp số giờ làm thực tế.`;
-      suggestions = ['Xem bảng chấm công', 'Cài đặt lại giờ ca làm việc', 'Quy định làm thêm giờ (OT)'];
-      navigateTab = 'attendance';
-    } else if (q.includes('tài sản') || q.includes('thiết bị') || q.includes('máy tính') || q.includes('laptop')) {
-      const total = assetsCount?.count || 0;
-      const maint = assetsCount?.maint_count || 0;
-      answer = `📦 **Quản lý Tài sản & Thiết bị:**\n\n` +
-        `Hệ thống đang quản lý **${total} tài sản** (${maint > 0 ? `trong đó có **${maint} thiết bị** đang bảo trì` : 'tất cả hoạt động tốt'}).\n\n` +
-        `💡 **Các thao tác chính:**\n` +
-        `• **Thêm tài sản mới:** Vào mục **Tài sản & Thiết bị** > Nhấn nút *"Thêm Tài Sản Mới"* > Nhập tên, mã serial, giá trị và gán người sử dụng.\n` +
-        `• **Bàn giao thiết bị:** Khi cấp phát máy móc cho nhân sự, hãy lập **Biên bản bàn giao** để lưu vết và xuất file in A4 có chữ ký 2 bên.`;
-      suggestions = ['Đi đến Quản lý tài sản', 'Hướng dẫn tạo biên bản bàn giao', 'Lập kế hoạch bảo trì'];
-      navigateTab = 'assets';
-    } else if (q.includes('biên bản') || q.includes('bàn giao') || q.includes('hợp đồng') || q.includes('in a4')) {
-      answer = `📄 **Quy trình Lập & In Biên Bản Bàn Giao:**\n\n` +
-        `1. Vào menu **Hợp đồng & Biên bản** > Chọn tab **"Biên Bản Bàn Giao"**.\n` +
-        `2. Nhấn nút **"Lập Biên Bản Mới"** > Chọn bên giao, bên nhận và thiết bị bàn giao kèm tình trạng phụ kiện.\n` +
-        `3. Sau khi lưu, nhấn biểu tượng **Máy in (Print)** trên thẻ biên bản. Hệ thống sẽ mở giao diện in ấn chuẩn khổ giấy **A4**, đã căn chỉnh lề, quốc hiệu, điều khoản pháp lý và 2 ô chữ ký rõ ràng.`;
-      suggestions = ['Mở Hợp đồng & Biên bản', 'Xem danh sách biên bản', 'Quy định thu hồi tài sản'];
-      navigateTab = 'contracts';
-    } else if (q.includes('doanh thu') || q.includes('chi phí') || q.includes('tài chính') || q.includes('tiền')) {
-      answer = `💰 **Quản lý Tài chính & Doanh thu:**\n\n` +
-        `• Phân hệ **Doanh thu & Chi phí** cho phép theo dõi dòng tiền thời gian thực, tự động tính **Lợi nhuận ròng = Doanh thu - Chi phí**.\n` +
-        `• Hỗ trợ biểu đồ trực quan biến động tài chính theo từng tháng.\n` +
-        `• Có thể phân loại thu/chi theo các danh mục như Bán hàng, Dịch vụ, Lương thưởng, Mặt bằng, Thiết bị...`;
-      suggestions = ['Xem Báo cáo tài chính', 'Thêm khoản thu mới', 'Thêm chi phí phát sinh'];
-      navigateTab = 'finance';
-    } else if (q.includes('công việc') || q.includes('task') || q.includes('nhắc hạn') || q.includes('quá hạn') || q.includes('deadline')) {
-      const tasks = tasksRes?.results || [];
-      const overdueList = tasks.filter((t) => t.due_date < new Date().toISOString().split('T')[0]);
-      answer = `📋 **Quản lý Tiến độ Công việc:**\n\n` +
-        (overdueList.length > 0 
-          ? `⚠️ Hiện có **${overdueList.length} công việc quá hạn** cần xử lý gấp:\n` + overdueList.map((t) => `• *${t.title}* (Hạn: ${t.due_date})`).join('\n') + `\n\n`
-          : `✅ Hệ thống không có công việc nào bị quá hạn!\n\n`) +
-        `💡 Bạn có thể tạo công việc mới, gán người phụ trách và chọn mức độ ưu tiên (Khẩn cấp, Cao, Bình thường) để nhận cảnh báo tự động trên thanh thông báo.`;
-      suggestions = ['Xem danh sách công việc', 'Tạo công việc mới', 'Lọc việc cần làm gấp'];
-      navigateTab = 'tasks';
-    } else if (q.includes('phân quyền') || q.includes('vai trò') || q.includes('role') || q.includes('admin') || q.includes('nhân sự')) {
-      answer = `👥 **Hệ thống phân quyền 3 cấp độ:**\n\n` +
-        `1. **Quản Trị Viên (ADMIN):** Toàn quyền truy cập, tiếp nhận nhân sự, phân vai trò, tạo danh mục và chỉnh sửa cài đặt hệ thống.\n` +
-        `2. **Quản Lý (MANAGER):** Quản lý tài sản, theo dõi tài chính doanh thu, phân chia công việc và thiết lập ca làm việc.\n` +
-        `3. **Nhân Viên (STAFF):** Thực hiện chấm công hằng ngày, xem danh sách tài sản được bàn giao và cập nhật tiến độ công việc được giao.`;
-      suggestions = ['Mở Quản lý nhân sự', 'Thêm nhân viên mới', 'Cài đặt hệ thống'];
-      navigateTab = 'users';
-    } else if (q.includes('cài đặt') || q.includes('setting') || q.includes('đổi giờ') || q.includes('tên công ty')) {
-      answer = `⚙️ **Cài Đặt Hệ Thống:**\n\n` +
-        `Bạn có thể truy cập mục **Cài đặt hệ thống** (ở chân thanh Sidebar hoặc icon bánh răng trên Navbar) để:\n` +
-        `• Thay đổi giờ vào ca, giờ tan ca, số phút ân hạn đi muộn.\n` +
-        `• Tùy chỉnh tên công ty, số hotline, email và địa chỉ in trên Biên bản bàn giao.\n` +
-        `• Đăng thông báo chung trên bảng tin toàn hệ thống.`;
-      suggestions = ['Mở Cài đặt hệ thống', 'Quy định giờ chấm công', 'Đổi thông tin công ty'];
-      navigateTab = 'settings';
-    } else {
-      answer = `👋 Xin chào ${userName || 'bạn'}! Tôi là **OMNI-Bot**, trợ lý AI đồng hành quản trị doanh nghiệp của bạn.\n\n` +
-        `Tôi có thể hỗ trợ bạn:\n` +
-        `• 📦 **Quản lý Tài sản**: Thêm mới, cấp phát, bảo trì và lập biên bản in A4.\n` +
-        `• ⏰ **Chấm công**: Giải đáp quy định giờ vào/ra, ân hạn đi muộn, tính làm thêm giờ.\n` +
-        `• 💰 **Tài chính & Doanh thu**: Phân tích dòng tiền, doanh thu và chi phí.\n` +
-        `• 📋 **Công việc & Hợp đồng**: Theo dõi nhắc hạn và cảnh báo quá hạn.\n` +
-        `• ⚙️ **Cài đặt hệ thống**: Tùy chỉnh quy định và thông tin doanh nghiệp.\n\n` +
-        `Bạn muốn tìm hiểu hoặc cần trợ giúp về phần nào?`;
-      suggestions = [
-        'Quy định giờ chấm công',
-        'Cách xuất biên bản bàn giao A4',
-        'Kiểm tra công việc sắp đến hạn',
-        'Hướng dẫn quản lý tài sản'
-      ];
+      answer = `Xin chào ${userName || 'bạn'}! Tôi là **OMNI-Bot** (Trợ lý AI tích hợp Google Gemini). \n\n` +
+        `Hiện tại kết nối mạng đến máy chủ AI của Google đang bị gián đoạn hoặc phản hồi chậm. Bạn vui lòng thử đặt lại câu hỏi sau vài giây, hoặc chọn nhanh các chủ đề bên dưới để tôi hỗ trợ nhé!`;
     }
-  }
 
     return c.json({
       success: true,
+      debug: debugInfo,
       data: {
         reply: answer,
+        needClientGemini,
+        geminiApiKey,
+        geminiModel,
+        systemPrompt,
+        message,
         suggestions,
         navigateTab
       }
