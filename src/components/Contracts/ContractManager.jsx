@@ -1694,28 +1694,27 @@ export function ContractManager({
       >
         <div className="space-y-5 text-xs">
           {/* Header Explanation */}
-          <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 flex items-start gap-3">
-            <Sparkles size={20} className="text-indigo-600 mt-0.5 shrink-0" />
-            <div className="space-y-1">
-              <p className="font-bold text-slate-800">
+          <div className="p-3 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 flex items-start gap-2.5">
+            <Sparkles size={17} className="text-indigo-600 mt-0.5 shrink-0" />
+            <div className="space-y-0.5">
+              <p className="font-bold text-slate-800 text-xs">
                 Nhập văn bản mẫu để huấn luyện mô hình cho Google Gemini AI
               </p>
               <p className="text-slate-600 leading-relaxed text-[11px]">
-                AI sẽ đọc hiểu, tự động bóc tách cấu trúc (tiêu đề, căn cứ, các điều khoản quyền và nghĩa vụ, trường thông tin biến số). 
-                Sau đó, khi bạn cần làm hợp đồng loại này cho khách hàng bất kỳ, AI sẽ đối chiếu mô hình đã học để tự động viết văn bản!
+                AI sẽ đọc hiểu và tự động bóc tách cấu trúc (tiêu đề, căn cứ, điều khoản, biến số). Sau đó, khi cần làm hợp đồng, AI sẽ đối chiếu để tự động viết văn bản!
               </p>
             </div>
           </div>
 
           {learnedSuccessInfo ? (
             /* Khi học thành công */
-            <div className="space-y-4 p-5 bg-emerald-50/70 rounded-2xl border border-emerald-200 animate-fade-in">
+            <div className="space-y-4 p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200 animate-fade-in">
               <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
-                <CheckCircle2 size={20} className="text-emerald-600" />
+                <CheckCircle2 size={18} className="text-emerald-600" />
                 <span>AI Đã Học Và Chuẩn Hóa Thành Công Mẫu Hợp Đồng!</span>
               </div>
 
-              <div className="bg-white p-4 rounded-xl border border-emerald-200/80 space-y-2 text-xs">
+              <div className="bg-white p-3.5 rounded-xl border border-emerald-200/80 space-y-2 text-xs">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-400">Tên mẫu:</span>
                   <span className="font-bold text-slate-900">{learnedSuccessInfo.title}</span>
@@ -1739,7 +1738,7 @@ export function ContractManager({
                     setLearnedSuccessInfo(null);
                     setIsLearnModalOpen(false);
                   }}
-                  className="px-4 py-2 rounded-xl bg-white text-slate-700 font-semibold border border-slate-200"
+                  className="px-4 py-2 rounded-xl bg-white text-slate-700 font-semibold border border-slate-200 text-xs"
                 >
                   Đóng
                 </button>
@@ -1749,7 +1748,7 @@ export function ContractManager({
                     setIsLearnModalOpen(false);
                     handleUseTemplateToDraft(learnedSuccessInfo);
                   }}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center gap-1.5 shadow-soft"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center gap-1.5 shadow-soft text-xs"
                 >
                   <Wand2 size={14} />
                   <span>Dùng Mẫu Này Soạn Thảo Ngay</span>
@@ -1758,25 +1757,25 @@ export function ContractManager({
             </div>
           ) : (
             /* Form Nhập File và Nội Dung */
-            <form onSubmit={handleLearnContract} className="space-y-4">
+            <form onSubmit={handleLearnContract} className="space-y-3.5">
               {/* File Upload Box */}
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
                   1. Tải lên tệp hợp đồng mẫu (.txt, .md, .docx, .doc)
                 </label>
-                <div className="border-2 border-dashed border-pastel-300 hover:border-indigo-400 rounded-2xl p-4 text-center bg-slate-50/50 hover:bg-indigo-50/20 transition-all cursor-pointer relative">
+                <div className="border-2 border-dashed border-pastel-300 hover:border-indigo-400 rounded-2xl p-3 text-center bg-slate-50/50 hover:bg-indigo-50/20 transition-all cursor-pointer relative">
                   <input
                     type="file"
                     accept=".txt,.md,.doc,.docx"
                     onChange={handleFileUpload}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                   />
-                  <div className="flex flex-col items-center gap-1.5 pointer-events-none">
-                    <FileUp size={24} className="text-indigo-600" />
+                  <div className="flex flex-col items-center gap-1 pointer-events-none">
+                    <FileUp size={20} className="text-indigo-600" />
                     <span className="font-bold text-slate-800 text-xs">
                       {learnForm.fileName ? `Đã chọn: ${learnForm.fileName}` : 'Nhấn để chọn tệp hoặc kéo thả file vào đây'}
                     </span>
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-[10px] text-slate-400">
                       Hỗ trợ văn bản hợp đồng, biên bản bàn giao, thỏa thuận hợp tác
                     </span>
                   </div>
@@ -1796,12 +1795,12 @@ export function ContractManager({
                   )}
                 </div>
                 <textarea
-                  rows={8}
+                  rows={4}
                   required
                   value={learnForm.rawContent}
                   onChange={(e) => setLearnForm({ ...learnForm, rawContent: e.target.value })}
                   placeholder="Dán toàn bộ văn bản hợp đồng mẫu vào đây (bao gồm tiêu ngữ, các điều khoản, quy định nghiệm thu, điều khoản thanh toán, bảo hành...)..."
-                  className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none text-slate-800 font-mono text-[11px] leading-relaxed bg-slate-50/30"
+                  className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none text-slate-800 font-mono text-[11px] leading-relaxed bg-slate-50/30 min-h-[90px] max-h-[160px]"
                 />
               </div>
 
@@ -1813,7 +1812,7 @@ export function ContractManager({
                     placeholder="VD: Hợp Đồng Thuê Máy Móc IT Văn Phòng"
                     value={learnForm.titleHint}
                     onChange={(e) => setLearnForm({ ...learnForm, titleHint: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none text-slate-800"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none text-slate-800 text-xs"
                   />
                 </div>
                 <div>
@@ -1821,7 +1820,7 @@ export function ContractManager({
                   <select
                     value={learnForm.categoryHint}
                     onChange={(e) => setLearnForm({ ...learnForm, categoryHint: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none text-slate-800 bg-white"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none text-slate-800 bg-white text-xs"
                   >
                     <option value="Hợp Đồng Dịch Vụ">Hợp Đồng Dịch Vụ</option>
                     <option value="Hợp Đồng Thuê Tài Sản">Hợp Đồng Thuê Tài Sản / Thiết Bị</option>
@@ -1833,19 +1832,20 @@ export function ContractManager({
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              {/* Action buttons sticky at bottom of modal body */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5 sticky bottom-0 bg-white/95 backdrop-blur-xs py-2 -mx-1 px-1">
                 <button
                   type="button"
                   disabled={isLearning}
                   onClick={() => setIsLearnModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-semibold"
+                  className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-semibold text-xs"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={isLearning}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold shadow-soft flex items-center gap-2 active:scale-95 disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold shadow-soft flex items-center gap-2 active:scale-95 disabled:opacity-50 text-xs"
                 >
                   {isLearning ? (
                     <>
