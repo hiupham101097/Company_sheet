@@ -8,15 +8,16 @@ import {
   Laptop,
   TrendingUp,
   Building2,
+  Users,
   X
 } from 'lucide-react';
 import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
 import { api } from '../../services/api';
 
-export function CategoryManager({ userRole = 'ADMIN' }) {
+export function CategoryManager({ userRole = 'ADMIN', users = [], onNavigate }) {
   const [categories, setCategories] = useState([]);
-  const [activeTab, setActiveTab] = useState('ASSET_CATEGORY');
+  const [activeTab, setActiveTab] = useState('DEPARTMENT');
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -28,9 +29,9 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
   const [loading, setLoading] = useState(false);
 
   const tabs = [
+    { id: 'DEPARTMENT', label: 'Phòng Ban Doanh Nghiệp', icon: Building2, color: 'text-sky-600' },
     { id: 'ASSET_CATEGORY', label: 'Loại Tài Sản & Thiết Bị', icon: Laptop, color: 'text-pastel-600' },
-    { id: 'FINANCE_CATEGORY', label: 'Hạng Mục Thu / Chi', icon: TrendingUp, color: 'text-emerald-600' },
-    { id: 'DEPARTMENT', label: 'Phòng Ban Doanh Nghiệp', icon: Building2, color: 'text-sky-600' }
+    { id: 'FINANCE_CATEGORY', label: 'Hạng Mục Thu / Chi', icon: TrendingUp, color: 'text-emerald-600' }
   ];
 
   const loadCategories = async () => {
@@ -198,41 +199,53 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
               Không tìm thấy danh mục nào phù hợp.
             </div>
           ) : (
-            filteredCategories.map((cat) => (
-              <div key={cat.id} className="p-3.5 rounded-2xl bg-pastel-50/40 border border-pastel-100 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <span className="font-mono text-[11px] font-bold text-pastel-700 bg-pastel-100 px-2 py-0.5 rounded-md inline-block mb-1">
-                      {cat.code || cat.id}
-                    </span>
-                    <h4 className="font-bold text-slate-800 text-sm">{cat.name}</h4>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => handleOpenEdit(cat)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-pastel-700 hover:bg-white border border-slate-200 bg-white"
-                      title="Sửa danh mục"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                    {userRole === 'ADMIN' && (
+            filteredCategories.map((cat) => {
+              const deptStaffCount = users.filter((u) => u.department === cat.name || u.department === cat.code).length;
+              return (
+                <div key={cat.id} className="p-3.5 rounded-2xl bg-pastel-50/40 border border-pastel-100 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="font-mono text-[11px] font-bold text-pastel-700 bg-pastel-100 px-2 py-0.5 rounded-md inline-block mb-1">
+                        {cat.code || cat.id}
+                      </span>
+                      <h4 className="font-bold text-slate-800 text-sm">{cat.name}</h4>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
-                        onClick={() => handleDelete(cat.id, cat.name)}
-                        className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 bg-white"
-                        title="Xóa danh mục"
+                        onClick={() => handleOpenEdit(cat)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-pastel-700 hover:bg-white border border-slate-200 bg-white"
+                        title="Sửa danh mục"
                       >
-                        <Trash2 size={14} />
+                        <Edit2 size={14} />
                       </button>
-                    )}
+                      {userRole === 'ADMIN' && (
+                        <button
+                          onClick={() => handleDelete(cat.id, cat.name)}
+                          className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 bg-white"
+                          title="Xóa danh mục"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  {activeTab === 'DEPARTMENT' && (
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                      <span className="text-slate-500">Nhân sự trực thuộc:</span>
+                      <span className="font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200 text-[11px] flex items-center gap-1">
+                        <Users size={11} className="text-sky-500" />
+                        <span>{deptStaffCount} nhân sự</span>
+                      </span>
+                    </div>
+                  )}
+                  {cat.description && (
+                    <p className="text-xs text-slate-500 bg-white p-2.5 rounded-xl border border-pastel-200/50">
+                      {cat.description}
+                    </p>
+                  )}
                 </div>
-                {cat.description && (
-                  <p className="text-xs text-slate-500 bg-white p-2.5 rounded-xl border border-pastel-200/50">
-                    {cat.description}
-                  </p>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -241,8 +254,15 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
           <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '700px' }}>
             <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
               <tr>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Mã Danh Mục</th>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Tên Danh Mục</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">
+                  {activeTab === 'DEPARTMENT' ? 'Mã Phòng Ban' : 'Mã Danh Mục'}
+                </th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">
+                  {activeTab === 'DEPARTMENT' ? 'Tên Phòng Ban' : 'Tên Danh Mục'}
+                </th>
+                {activeTab === 'DEPARTMENT' && (
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Nhân Sự Trực Thuộc</th>
+                )}
                 <th className="py-3.5 px-4 font-bold">Mô Tả / Diễn Giải</th>
                 <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">Thao Tác</th>
               </tr>
@@ -250,40 +270,51 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
             <tbody className="divide-y divide-slate-100 font-medium">
               {filteredCategories.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center text-slate-400">
+                  <td colSpan={activeTab === 'DEPARTMENT' ? 5 : 4} className="py-12 text-center text-slate-400">
                     Không tìm thấy danh mục nào phù hợp.
                   </td>
                 </tr>
               ) : (
-                filteredCategories.map((cat) => (
-                  <tr key={cat.id} className="hover:bg-pastel-50/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">
-                      {cat.code || cat.id}
-                    </td>
-                    <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">{cat.name}</td>
-                    <td className="py-3.5 px-4 text-slate-500 max-w-md">{cat.description || '-'}</td>
-                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleOpenEdit(cat)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
-                          title="Sửa danh mục"
-                        >
-                          <Edit2 size={15} />
-                        </button>
-                        {userRole === 'ADMIN' && (
+                filteredCategories.map((cat) => {
+                  const deptStaffCount = users.filter((u) => u.department === cat.name || u.department === cat.code).length;
+                  return (
+                    <tr key={cat.id} className="hover:bg-pastel-50/40 transition-colors">
+                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">
+                        {cat.code || cat.id}
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">{cat.name}</td>
+                      {activeTab === 'DEPARTMENT' && (
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200 text-xs font-semibold">
+                            <Users size={12} className="text-sky-500" />
+                            <span>{deptStaffCount} nhân sự</span>
+                          </span>
+                        </td>
+                      )}
+                      <td className="py-3.5 px-4 text-slate-500 max-w-md">{cat.description || '-'}</td>
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => handleDelete(cat.id, cat.name)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                            title="Xóa danh mục"
+                            onClick={() => handleOpenEdit(cat)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
+                            title="Sửa danh mục"
                           >
-                            <Trash2 size={15} />
+                            <Edit2 size={15} />
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {userRole === 'ADMIN' && (
+                            <button
+                              onClick={() => handleDelete(cat.id, cat.name)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Xóa danh mục"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -294,15 +325,25 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingCategory ? 'Chỉnh Sửa Danh Mục' : 'Thêm Mới Danh Mục'}
+        title={
+          editingCategory
+            ? (activeTab === 'DEPARTMENT' ? 'Chỉnh Sửa Phòng Ban' : 'Chỉnh Sửa Danh Mục')
+            : (activeTab === 'DEPARTMENT' ? 'Thêm Mới Phòng Ban Doanh Nghiệp' : 'Thêm Mới Danh Mục')
+        }
       >
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Tên danh mục *</label>
+            <label className="block font-semibold text-slate-700 mb-1">
+              {activeTab === 'DEPARTMENT' ? 'Tên phòng ban *' : 'Tên danh mục *'}
+            </label>
             <input
               type="text"
               required
-              placeholder="VD: Máy in & Máy scan"
+              placeholder={
+                activeTab === 'DEPARTMENT'
+                  ? 'VD: Phòng Chăm Sóc Khách Hàng (CSKH)'
+                  : 'VD: Máy in & Máy scan'
+              }
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"
@@ -310,10 +351,12 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Mã định danh (Code)</label>
+            <label className="block font-semibold text-slate-700 mb-1">
+              {activeTab === 'DEPARTMENT' ? 'Mã phòng ban (Code)' : 'Mã định danh (Code)'}
+            </label>
             <input
               type="text"
-              placeholder="VD: PRINTER"
+              placeholder={activeTab === 'DEPARTMENT' ? 'VD: CSKH' : 'VD: PRINTER'}
               value={formData.code}
               onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
               className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-mono"
@@ -321,10 +364,16 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Mô tả / Ghi chú</label>
+            <label className="block font-semibold text-slate-700 mb-1">
+              {activeTab === 'DEPARTMENT' ? 'Mô tả chức năng & nhiệm vụ phòng ban' : 'Mô tả / Ghi chú'}
+            </label>
             <textarea
               rows={3}
-              placeholder="Mục đích sử dụng, phạm vi áp dụng..."
+              placeholder={
+                activeTab === 'DEPARTMENT'
+                  ? 'Quy định chức năng, phạm vi phụ trách và vai trò trong công ty...'
+                  : 'Mục đích sử dụng, phạm vi áp dụng...'
+              }
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800"

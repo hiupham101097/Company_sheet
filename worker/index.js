@@ -472,7 +472,7 @@ app.get('/api/tasks', async (c) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const query = `
-      SELECT t.*, u.name as assigned_user_name, u.avatar as assigned_user_avatar
+      SELECT t.*, u.name as assigned_user_name, u.avatar as assigned_user_avatar, u.department as assigned_user_department
       FROM tasks t
       LEFT JOIN users u ON t.assigned_to_user_id = u.id
       ORDER BY t.due_date ASC
@@ -988,6 +988,56 @@ app.post('/api/users', async (c) => {
     ).run();
 
     return c.json({ success: true, message: 'Đã thêm nhân sự' });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+app.put('/api/users/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const role = c.req.header('x-user-role') || 'STAFF';
+    if (role !== 'ADMIN') {
+      return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) mới có quyền chỉnh sửa nhân sự' }, 403);
+    }
+    const body = await c.req.json();
+    await c.env.DB.prepare(`
+      UPDATE users
+      SET name = COALESCE(?, name),
+          email = COALESCE(?, email),
+          department = COALESCE(?, department),
+          role = COALESCE(?, role),
+          phone = COALESCE(?, phone),
+          status = COALESCE(?, status)
+      WHERE id = ?
+    `).bind(
+      body.name !== undefined ? body.name : null,
+      body.email !== undefined ? body.email : null,
+      body.department !== undefined ? body.department : null,
+      body.role !== undefined ? body.role : null,
+      body.phone !== undefined ? body.phone : null,
+      body.status !== undefined ? body.status : null,
+      id
+    ).run();
+
+    return c.json({ success: true, message: 'Đã cập nhật thông tin nhân sự và phòng ban' });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+app.delete('/api/users/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const role = c.req.header('x-user-role') || 'STAFF';
+    if (role !== 'ADMIN') {
+      return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) mới có quyền xóa nhân sự' }, 403);
+    }
+    if (id === 'usr_admin' || id === 'usr_1') {
+      return c.json({ success: false, message: 'Không thể xóa tài khoản Quản trị viên khởi tạo' }, 400);
+    }
+    await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run();
+    return c.json({ success: true, message: 'Đã xóa nhân sự khỏi hệ thống' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
   }

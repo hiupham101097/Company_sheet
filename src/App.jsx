@@ -242,6 +242,8 @@ export default function App() {
               {currentTab === 'categories' && (
                 <CategoryManager
                   userRole={currentUser?.role}
+                  users={users}
+                  onNavigate={setCurrentTab}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
                 />

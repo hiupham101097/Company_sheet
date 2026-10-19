@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Mail, Phone, Shield, Building } from 'lucide-react';
+import {
+  Users,
+  Plus,
+  Mail,
+  Phone,
+  Shield,
+  Building2,
+  Edit2,
+  Trash2,
+  Search,
+  CheckCircle2,
+  X
+} from 'lucide-react';
 import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
 import { api } from '../../services/api';
@@ -12,7 +24,10 @@ export function UserManager({
   onOpenUpgrade
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
   const [departments, setDepartments] = useState([]);
+  const [selectedDept, setSelectedDept] = useState('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -60,14 +75,54 @@ export function UserManager({
       }
       return;
     }
+    setEditingUser(null);
+    setFormData({
+      name: '',
+      email: '',
+      role: 'STAFF',
+      department: departments[0]?.name || 'Phòng Kỹ Thuật & IT',
+      phone: '',
+    });
     setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (user) => {
+    setEditingUser(user);
+    setFormData({
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role || 'STAFF',
+      department: user.department || departments[0]?.name || 'Phòng Kỹ Thuật & IT',
+      phone: user.phone || '',
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteUser = async (user) => {
+    if (user.id === 'usr_admin' || user.id === 'usr_1') {
+      alert('Không thể xóa tài khoản Quản trị viên khởi tạo của hệ thống!');
+      return;
+    }
+    if (window.confirm(`Bạn có chắc chắn muốn xóa nhân viên "${user.name}" khỏi hệ thống?`)) {
+      try {
+        await api.deleteUser(user.id);
+        if (onRefresh) onRefresh();
+      } catch (err) {
+        alert(err.message || 'Lỗi khi xóa nhân viên');
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.createUser(formData);
+      if (editingUser) {
+        await api.updateUser(editingUser.id, formData);
+      } else {
+        await api.createUser(formData);
+      }
       setIsModalOpen(false);
+      setEditingUser(null);
       setFormData({
         name: '',
         email: '',
@@ -81,9 +136,20 @@ export function UserManager({
         onOpenUpgrade(err.message);
         return;
       }
-      alert(err.message || 'Lỗi thêm nhân sự');
+      alert(err.message || 'Lỗi lưu thông tin nhân sự');
     }
   };
+
+  const filteredUsers = users.filter((u) => {
+    const matchesDept = selectedDept === 'ALL' || u.department === selectedDept;
+    const q = searchTerm.toLowerCase();
+    const matchesSearch = !q || 
+      (u.name && u.name.toLowerCase().includes(q)) || 
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.department && u.department.toLowerCase().includes(q)) ||
+      (u.phone && u.phone.includes(q));
+    return matchesDept && matchesSearch;
+  });
 
   return (
     <div className="space-y-6">
@@ -91,11 +157,11 @@ export function UserManager({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800 tracking-tight">
-            Quản Lý Nhân Sự & Người Sử Dụng
+            Quản Lý Nhân Sự & Phòng Ban
           </h2>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs sm:text-sm text-slate-500">
-              Danh sách cán bộ nhân viên, phân quyền truy cập hệ thống ({users.length} thành viên).
+              Phân bổ nhân viên theo từng phòng ban, phân quyền tài khoản ({users.length} thành viên).
             </p>
             {licenseInfo?.isDemo && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold border border-amber-200">
@@ -107,68 +173,175 @@ export function UserManager({
 
         <button
           onClick={handleOpenAddModal}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
         >
           <Plus size={16} />
           <span>Thêm Nhân Viên Mới</span>
         </button>
       </div>
 
-      {/* Staff Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {users.map((user) => {
-          const roleInfo = roleMap[user.role] || { label: user.role, variant: 'default' };
-          return (
-            <div
-              key={user.id}
-              className="bg-white p-5 rounded-2xl border border-pastel-200 shadow-soft card-hover flex flex-col justify-between"
+      {/* Filter by Department and Search */}
+      <div className="space-y-3">
+        {/* Department Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <button
+            onClick={() => setSelectedDept('ALL')}
+            className={`px-3.5 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+              selectedDept === 'ALL'
+                ? 'bg-pastel-500 text-white shadow-soft'
+                : 'bg-white text-slate-600 hover:bg-pastel-50 border border-pastel-200/80'
+            }`}
+          >
+            <span>Tất cả phòng ban</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] ${
+                selectedDept === 'ALL' ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'
+              }`}
             >
-              <div>
-                <div className="flex items-center gap-3">
-                  <img
-                    src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`}
-                    alt={user.name}
-                    className="w-12 h-12 rounded-2xl object-cover ring-2 ring-pastel-200"
-                  />
-                  <div className="min-w-0">
-                    <h4 className="text-sm font-bold text-slate-800 leading-tight truncate">{user.name}</h4>
-                    <p className="text-[11px] text-pastel-700 font-semibold mt-0.5 truncate">{user.department}</p>
-                  </div>
-                </div>
+              {users.length}
+            </span>
+          </button>
 
-                <div className="mt-4 pt-3.5 border-t border-slate-100 space-y-2 text-xs text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <Mail size={13} className="text-slate-400 shrink-0" />
-                    <span className="truncate">{user.email}</span>
-                  </div>
-                  {user.phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone size={13} className="text-slate-400 shrink-0" />
-                      <span className="font-mono">{user.phone}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between gap-2">
-                <Badge variant={roleInfo.variant} className="whitespace-nowrap shrink-0">
-                  {roleInfo.label}
-                </Badge>
-                <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>Hoạt động</span>
+          {departments.map((dept) => {
+            const count = users.filter((u) => u.department === dept.name).length;
+            const isSelected = selectedDept === dept.name;
+            return (
+              <button
+                key={dept.id}
+                onClick={() => setSelectedDept(dept.name)}
+                className={`px-3.5 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-pastel-500 text-white shadow-soft'
+                    : 'bg-white text-slate-600 hover:bg-pastel-50 border border-pastel-200/80'
+                }`}
+              >
+                <Building2 size={13} className={isSelected ? 'text-white' : 'text-pastel-600'} />
+                <span>{dept.name}</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] ${
+                    isSelected ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {count}
                 </span>
-              </div>
-            </div>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Search Input */}
+        <div className="bg-white p-3 rounded-2xl border border-pastel-200/90 shadow-soft flex items-center justify-between">
+          <div className="relative w-full sm:w-80">
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Tìm theo tên, email, số điện thoại, phòng ban..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pastel-400 focus:bg-white text-slate-800 font-medium"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <span className="text-xs font-semibold text-slate-400 hidden sm:inline">
+            Hiển thị {filteredUsers.length} / {users.length} nhân sự
+          </span>
+        </div>
       </div>
 
-      {/* Modal: Thêm Nhân Viên Mới */}
+      {/* Staff Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {filteredUsers.length === 0 ? (
+          <div className="col-span-full py-16 text-center bg-white rounded-3xl border border-pastel-200/80">
+            <Users size={36} className="mx-auto text-pastel-400 mb-2" />
+            <p className="text-xs font-semibold text-slate-700">Không tìm thấy nhân viên nào phù hợp.</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Vui lòng thử chọn phòng ban khác hoặc thêm nhân sự mới</p>
+          </div>
+        ) : (
+          filteredUsers.map((user) => {
+            const roleInfo = roleMap[user.role] || { label: user.role, variant: 'default' };
+            return (
+              <div
+                key={user.id}
+                className="bg-white p-5 rounded-2xl border border-pastel-200 shadow-soft card-hover flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`}
+                        alt={user.name}
+                        className="w-12 h-12 rounded-2xl object-cover ring-2 ring-pastel-200 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold text-slate-800 leading-tight truncate">{user.name}</h4>
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 text-sky-800 border border-sky-200/80 text-[10px] font-semibold mt-1 max-w-[170px] truncate">
+                          <Building2 size={11} className="text-sky-600 shrink-0" />
+                          <span className="truncate">{user.department || 'Chưa gán'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleOpenEditModal(user)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
+                        title="Chỉnh sửa thông tin & đổi phòng ban"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      {user.id !== 'usr_admin' && user.id !== 'usr_1' && (
+                        <button
+                          onClick={() => handleDeleteUser(user)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Xóa nhân viên"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3.5 border-t border-slate-100 space-y-2 text-xs text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <Mail size={13} className="text-slate-400 shrink-0" />
+                      <span className="truncate">{user.email}</span>
+                    </div>
+                    {user.phone && (
+                      <div className="flex items-center gap-2">
+                        <Phone size={13} className="text-slate-400 shrink-0" />
+                        <span className="font-mono">{user.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <Badge variant={roleInfo.variant} className="whitespace-nowrap shrink-0">
+                    {roleInfo.label}
+                  </Badge>
+                  <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Hoạt động</span>
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Modal: Thêm / Sửa Nhân Viên & Phòng Ban */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Tiếp Nhận Nhân Sự Mới"
+        title={editingUser ? `Chỉnh Sửa Nhân Sự & Phòng Ban: ${editingUser.name}` : "Tiếp Nhận Nhân Sự Mới"}
       >
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
@@ -209,8 +382,11 @@ export function UserManager({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Phòng ban công tác</label>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Phòng ban công tác * (Tiện giao việc)
+              </label>
               <select
+                required
                 value={formData.department}
                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                 className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
@@ -220,7 +396,7 @@ export function UserManager({
                 ) : (
                   departments.map((d) => (
                     <option key={d.id} value={d.name}>
-                      {d.name}
+                      {d.name} {d.code ? `(${d.code})` : ''}
                     </option>
                   ))
                 )}
@@ -252,7 +428,7 @@ export function UserManager({
               type="submit"
               className="px-6 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-soft transition-all flex items-center gap-1.5"
             >
-              <span>Lưu Nhân Sự</span>
+              <span>{editingUser ? 'Cập Nhật Nhân Sự' : 'Lưu Nhân Sự'}</span>
             </button>
           </div>
         </form>

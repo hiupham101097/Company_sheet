@@ -7,7 +7,8 @@ import {
   User,
   CheckCircle2,
   Trash2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Building2
 } from 'lucide-react';
 import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
@@ -17,6 +18,8 @@ import { formatDateVN } from '../../utils/formatters';
 
 export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId = 'usr_1' }) {
   const [filterTab, setFilterTab] = useState('ALL'); // ALL, MY_TASKS, UPCOMING, OVERDUE, COMPLETED
+  const [selectedDept, setSelectedDept] = useState('ALL');
+  const [assignDept, setAssignDept] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -33,7 +36,17 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
     URGENT: { label: 'Khẩn cấp', variant: 'danger' }
   };
 
+  // Collect unique list of departments from users and tasks
+  const allDepartments = Array.from(new Set([
+    ...users.map((u) => u.department).filter(Boolean),
+    ...tasks.map((t) => t.assigned_user_department).filter(Boolean)
+  ]));
+
   const filteredTasks = tasks.filter((task) => {
+    if (selectedDept !== 'ALL') {
+      const taskDept = task.assigned_user_department || users.find((u) => u.id === task.assigned_to_user_id)?.department;
+      if (taskDept !== selectedDept) return false;
+    }
     if (filterTab === 'MY_TASKS') return task.assigned_to_user_id === currentUserId;
     if (filterTab === 'UPCOMING') return task.urgency === 'UPCOMING' || task.urgency === 'TODAY';
     if (filterTab === 'OVERDUE') return task.urgency === 'OVERDUE' && task.status !== 'COMPLETED';
@@ -84,6 +97,7 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
     const exportData = filteredTasks.map((t) => ({
       'Tiêu đề': t.title,
       'Người được giao': t.assigned_user_name,
+      'Phòng ban': t.assigned_user_department || users.find((u) => u.id === t.assigned_to_user_id)?.department || 'Chưa gán',
       'Hạn chót': formatDateVN(t.due_date),
       'Mức ưu tiên': priorityMap[t.priority]?.label || t.priority,
       'Trạng thái': t.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Đang thực hiện',
@@ -102,10 +116,10 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800 tracking-tight">
-            Quản Lý Công Việc & Nhắc Hạn
+            Quản Lý Công Việc & Phân Công Theo Phòng Ban
           </h2>
           <p className="text-xs sm:text-sm text-slate-500">
-            Theo dõi phân công nhiệm vụ, cảnh báo công việc sắp đến hạn và xử lý công việc quá hạn.
+            Giao việc theo chuyên môn từng phòng ban, theo dõi deadline và tự động nhắc hạn mỗi ngày lúc 06:00 AM.
           </p>
         </div>
 
@@ -118,7 +132,10 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
             <span>Xuất Excel</span>
           </button>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setAssignDept('ALL');
+              setIsModalOpen(true);
+            }}
             className="justify-center inline-flex items-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
           >
             <Plus size={16} />
@@ -127,37 +144,85 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
         </div>
       </div>
 
-      {/* Filter Tabs Bar */}
-      <div className="flex items-center gap-2 border-b border-pastel-200/80 pb-3 overflow-x-auto">
-        {[
-          { id: 'ALL', label: 'Tất cả', count: tasks.length },
-          { id: 'MY_TASKS', label: 'Việc của tôi', count: tasks.filter((t) => t.assigned_to_user_id === currentUserId).length },
-          { id: 'UPCOMING', label: 'Sắp tới hạn (≤3 ngày)', count: upcomingCount, badgeColor: 'bg-amber-100 text-amber-700' },
-          { id: 'OVERDUE', label: 'Quá hạn', count: overdueCount, badgeColor: 'bg-rose-100 text-rose-700 font-bold' },
-          { id: 'COMPLETED', label: 'Đã hoàn thành', count: tasks.filter((t) => t.status === 'COMPLETED').length }
-        ].map((tab) => {
-          const isSelected = filterTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setFilterTab(tab.id)}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all ${
-                isSelected
-                  ? 'bg-pastel-500 text-white shadow-soft'
-                  : 'text-slate-600 hover:bg-pastel-50'
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[10px] ${
-                  isSelected ? 'bg-white/25 text-white' : tab.badgeColor || 'bg-slate-100 text-slate-600'
+      {/* Filter Bars */}
+      <div className="space-y-3">
+        {/* Status Filter Tabs Bar */}
+        <div className="flex items-center gap-2 border-b border-pastel-200/80 pb-3 overflow-x-auto">
+          {[
+            { id: 'ALL', label: 'Tất cả trạng thái', count: tasks.length },
+            { id: 'MY_TASKS', label: 'Việc của tôi', count: tasks.filter((t) => t.assigned_to_user_id === currentUserId).length },
+            { id: 'UPCOMING', label: 'Sắp tới hạn (≤3 ngày)', count: upcomingCount, badgeColor: 'bg-amber-100 text-amber-700' },
+            { id: 'OVERDUE', label: 'Quá hạn', count: overdueCount, badgeColor: 'bg-rose-100 text-rose-700 font-bold' },
+            { id: 'COMPLETED', label: 'Đã hoàn thành', count: tasks.filter((t) => t.status === 'COMPLETED').length }
+          ].map((tab) => {
+            const isSelected = filterTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setFilterTab(tab.id)}
+                className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all ${
+                  isSelected
+                    ? 'bg-pastel-500 text-white shadow-soft'
+                    : 'text-slate-600 hover:bg-pastel-50'
                 }`}
               >
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
+                <span>{tab.label}</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] ${
+                    isSelected ? 'bg-white/25 text-white' : tab.badgeColor || 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Department Filter Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+          <span className="text-slate-400 font-semibold flex items-center gap-1 shrink-0">
+            <Building2 size={13} className="text-pastel-600" />
+            <span>Phòng ban:</span>
+          </span>
+          <button
+            onClick={() => setSelectedDept('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+              selectedDept === 'ALL'
+                ? 'bg-sky-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            Tất cả ({tasks.length})
+          </button>
+          {allDepartments.map((dept) => {
+            const count = tasks.filter((t) => {
+              const d = t.assigned_user_department || users.find((u) => u.id === t.assigned_to_user_id)?.department;
+              return d === dept;
+            }).length;
+            const isSelected = selectedDept === dept;
+            return (
+              <button
+                key={dept}
+                onClick={() => setSelectedDept(dept)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-sky-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <span>{dept}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    isSelected ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Task Cards Grid */}
@@ -165,14 +230,15 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
         {filteredTasks.length === 0 ? (
           <div className="col-span-full py-16 text-center bg-white rounded-3xl border border-pastel-200/80">
             <CheckCircle2 size={36} className="mx-auto text-pastel-400 mb-2" />
-            <p className="text-xs font-semibold text-slate-700">Không có công việc nào trong danh mục này.</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Nhấn "Giao Việc Mới" để thiết lập nhiệm vụ cho nhân sự</p>
+            <p className="text-xs font-semibold text-slate-700">Không có công việc nào trong danh mục hoặc phòng ban này.</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Nhấn "Giao Việc Mới" để thiết lập nhiệm vụ cho nhân sự phòng ban</p>
           </div>
         ) : (
           filteredTasks.map((task) => {
             const isDone = task.status === 'COMPLETED';
             const isOverdue = task.urgency === 'OVERDUE' && !isDone;
             const isUpcoming = (task.urgency === 'UPCOMING' || task.urgency === 'TODAY') && !isDone;
+            const deptName = task.assigned_user_department || users.find((u) => u.id === task.assigned_to_user_id)?.department;
 
             return (
               <div
@@ -220,17 +286,25 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-pastel-100 text-pastel-700 flex items-center justify-center font-bold text-[10px]">
+                <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-full bg-pastel-100 text-pastel-700 flex items-center justify-center font-bold text-xs shrink-0">
                       {task.assigned_user_name?.slice(0, 1) || 'U'}
                     </div>
-                    <span className="font-semibold text-slate-700 text-xs truncate max-w-[140px]">
-                      {task.assigned_user_name}
-                    </span>
+                    <div className="min-w-0">
+                      <span className="font-semibold text-slate-800 text-xs truncate max-w-[150px] block leading-tight">
+                        {task.assigned_user_name}
+                      </span>
+                      {deptName && (
+                        <span className="text-[10px] text-sky-700 font-medium truncate max-w-[150px] flex items-center gap-1 leading-tight mt-0.5">
+                          <Building2 size={10} className="text-sky-500 shrink-0" />
+                          <span className="truncate">{deptName}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 shrink-0">
                     <div
                       className={`flex items-center gap-1 font-semibold text-[11px] font-mono ${
                         isOverdue
@@ -282,6 +356,31 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
+              <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                <Building2 size={13} className="text-pastel-600" />
+                <span>Lọc theo phòng ban</span>
+              </label>
+              <select
+                value={assignDept}
+                onChange={(e) => {
+                  setAssignDept(e.target.value);
+                  setFormData((prev) => ({ ...prev, assigned_to_user_id: '' }));
+                }}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
+              >
+                <option value="ALL">-- Tất cả phòng ban ({users.length} người) --</option>
+                {allDepartments.map((dept) => {
+                  const count = users.filter((u) => u.department === dept).length;
+                  return (
+                    <option key={dept} value={dept}>
+                      {dept} ({count} nhân sự)
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div>
               <label className="block font-semibold text-slate-700 mb-1">Người thực hiện *</label>
               <select
                 required
@@ -290,13 +389,42 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
                 className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none bg-white text-slate-800 font-medium"
               >
                 <option value="">-- Chọn nhân sự phụ trách --</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.department})
-                  </option>
-                ))}
+                {assignDept === 'ALL' ? (
+                  allDepartments.length > 0 ? (
+                    allDepartments.map((dept) => {
+                      const deptUsers = users.filter((u) => u.department === dept);
+                      if (deptUsers.length === 0) return null;
+                      return (
+                        <optgroup key={dept} label={`🏢 ${dept}`}>
+                          {deptUsers.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name} - {u.role}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })
+                  ) : (
+                    users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.department || 'Chưa gán'})
+                      </option>
+                    ))
+                  )
+                ) : (
+                  users
+                    .filter((u) => u.department === assignDept)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} - {u.role}
+                      </option>
+                    ))
+                )}
               </select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Mức độ ưu tiên</label>
               <select
@@ -310,17 +438,17 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
                 <option value="URGENT">Khẩn cấp (Ưu tiên hàng đầu)</option>
               </select>
             </div>
-          </div>
 
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">Thời hạn hoàn thành (Due date) *</label>
-            <input
-              type="date"
-              required
-              value={formData.due_date}
-              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-medium"
-            />
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Thời hạn hoàn thành (Due date) *</label>
+              <input
+                type="date"
+                required
+                value={formData.due_date}
+                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-pastel-400 outline-none text-slate-800 font-medium"
+              />
+            </div>
           </div>
 
           <div>
@@ -346,7 +474,7 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
               type="submit"
               className="px-6 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-soft transition-all flex items-center gap-1.5"
             >
-              <span>Tạo Công Việc</span>
+              <span>Tạo & Giao Công Việc</span>
             </button>
           </div>
         </form>
