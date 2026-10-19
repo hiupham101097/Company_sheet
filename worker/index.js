@@ -132,6 +132,44 @@ app.use('*', async (c, next) => {
   return next();
 });
 
+// ==========================================
+// TENANT CONTEXT HELPER (MULTI-TENANCY)
+// ==========================================
+async function getTenantContext(c) {
+  let companyId = c.req.header('x-company-id');
+  const userId = c.req.header('x-user-id');
+  const userRole = c.req.header('x-user-role');
+
+  if (userRole === 'SUPER_ADMIN') {
+    return {
+      companyId: (companyId && companyId !== 'SYSTEM' && companyId !== 'ALL') ? companyId : 'ALL',
+      isSuperAdmin: true,
+      userId
+    };
+  }
+
+  if (!companyId || companyId === 'undefined' || companyId === 'null') {
+    if (userId) {
+      const u = await c.env.DB.prepare('SELECT company_id, role FROM users WHERE id = ?').bind(userId).first().catch(() => null);
+      if (u?.role === 'SUPER_ADMIN') {
+        return { companyId: 'ALL', isSuperAdmin: true, userId };
+      }
+      companyId = u?.company_id;
+    }
+  }
+
+  // Fallback to comp_1 (demo company) if undefined
+  if (!companyId || companyId === 'undefined' || companyId === 'null') {
+    companyId = 'comp_1';
+  }
+
+  return {
+    companyId,
+    isSuperAdmin: false,
+    userId
+  };
+}
+
 // ========================
 // 1. AUTHENTICATION & LOGIN
 // ========================
@@ -146,7 +184,7 @@ app.post('/api/auth/login', async (c) => {
     const cleanPassword = password.trim();
 
     const user = await c.env.DB
-      .prepare('SELECT id, name, email, role, department, phone, avatar, status FROM users WHERE (lower(email) = ? OR lower(id) = ?) AND password = ?')
+      .prepare('SELECT id, name, email, role, department, phone, avatar, status, company_id FROM users WHERE (lower(email) = ? OR lower(id) = ?) AND password = ?')
       .bind(cleanAccount, cleanAccount, cleanPassword)
       .first();
 
@@ -158,11 +196,23 @@ app.post('/api/auth/login', async (c) => {
       return c.json({ success: false, message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Quản trị viên hệ thống.' }, 403);
     }
 
-    const compSetting = await c.env.DB
-      .prepare('SELECT value FROM system_settings WHERE key = "company_name"')
-      .first()
-      .catch(() => null);
-    user.company_name = compSetting?.value || 'OMNI ASSETS';
+    // Default company_id if missing
+    if (!user.company_id) {
+      user.company_id = user.role === 'SUPER_ADMIN' ? 'SYSTEM' : 'comp_1';
+    }
+
+    if (user.company_id && user.company_id !== 'SYSTEM') {
+      const compTenant = await c.env.DB
+        .prepare('SELECT company_name, plan_code, license_status FROM company_tenants WHERE id = ?')
+        .bind(user.company_id)
+        .first()
+        .catch(() => null);
+      user.company_name = compTenant?.company_name || 'OMNI ASSETS';
+      user.plan_code = compTenant?.plan_code || 'TRIAL_2M';
+      user.license_status = compTenant?.license_status || 'ACTIVE';
+    } else {
+      user.company_name = 'Hệ Thống Quản Trị Nền Tảng (Master)';
+    }
 
     return c.json({
       success: true,
@@ -177,7 +227,7 @@ app.post('/api/auth/login', async (c) => {
   }
 });
 
-// Đăng ký Doanh nghiệp Mới & Tạo User Quản Trị Viên (Super Admin)
+// Đăng ký Doanh nghiệp Mới & Tạo User Quản Trị Viên (Tenant Isolation)
 app.post('/api/auth/register-company', async (c) => {
   try {
     const body = await c.req.json().catch(() => ({}));
@@ -224,14 +274,35 @@ app.post('/api/auth/register-company', async (c) => {
       }, 400);
     }
 
-    // Create Admin User
+    // Generate isolated Company Tenant
+    const companyId = `comp_${Date.now()}`;
+    const today = new Date().toISOString().slice(0, 10);
+    const d = new Date(today);
+    d.setMonth(d.getMonth() + 2);
+    const expireDate = d.toISOString().slice(0, 10);
+
+    await c.env.DB.prepare(`
+      INSERT INTO company_tenants (id, company_name, tax_id, admin_name, admin_email, admin_phone, plan_code, license_status, start_date, expire_date, revenue, notes, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'TRIAL_2M', 'ACTIVE', ?, ?, 0, 'Tự đăng ký doanh nghiệp mới', datetime('now'))
+    `).bind(
+      companyId,
+      company_name.trim(),
+      tax_id ? tax_id.trim() : null,
+      admin_name.trim(),
+      cleanEmail,
+      admin_phone ? admin_phone.trim() : (company_phone ? company_phone.trim() : null),
+      today,
+      expireDate
+    ).run();
+
+    // Create Admin User for this isolated company
     const adminId = `adm_${Date.now()}`;
     const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(admin_name.trim())}`;
     const departmentName = admin_title?.trim() || 'Ban Giám Đốc';
 
     await c.env.DB.prepare(`
-      INSERT INTO users (id, name, email, password, role, department, phone, avatar, status)
-      VALUES (?, ?, ?, ?, 'ADMIN', ?, ?, ?, 'ACTIVE')
+      INSERT INTO users (id, name, email, password, role, department, phone, avatar, status, company_id)
+      VALUES (?, ?, ?, ?, 'ADMIN', ?, ?, ?, 'ACTIVE', ?)
     `).bind(
       adminId,
       admin_name.trim(),
@@ -239,30 +310,9 @@ app.post('/api/auth/register-company', async (c) => {
       admin_password.trim(),
       departmentName,
       admin_phone ? admin_phone.trim() : (company_phone ? company_phone.trim() : ''),
-      avatar
+      avatar,
+      companyId
     ).run();
-
-    // Ensure system_settings table exists & update company profile
-    await initSettingsTable(c.env.DB);
-    const now = new Date().toISOString();
-
-    const settingsUpdates = [
-      ['company_name', company_name.trim()],
-      ['system_title', `Hệ Thống Quản Trị & Vận Hành - ${company_name.trim()}`],
-      ['company_email', (company_email && company_email.trim()) ? company_email.trim() : cleanEmail],
-      ['company_phone', (company_phone && company_phone.trim()) ? company_phone.trim() : (admin_phone ? admin_phone.trim() : '1900 6868')],
-      ['company_address', (company_address && company_address.trim()) ? company_address.trim() : ''],
-      ['tax_id', (tax_id && tax_id.trim()) ? tax_id.trim() : ''],
-      ['system_announcement', `Chào mừng ${company_name.trim()} gia nhập hệ thống quản trị vận hành OMNI ASSETS!`]
-    ];
-
-    for (const [k, v] of settingsUpdates) {
-      await c.env.DB.prepare(`
-        INSERT INTO system_settings (key, value, category, description, updated_at)
-        VALUES (?, ?, 'GENERAL', '', ?)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-      `).bind(k, v, now).run();
-    }
 
     const newUser = {
       id: adminId,
@@ -273,7 +323,10 @@ app.post('/api/auth/register-company', async (c) => {
       phone: admin_phone || '',
       avatar,
       status: 'ACTIVE',
-      company_name: company_name.trim()
+      company_id: companyId,
+      company_name: company_name.trim(),
+      plan_code: 'TRIAL_2M',
+      license_status: 'ACTIVE'
     };
 
     return c.json({
@@ -419,9 +472,26 @@ app.get('/api/auth/profile', async (c) => {
 app.get('/api/reports/dashboard-summary', async (c) => {
   try {
     const today = new Date().toISOString().split('T')[0];
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+
+    let assetsQuery = 'SELECT status, price FROM assets WHERE company_id = ?';
+    let finQuery = 'SELECT type, amount FROM finance WHERE company_id = ?';
+    let tasksQuery = 'SELECT id, title, due_date, status, priority FROM tasks WHERE company_id = ?';
+    let contractsQuery = 'SELECT id, title, end_date, status FROM contracts WHERE company_id = ?';
+    let usersCountQuery = 'SELECT count(*) as count FROM users WHERE company_id = ?';
+    let params = [companyId];
+
+    if (isSuperAdmin && companyId === 'ALL') {
+      assetsQuery = 'SELECT status, price FROM assets';
+      finQuery = 'SELECT type, amount FROM finance';
+      tasksQuery = 'SELECT id, title, due_date, status, priority FROM tasks';
+      contractsQuery = 'SELECT id, title, end_date, status FROM contracts';
+      usersCountQuery = 'SELECT count(*) as count FROM users';
+      params = [];
+    }
 
     // Assets count
-    const assetsRes = await c.env.DB.prepare('SELECT status, price FROM assets').all();
+    const assetsRes = await c.env.DB.prepare(assetsQuery).bind(...params).all();
     const assets = assetsRes.results || [];
     const totalAssets = assets.length;
     const inUseAssets = assets.filter((a) => a.status === 'IN_USE').length;
@@ -429,7 +499,7 @@ app.get('/api/reports/dashboard-summary', async (c) => {
     const totalAssetValue = assets.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
 
     // Finance count
-    const finRes = await c.env.DB.prepare('SELECT type, amount FROM finance').all();
+    const finRes = await c.env.DB.prepare(finQuery).bind(...params).all();
     const finance = finRes.results || [];
     const totalRevenue = finance
       .filter((f) => f.type === 'REVENUE')
@@ -440,7 +510,7 @@ app.get('/api/reports/dashboard-summary', async (c) => {
     const netProfit = totalRevenue - totalExpense;
 
     // Tasks & Reminders
-    const tasksRes = await c.env.DB.prepare('SELECT id, title, due_date, status, priority FROM tasks').all();
+    const tasksRes = await c.env.DB.prepare(tasksQuery).bind(...params).all();
     const tasks = tasksRes.results || [];
     const pendingTasks = tasks.filter((t) => t.status !== 'COMPLETED');
     const overdueTasks = pendingTasks.filter((t) => t.due_date < today);
@@ -450,7 +520,7 @@ app.get('/api/reports/dashboard-summary', async (c) => {
     });
 
     // Contracts
-    const contractsRes = await c.env.DB.prepare('SELECT id, title, end_date, status FROM contracts').all();
+    const contractsRes = await c.env.DB.prepare(contractsQuery).bind(...params).all();
     const contracts = contractsRes.results || [];
     const activeContracts = contracts.filter((ct) => ct.status === 'ACTIVE');
     const expiringContracts = activeContracts.filter((ct) => {
@@ -460,7 +530,7 @@ app.get('/api/reports/dashboard-summary', async (c) => {
     });
 
     // Users
-    const usersCount = (await c.env.DB.prepare('SELECT count(*) as count FROM users').first())?.count || 0;
+    const usersCount = (await c.env.DB.prepare(usersCountQuery).bind(...params).first())?.count || 0;
 
     // Reminders
     const urgentReminders = [
@@ -485,11 +555,17 @@ app.get('/api/reports/dashboard-summary', async (c) => {
     ];
 
     // Enterprise Company Name
-    const compSetting = await c.env.DB
-      .prepare('SELECT value FROM system_settings WHERE key = "company_name"')
-      .first()
-      .catch(() => null);
-    const currentCompanyName = compSetting?.value || 'OMNI ASSETS';
+    let currentCompanyName = 'OMNI ASSETS';
+    if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      const compTenant = await c.env.DB
+        .prepare('SELECT company_name FROM company_tenants WHERE id = ?')
+        .bind(companyId)
+        .first()
+        .catch(() => null);
+      if (compTenant?.company_name) {
+        currentCompanyName = compTenant.company_name;
+      }
+    }
 
     return c.json({
       success: true,
@@ -524,15 +600,31 @@ app.get('/api/reports/dashboard-summary', async (c) => {
 // ========================
 app.get('/api/assets', async (c) => {
   try {
-    const query = `
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let query = `
       SELECT a.*, 
              u.name as assigned_user_name, 
              u.department as assigned_user_department
       FROM assets a
       LEFT JOIN users u ON a.assigned_to_user_id = u.id
+      WHERE a.company_id = ?
       ORDER BY a.created_at DESC
     `;
-    const res = await c.env.DB.prepare(query).all();
+    let params = [companyId];
+
+    if (isSuperAdmin && companyId === 'ALL') {
+      query = `
+        SELECT a.*, 
+               u.name as assigned_user_name, 
+               u.department as assigned_user_department
+        FROM assets a
+        LEFT JOIN users u ON a.assigned_to_user_id = u.id
+        ORDER BY a.created_at DESC
+      `;
+      params = [];
+    }
+
+    const res = await c.env.DB.prepare(query).bind(...params).all();
     return c.json({ success: true, data: res.results || [] });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -541,9 +633,10 @@ app.get('/api/assets', async (c) => {
 
 app.post('/api/assets', async (c) => {
   try {
+    const { companyId } = await getTenantContext(c);
     const license = await getLicenseStatus(c.env.DB);
     if (license.isDemo) {
-      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM assets').first())?.count || 0;
+      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM assets WHERE company_id = ?').bind(companyId).first())?.count || 0;
       if (count >= 5) {
         return c.json({
           success: false,
@@ -558,8 +651,8 @@ app.post('/api/assets', async (c) => {
     const code = body.code || `TS-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
 
     await c.env.DB.prepare(`
-      INSERT INTO assets (id, code, name, category, serial_number, purchase_date, price, status, location, assigned_to_user_id, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO assets (id, code, name, category, serial_number, purchase_date, price, status, location, assigned_to_user_id, notes, company_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       code,
@@ -571,7 +664,8 @@ app.post('/api/assets', async (c) => {
       body.status || 'AVAILABLE',
       body.location || 'Kho công ty',
       body.assigned_to_user_id || null,
-      body.notes || ''
+      body.notes || '',
+      companyId
     ).run();
 
     return c.json({ success: true, data: { id, code, ...body } });
@@ -583,8 +677,10 @@ app.post('/api/assets', async (c) => {
 app.put('/api/assets/:id', async (c) => {
   try {
     const id = c.req.param('id');
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
     const body = await c.req.json();
-    await c.env.DB.prepare(`
+
+    let sql = `
       UPDATE assets
       SET name = COALESCE(?, name),
           category = COALESCE(?, category),
@@ -595,7 +691,8 @@ app.put('/api/assets/:id', async (c) => {
           assigned_to_user_id = COALESCE(?, assigned_to_user_id),
           notes = COALESCE(?, notes)
       WHERE id = ?
-    `).bind(
+    `;
+    let params = [
       body.name !== undefined ? body.name : null,
       body.category !== undefined ? body.category : null,
       body.serial_number !== undefined ? body.serial_number : null,
@@ -605,7 +702,14 @@ app.put('/api/assets/:id', async (c) => {
       body.assigned_to_user_id !== undefined ? body.assigned_to_user_id : null,
       body.notes !== undefined ? body.notes : null,
       id
-    ).run();
+    ];
+
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      sql += ' AND (company_id = ? OR company_id IS NULL)';
+      params.push(companyId);
+    }
+
+    await c.env.DB.prepare(sql).bind(...params).run();
 
     return c.json({ success: true, message: 'Đã cập nhật tài sản' });
   } catch (err) {
@@ -616,7 +720,16 @@ app.put('/api/assets/:id', async (c) => {
 app.delete('/api/assets/:id', async (c) => {
   try {
     const id = c.req.param('id');
-    await c.env.DB.prepare('DELETE FROM assets WHERE id = ?').bind(id).run();
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let sql = 'DELETE FROM assets WHERE id = ?';
+    let params = [id];
+
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      sql += ' AND (company_id = ? OR company_id IS NULL)';
+      params.push(companyId);
+    }
+
+    await c.env.DB.prepare(sql).bind(...params).run();
     return c.json({ success: true, message: 'Đã xóa tài sản' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -628,7 +741,15 @@ app.delete('/api/assets/:id', async (c) => {
 // ========================
 app.get('/api/finance', async (c) => {
   try {
-    const res = await c.env.DB.prepare('SELECT * FROM finance ORDER BY date DESC').all();
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let sql = 'SELECT * FROM finance WHERE company_id = ? ORDER BY date DESC, created_at DESC';
+    let params = [companyId];
+    if (isSuperAdmin && companyId === 'ALL') {
+      sql = 'SELECT * FROM finance ORDER BY date DESC, created_at DESC';
+      params = [];
+    }
+
+    const res = await c.env.DB.prepare(sql).bind(...params).all();
     return c.json({ success: true, data: res.results || [] });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -637,7 +758,15 @@ app.get('/api/finance', async (c) => {
 
 app.get('/api/finance/monthly-summary', async (c) => {
   try {
-    const res = await c.env.DB.prepare('SELECT * FROM finance').all();
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let sql = 'SELECT * FROM finance WHERE company_id = ?';
+    let params = [companyId];
+    if (isSuperAdmin && companyId === 'ALL') {
+      sql = 'SELECT * FROM finance';
+      params = [];
+    }
+
+    const res = await c.env.DB.prepare(sql).bind(...params).all();
     const list = res.results || [];
 
     const summaryMap = {};
@@ -646,21 +775,24 @@ app.get('/api/finance/monthly-summary', async (c) => {
       summaryMap[monthKey] = { month: `T${i}`, revenue: 0, expense: 0, profit: 0 };
     }
 
-    const sampleTrend = [
-      { m: '2024-01', rev: 95000000, exp: 40000000 },
-      { m: '2024-02', rev: 110000000, exp: 45000000 },
-      { m: '2024-03', rev: 135000000, exp: 52000000 },
-      { m: '2024-04', rev: 160000000, exp: 58000000 },
-      { m: '2024-05', rev: 145000000, exp: 62000000 },
-      { m: '2024-06', rev: 170000000, exp: 46500000 },
-    ];
-    sampleTrend.forEach((s) => {
-      if (summaryMap[s.m]) {
-        summaryMap[s.m].revenue = s.rev;
-        summaryMap[s.m].expense = s.exp;
-        summaryMap[s.m].profit = s.rev - s.exp;
-      }
-    });
+    // Chỉ dùng demo trend cho comp_1
+    if (companyId === 'comp_1') {
+      const sampleTrend = [
+        { m: '2024-01', rev: 95000000, exp: 40000000 },
+        { m: '2024-02', rev: 110000000, exp: 45000000 },
+        { m: '2024-03', rev: 135000000, exp: 52000000 },
+        { m: '2024-04', rev: 160000000, exp: 58000000 },
+        { m: '2024-05', rev: 145000000, exp: 62000000 },
+        { m: '2024-06', rev: 170000000, exp: 46500000 },
+      ];
+      sampleTrend.forEach((s) => {
+        if (summaryMap[s.m]) {
+          summaryMap[s.m].revenue = s.rev;
+          summaryMap[s.m].expense = s.exp;
+          summaryMap[s.m].profit = s.rev - s.exp;
+        }
+      });
+    }
 
     list.forEach((item) => {
       const ym = item.date ? item.date.slice(0, 7) : '2024-06';
@@ -684,7 +816,7 @@ app.get('/api/finance/monthly-summary', async (c) => {
         totalRevenue,
         totalExpense,
         netProfit: totalRevenue - totalExpense,
-        growthRate: '+18.4%'
+        growthRate: totalRevenue > 0 ? '+18.4%' : '0%'
       }
     });
   } catch (err) {
@@ -694,9 +826,10 @@ app.get('/api/finance/monthly-summary', async (c) => {
 
 app.post('/api/finance', async (c) => {
   try {
+    const { companyId } = await getTenantContext(c);
     const license = await getLicenseStatus(c.env.DB);
     if (license.isDemo) {
-      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM finance').first())?.count || 0;
+      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM finance WHERE company_id = ?').bind(companyId).first())?.count || 0;
       if (count >= 5) {
         return c.json({
           success: false,
@@ -711,8 +844,8 @@ app.post('/api/finance', async (c) => {
     const invoice = body.invoice_number || `HD-${Date.now().toString().slice(-6)}`;
 
     await c.env.DB.prepare(`
-      INSERT INTO finance (id, type, category, amount, date, description, invoice_number)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO finance (id, type, category, amount, date, description, invoice_number, company_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       body.type,
@@ -720,7 +853,8 @@ app.post('/api/finance', async (c) => {
       Number(body.amount),
       body.date || new Date().toISOString().split('T')[0],
       body.description || '',
-      invoice
+      invoice,
+      companyId
     ).run();
 
     return c.json({ success: true, message: 'Đã thêm giao dịch' });
@@ -732,7 +866,14 @@ app.post('/api/finance', async (c) => {
 app.delete('/api/finance/:id', async (c) => {
   try {
     const id = c.req.param('id');
-    await c.env.DB.prepare('DELETE FROM finance WHERE id = ?').bind(id).run();
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let sql = 'DELETE FROM finance WHERE id = ?';
+    let params = [id];
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      sql += ' AND (company_id = ? OR company_id IS NULL)';
+      params.push(companyId);
+    }
+    await c.env.DB.prepare(sql).bind(...params).run();
     return c.json({ success: true, message: 'Đã xóa giao dịch' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -745,13 +886,27 @@ app.delete('/api/finance/:id', async (c) => {
 app.get('/api/tasks', async (c) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    const query = `
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+
+    let query = `
       SELECT t.*, u.name as assigned_user_name, u.avatar as assigned_user_avatar, u.department as assigned_user_department
       FROM tasks t
       LEFT JOIN users u ON t.assigned_to_user_id = u.id
+      WHERE t.company_id = ?
       ORDER BY t.due_date ASC
     `;
-    const res = await c.env.DB.prepare(query).all();
+    let params = [companyId];
+    if (isSuperAdmin && companyId === 'ALL') {
+      query = `
+        SELECT t.*, u.name as assigned_user_name, u.avatar as assigned_user_avatar, u.department as assigned_user_department
+        FROM tasks t
+        LEFT JOIN users u ON t.assigned_to_user_id = u.id
+        ORDER BY t.due_date ASC
+      `;
+      params = [];
+    }
+
+    const res = await c.env.DB.prepare(query).bind(...params).all();
     const list = (res.results || []).map((t) => {
       let urgency = 'NORMAL';
       if (t.status !== 'COMPLETED') {
@@ -775,11 +930,12 @@ app.get('/api/tasks', async (c) => {
 
 app.post('/api/tasks', async (c) => {
   try {
+    const { companyId } = await getTenantContext(c);
     const body = await c.req.json();
     const id = `tsk_${Date.now()}`;
     await c.env.DB.prepare(`
-      INSERT INTO tasks (id, title, description, assigned_to_user_id, due_date, priority, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, title, description, assigned_to_user_id, due_date, priority, status, company_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       body.title,
@@ -787,7 +943,8 @@ app.post('/api/tasks', async (c) => {
       body.assigned_to_user_id || null,
       body.due_date,
       body.priority || 'MEDIUM',
-      'PENDING'
+      'PENDING',
+      companyId
     ).run();
 
     return c.json({ success: true, message: 'Đã tạo công việc' });
@@ -799,19 +956,28 @@ app.post('/api/tasks', async (c) => {
 app.put('/api/tasks/:id', async (c) => {
   try {
     const id = c.req.param('id');
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
     const body = await c.req.json();
-    await c.env.DB.prepare(`
+
+    let sql = `
       UPDATE tasks
       SET status = COALESCE(?, status),
           title = COALESCE(?, title),
           priority = COALESCE(?, priority)
       WHERE id = ?
-    `).bind(
+    `;
+    let params = [
       body.status !== undefined ? body.status : null,
       body.title !== undefined ? body.title : null,
       body.priority !== undefined ? body.priority : null,
       id
-    ).run();
+    ];
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      sql += ' AND (company_id = ? OR company_id IS NULL)';
+      params.push(companyId);
+    }
+
+    await c.env.DB.prepare(sql).bind(...params).run();
 
     return c.json({ success: true, message: 'Đã cập nhật công việc' });
   } catch (err) {
@@ -822,7 +988,14 @@ app.put('/api/tasks/:id', async (c) => {
 app.delete('/api/tasks/:id', async (c) => {
   try {
     const id = c.req.param('id');
-    await c.env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(id).run();
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let sql = 'DELETE FROM tasks WHERE id = ?';
+    let params = [id];
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      sql += ' AND (company_id = ? OR company_id IS NULL)';
+      params.push(companyId);
+    }
+    await c.env.DB.prepare(sql).bind(...params).run();
     return c.json({ success: true, message: 'Đã xóa công việc' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -846,7 +1019,15 @@ async function initContractColumns(db) {
 app.get('/api/contracts', async (c) => {
   try {
     await initContractColumns(c.env.DB);
-    const res = await c.env.DB.prepare('SELECT * FROM contracts ORDER BY start_date DESC').all();
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let sql = 'SELECT * FROM contracts WHERE company_id = ? ORDER BY start_date DESC';
+    let params = [companyId];
+    if (isSuperAdmin && companyId === 'ALL') {
+      sql = 'SELECT * FROM contracts ORDER BY start_date DESC';
+      params = [];
+    }
+
+    const res = await c.env.DB.prepare(sql).bind(...params).all();
     return c.json({ success: true, data: res.results || [] });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -856,9 +1037,10 @@ app.get('/api/contracts', async (c) => {
 app.post('/api/contracts', async (c) => {
   try {
     await initContractColumns(c.env.DB);
+    const { companyId } = await getTenantContext(c);
     const license = await getLicenseStatus(c.env.DB);
     if (license.isDemo) {
-      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM contracts').first())?.count || 0;
+      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM contracts WHERE company_id = ?').bind(companyId).first())?.count || 0;
       if (count >= 3) {
         return c.json({
           success: false,
@@ -875,8 +1057,8 @@ app.post('/api/contracts', async (c) => {
     const appendices = typeof body.appendices === 'string' ? body.appendices : (body.appendices ? JSON.stringify(body.appendices) : '[]');
 
     await c.env.DB.prepare(`
-      INSERT INTO contracts (id, code, title, type, partner_name, value, start_date, end_date, status, notes, terms, appendices)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO contracts (id, code, title, type, partner_name, value, start_date, end_date, status, notes, terms, appendices, company_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       code,
@@ -889,7 +1071,8 @@ app.post('/api/contracts', async (c) => {
       body.status || 'ACTIVE',
       body.notes || '',
       terms,
-      appendices
+      appendices,
+      companyId
     ).run();
 
     return c.json({ success: true, message: 'Đã thêm hợp đồng', data: { id, code } });
@@ -903,9 +1086,17 @@ app.put('/api/contracts/:id', async (c) => {
   try {
     await initContractColumns(c.env.DB);
     const id = c.req.param('id');
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
     const body = await c.req.json();
 
-    const existing = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first();
+    let checkSql = 'SELECT * FROM contracts WHERE id = ?';
+    let checkParams = [id];
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      checkSql += ' AND (company_id = ? OR company_id IS NULL)';
+      checkParams.push(companyId);
+    }
+
+    const existing = await c.env.DB.prepare(checkSql).bind(...checkParams).first();
     if (!existing) {
       return c.json({ success: false, message: 'Hợp đồng không tồn tại' }, 404);
     }
@@ -947,9 +1138,17 @@ app.post('/api/contracts/:id/appendices', async (c) => {
   try {
     await initContractColumns(c.env.DB);
     const id = c.req.param('id');
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
     const body = await c.req.json();
 
-    const contract = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first();
+    let checkSql = 'SELECT * FROM contracts WHERE id = ?';
+    let checkParams = [id];
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      checkSql += ' AND (company_id = ? OR company_id IS NULL)';
+      checkParams.push(companyId);
+    }
+
+    const contract = await c.env.DB.prepare(checkSql).bind(...checkParams).first();
     if (!contract) {
       return c.json({ success: false, message: 'Không tìm thấy hợp đồng' }, 404);
     }
@@ -988,16 +1187,32 @@ app.post('/api/contracts/:id/appendices', async (c) => {
 
 app.get('/api/contracts/handover/list', async (c) => {
   try {
-    const query = `
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let query = `
       SELECT h.*, 
              a.name as asset_name, a.code as asset_code,
              u.name as user_name, u.department as user_department
       FROM handover_protocols h
       LEFT JOIN assets a ON h.asset_id = a.id
       LEFT JOIN users u ON h.user_id = u.id
+      WHERE h.company_id = ?
       ORDER BY h.handover_date DESC
     `;
-    const res = await c.env.DB.prepare(query).all();
+    let params = [companyId];
+    if (isSuperAdmin && companyId === 'ALL') {
+      query = `
+        SELECT h.*, 
+               a.name as asset_name, a.code as asset_code,
+               u.name as user_name, u.department as user_department
+        FROM handover_protocols h
+        LEFT JOIN assets a ON h.asset_id = a.id
+        LEFT JOIN users u ON h.user_id = u.id
+        ORDER BY h.handover_date DESC
+      `;
+      params = [];
+    }
+
+    const res = await c.env.DB.prepare(query).bind(...params).all();
     return c.json({ success: true, data: res.results || [] });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -1006,13 +1221,14 @@ app.get('/api/contracts/handover/list', async (c) => {
 
 app.post('/api/contracts/handover/create', async (c) => {
   try {
+    const { companyId } = await getTenantContext(c);
     const body = await c.req.json();
     const id = `bb_${Date.now()}`;
     const code = body.code || `BBBG-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
 
     await c.env.DB.prepare(`
-      INSERT INTO handover_protocols (id, code, asset_id, user_id, type, handover_date, condition, status, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO handover_protocols (id, code, asset_id, user_id, type, handover_date, condition, status, notes, company_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       code,
@@ -1022,7 +1238,8 @@ app.post('/api/contracts/handover/create', async (c) => {
       body.handover_date || new Date().toISOString().split('T')[0],
       body.condition || 'Hoạt động tốt',
       'COMPLETED',
-      body.notes || ''
+      body.notes || '',
+      companyId
     ).run();
 
     // Cập nhật trạng thái và người nắm giữ tài sản
@@ -1052,6 +1269,7 @@ async function initAiTemplateTable(db) {
         summary TEXT,
         structure_schema TEXT,
         sample_content TEXT,
+        company_id TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `).run();
@@ -1062,10 +1280,19 @@ async function initAiTemplateTable(db) {
 app.get('/api/contracts/ai/templates', async (c) => {
   try {
     await initAiTemplateTable(c.env.DB);
-    let res = await c.env.DB.prepare('SELECT * FROM ai_contract_templates ORDER BY created_at DESC').all();
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+
+    let sql = 'SELECT * FROM ai_contract_templates WHERE company_id = ? OR company_id IS NULL ORDER BY created_at DESC';
+    let params = [companyId];
+    if (isSuperAdmin && companyId === 'ALL') {
+      sql = 'SELECT * FROM ai_contract_templates ORDER BY created_at DESC';
+      params = [];
+    }
+
+    let res = await c.env.DB.prepare(sql).bind(...params).all();
     let templates = res.results || [];
 
-    // Nếu kho mẫu trống, nạp sẵn 3 mẫu tiêu chuẩn doanh nghiệp
+    // Nếu kho mẫu trống, nạp sẵn 3 mẫu tiêu chuẩn doanh nghiệp (dùng chung cho mọi tenant: company_id = NULL)
     if (templates.length === 0) {
       const initialSeed = [
         {
@@ -1144,12 +1371,12 @@ NỘI DUNG BÀN GIAO:
 
       for (const item of initialSeed) {
         await c.env.DB.prepare(`
-          INSERT OR REPLACE INTO ai_contract_templates (id, title, type, category_name, summary, structure_schema, sample_content)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO ai_contract_templates (id, title, type, category_name, summary, structure_schema, sample_content, company_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
         `).bind(item.id, item.title, item.type, item.category_name, item.summary, item.structure_schema, item.sample_content).run();
       }
 
-      res = await c.env.DB.prepare('SELECT * FROM ai_contract_templates ORDER BY created_at DESC').all();
+      res = await c.env.DB.prepare(sql).bind(...params).all();
       templates = res.results || [];
     }
 
@@ -1163,13 +1390,14 @@ NỘI DUNG BÀN GIAO:
 app.post('/api/contracts/ai/templates', async (c) => {
   try {
     await initAiTemplateTable(c.env.DB);
+    const { companyId } = await getTenantContext(c);
     const body = await c.req.json();
     const id = body.id || `tpl_${Date.now()}`;
     const schemaStr = typeof body.structure_schema === 'object' ? JSON.stringify(body.structure_schema) : (body.structure_schema || '{}');
 
     await c.env.DB.prepare(`
-      INSERT OR REPLACE INTO ai_contract_templates (id, title, type, category_name, summary, structure_schema, sample_content)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO ai_contract_templates (id, title, type, category_name, summary, structure_schema, sample_content, company_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       body.title || 'Mẫu Hợp Đồng Tùy Biến',
@@ -1177,7 +1405,8 @@ app.post('/api/contracts/ai/templates', async (c) => {
       body.category_name || 'Hợp Đồng Thương Mại',
       body.summary || '',
       schemaStr,
-      body.sample_content || ''
+      body.sample_content || '',
+      companyId
     ).run();
 
     return c.json({ success: true, message: 'Đã lưu mẫu hợp đồng thành công', data: { id } });
@@ -1190,7 +1419,14 @@ app.post('/api/contracts/ai/templates', async (c) => {
 app.delete('/api/contracts/ai/templates/:id', async (c) => {
   try {
     const id = c.req.param('id');
-    await c.env.DB.prepare('DELETE FROM ai_contract_templates WHERE id = ?').bind(id).run();
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let sql = 'DELETE FROM ai_contract_templates WHERE id = ?';
+    let params = [id];
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      sql += ' AND company_id = ?';
+      params.push(companyId);
+    }
+    await c.env.DB.prepare(sql).bind(...params).run();
     return c.json({ success: true, message: 'Đã xóa mẫu hợp đồng' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -1459,13 +1695,26 @@ Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown \
 // ========================
 app.get('/api/attendance', async (c) => {
   try {
-    const query = `
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let query = `
       SELECT att.*, u.name as user_name, u.role as user_role, u.department as user_department
       FROM attendance att
       LEFT JOIN users u ON att.user_id = u.id
+      WHERE att.company_id = ?
       ORDER BY att.date DESC, att.check_in DESC
     `;
-    const res = await c.env.DB.prepare(query).all();
+    let params = [companyId];
+    if (isSuperAdmin && companyId === 'ALL') {
+      query = `
+        SELECT att.*, u.name as user_name, u.role as user_role, u.department as user_department
+        FROM attendance att
+        LEFT JOIN users u ON att.user_id = u.id
+        ORDER BY att.date DESC, att.check_in DESC
+      `;
+      params = [];
+    }
+
+    const res = await c.env.DB.prepare(query).bind(...params).all();
     return c.json({ success: true, data: res.results || [] });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -1482,7 +1731,7 @@ app.post('/api/attendance/check', async (c) => {
 
     // Kiểm tra nhân viên có tồn tại trong CSDL không
     const targetUser = await c.env.DB
-      .prepare('SELECT id, name FROM users WHERE id = ?')
+      .prepare('SELECT id, name, company_id FROM users WHERE id = ?')
       .bind(user_id)
       .first();
 
@@ -1492,6 +1741,8 @@ app.post('/api/attendance/check', async (c) => {
         message: `Mã nhân sự "${user_id}" không tồn tại trên hệ thống. Vui lòng đăng nhập lại.`
       }, 400);
     }
+
+    const companyId = targetUser.company_id || 'comp_1';
 
     // Chuẩn hóa ngày và giờ theo múi giờ Việt Nam (Asia/Ho_Chi_Minh - UTC+7)
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date()); // YYYY-MM-DD
@@ -1544,15 +1795,16 @@ app.post('/api/attendance/check', async (c) => {
       const noteText = (notes && String(notes).trim()) ? String(notes).trim() : (isLate ? `Đi muộn (quy định ${workStart} + ${graceMin}p ân hạn)` : 'Đúng giờ');
 
       await c.env.DB.prepare(`
-        INSERT INTO attendance (id, user_id, date, check_in, check_out, total_hours, status, notes)
-        VALUES (?, ?, ?, ?, NULL, 0, ?, ?)
+        INSERT INTO attendance (id, user_id, date, check_in, check_out, total_hours, status, notes, company_id)
+        VALUES (?, ?, ?, ?, NULL, 0, ?, ?, ?)
       `).bind(
         id,
         user_id,
         today,
         timeStr,
         isLate ? 'LATE' : 'ON_TIME',
-        noteText
+        noteText,
+        companyId
       ).run();
 
       return c.json({
@@ -1605,8 +1857,22 @@ app.post('/api/attendance/check', async (c) => {
 app.get('/api/attendance/summary', async (c) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    const usersCount = (await c.env.DB.prepare('SELECT count(*) as count FROM users').first())?.count || 0;
-    const todayRecords = (await c.env.DB.prepare('SELECT * FROM attendance WHERE date = ?').bind(today).all())?.results || [];
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+
+    let usersQuery = 'SELECT count(*) as count FROM users WHERE company_id = ?';
+    let attQuery = 'SELECT * FROM attendance WHERE date = ? AND company_id = ?';
+    let userParams = [companyId];
+    let attParams = [today, companyId];
+
+    if (isSuperAdmin && companyId === 'ALL') {
+      usersQuery = 'SELECT count(*) as count FROM users';
+      attQuery = 'SELECT * FROM attendance WHERE date = ?';
+      userParams = [];
+      attParams = [today];
+    }
+
+    const usersCount = (await c.env.DB.prepare(usersQuery).bind(...userParams).first())?.count || 0;
+    const todayRecords = (await c.env.DB.prepare(attQuery).bind(...attParams).all())?.results || [];
 
     const checkedInCount = todayRecords.length;
     const onTimeCount = todayRecords.filter((a) => a.status === 'ON_TIME').length;
@@ -1633,9 +1899,18 @@ app.get('/api/attendance/summary', async (c) => {
 // ========================
 app.get('/api/users', async (c) => {
   try {
-    const res = await c.env.DB
-      .prepare('SELECT id, name, email, role, department, phone, avatar, status, created_at FROM users ORDER BY created_at DESC')
-      .all();
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let res;
+    if (isSuperAdmin && companyId === 'ALL') {
+      res = await c.env.DB
+        .prepare('SELECT id, name, email, role, department, phone, avatar, status, company_id, created_at FROM users ORDER BY created_at DESC')
+        .all();
+    } else {
+      res = await c.env.DB
+        .prepare('SELECT id, name, email, role, department, phone, avatar, status, company_id, created_at FROM users WHERE company_id = ? ORDER BY created_at DESC')
+        .bind(companyId)
+        .all();
+    }
     return c.json({ success: true, data: res.results || [] });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -1649,9 +1924,10 @@ app.post('/api/users', async (c) => {
       return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) mới có quyền thêm nhân sự' }, 403);
     }
 
+    const { companyId } = await getTenantContext(c);
     const license = await getLicenseStatus(c.env.DB);
     if (license.isDemo) {
-      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM users').first())?.count || 0;
+      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM users WHERE company_id = ?').bind(companyId).first())?.count || 0;
       if (count >= 4) {
         return c.json({
           success: false,
@@ -1664,8 +1940,8 @@ app.post('/api/users', async (c) => {
     const body = await c.req.json();
     const id = `usr_${Date.now()}`;
     await c.env.DB.prepare(`
-      INSERT INTO users (id, name, email, password, role, department, phone, avatar, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+      INSERT INTO users (id, name, email, password, role, department, phone, avatar, status, company_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)
     `).bind(
       id,
       body.name,
@@ -1674,7 +1950,8 @@ app.post('/api/users', async (c) => {
       body.role || 'STAFF',
       body.department || 'Phòng Kế Hoạch',
       body.phone || '',
-      body.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(body.name)}`
+      body.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(body.name)}`,
+      companyId
     ).run();
 
     return c.json({ success: true, message: 'Đã thêm nhân sự' });
@@ -1690,8 +1967,10 @@ app.put('/api/users/:id', async (c) => {
     if (role !== 'ADMIN') {
       return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) mới có quyền chỉnh sửa nhân sự' }, 403);
     }
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
     const body = await c.req.json();
-    await c.env.DB.prepare(`
+
+    let sql = `
       UPDATE users
       SET name = COALESCE(?, name),
           email = COALESCE(?, email),
@@ -1700,7 +1979,8 @@ app.put('/api/users/:id', async (c) => {
           phone = COALESCE(?, phone),
           status = COALESCE(?, status)
       WHERE id = ?
-    `).bind(
+    `;
+    let params = [
       body.name !== undefined ? body.name : null,
       body.email !== undefined ? body.email : null,
       body.department !== undefined ? body.department : null,
@@ -1708,7 +1988,13 @@ app.put('/api/users/:id', async (c) => {
       body.phone !== undefined ? body.phone : null,
       body.status !== undefined ? body.status : null,
       id
-    ).run();
+    ];
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      sql += ' AND (company_id = ? OR company_id IS NULL)';
+      params.push(companyId);
+    }
+
+    await c.env.DB.prepare(sql).bind(...params).run();
 
     return c.json({ success: true, message: 'Đã cập nhật thông tin nhân sự và phòng ban' });
   } catch (err) {
@@ -1723,10 +2009,19 @@ app.delete('/api/users/:id', async (c) => {
     if (role !== 'ADMIN') {
       return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) mới có quyền xóa nhân sự' }, 403);
     }
-    if (id === 'usr_admin' || id === 'usr_1') {
+    if (id === 'usr_admin' || id === 'usr_1' || id === 'super_admin_master') {
       return c.json({ success: false, message: 'Không thể xóa tài khoản Quản trị viên khởi tạo' }, 400);
     }
-    await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run();
+
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let sql = 'DELETE FROM users WHERE id = ?';
+    let params = [id];
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      sql += ' AND (company_id = ? OR company_id IS NULL)';
+      params.push(companyId);
+    }
+
+    await c.env.DB.prepare(sql).bind(...params).run();
     return c.json({ success: true, message: 'Đã xóa nhân sự khỏi hệ thống' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -1792,12 +2087,22 @@ async function ensureCategories(db) {
 app.get('/api/categories', async (c) => {
   try {
     await ensureCategories(c.env.DB);
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
     const type = c.req.query('type');
     let query = 'SELECT * FROM categories';
     let params = [];
-    if (type) {
-      query += ' WHERE type = ?';
-      params.push(type);
+    if (isSuperAdmin && companyId === 'ALL') {
+      if (type) {
+        query += ' WHERE type = ?';
+        params.push(type);
+      }
+    } else {
+      query += ' WHERE (company_id = ? OR company_id IS NULL)';
+      params.push(companyId);
+      if (type) {
+        query += ' AND type = ?';
+        params.push(type);
+      }
     }
     query += ' ORDER BY type ASC, created_at ASC';
 
@@ -1816,6 +2121,7 @@ app.post('/api/categories', async (c) => {
       return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) mới có quyền quản lý danh mục' }, 403);
     }
 
+    const { companyId } = await getTenantContext(c);
     const { type, name, code, description } = await c.req.json();
     if (!type || !name) {
       return c.json({ success: false, message: 'Phân loại và tên danh mục là bắt buộc' }, 400);
@@ -1823,9 +2129,9 @@ app.post('/api/categories', async (c) => {
 
     const id = `cat_${Date.now()}`;
     await c.env.DB.prepare(`
-      INSERT INTO categories (id, type, name, code, description)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(id, type, name, code || '', description || '').run();
+      INSERT INTO categories (id, type, name, code, description, company_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(id, type, name, code || '', description || '', companyId).run();
 
     return c.json({ success: true, message: 'Đã thêm danh mục thành công', data: { id, type, name, code, description } });
   } catch (err) {
@@ -1842,19 +2148,28 @@ app.put('/api/categories/:id', async (c) => {
     }
 
     const id = c.req.param('id');
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
     const { name, code, description } = await c.req.json();
-    await c.env.DB.prepare(`
+
+    let sql = `
       UPDATE categories
       SET name = COALESCE(?, name),
           code = COALESCE(?, code),
           description = COALESCE(?, description)
       WHERE id = ?
-    `).bind(
+    `;
+    let params = [
       name !== undefined ? name : null,
       code !== undefined ? code : null,
       description !== undefined ? description : null,
       id
-    ).run();
+    ];
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      sql += ' AND (company_id = ? OR company_id IS NULL)';
+      params.push(companyId);
+    }
+
+    await c.env.DB.prepare(sql).bind(...params).run();
 
     return c.json({ success: true, message: 'Đã cập nhật danh mục' });
   } catch (err) {
@@ -1871,7 +2186,15 @@ app.delete('/api/categories/:id', async (c) => {
     }
 
     const id = c.req.param('id');
-    await c.env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(id).run();
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    let sql = 'DELETE FROM categories WHERE id = ?';
+    let params = [id];
+    if (!isSuperAdmin || companyId !== 'ALL') {
+      sql += ' AND company_id = ?';
+      params.push(companyId);
+    }
+
+    await c.env.DB.prepare(sql).bind(...params).run();
     return c.json({ success: true, message: 'Đã xóa danh mục' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
@@ -1958,12 +2281,23 @@ async function getLicenseStatus(db) {
 app.get('/api/settings', async (c) => {
   try {
     await initSettingsTable(c.env.DB);
+    const { companyId } = await getTenantContext(c);
     const res = await c.env.DB.prepare('SELECT * FROM system_settings ORDER BY category, key').all();
     const rows = res.results || [];
     const settingsMap = {};
     rows.forEach((r) => {
       settingsMap[r.key] = r.value;
     });
+
+    if (companyId && companyId !== 'comp_1' && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      const compTenant = await c.env.DB.prepare('SELECT * FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null);
+      if (compTenant) {
+        settingsMap['company_name'] = compTenant.company_name;
+        if (compTenant.tax_id) settingsMap['tax_id'] = compTenant.tax_id;
+        if (compTenant.admin_email) settingsMap['company_email'] = compTenant.admin_email;
+        if (compTenant.admin_phone) settingsMap['company_phone'] = compTenant.admin_phone;
+      }
+    }
 
     return c.json({
       success: true,
@@ -1985,6 +2319,7 @@ app.put('/api/settings', async (c) => {
     }
 
     await initSettingsTable(c.env.DB);
+    const { companyId } = await getTenantContext(c);
     const body = await c.req.json().catch(() => ({}));
     const settingsToUpdate = body.settings || body;
     const now = new Date().toISOString();
@@ -1995,6 +2330,24 @@ app.put('/api/settings', async (c) => {
         SET value = ?, updated_at = ?
         WHERE key = ?
       `).bind(String(value), now, key).run();
+    }
+
+    // Nếu là tenant riêng, đồng bộ tên và thông tin sang company_tenants
+    if (companyId && companyId !== 'comp_1' && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      const compName = settingsToUpdate['company_name'];
+      const taxId = settingsToUpdate['tax_id'];
+      const phone = settingsToUpdate['company_phone'];
+      const email = settingsToUpdate['company_email'];
+      if (compName) {
+        await c.env.DB.prepare(`
+          UPDATE company_tenants
+          SET company_name = COALESCE(?, company_name),
+              tax_id = COALESCE(?, tax_id),
+              admin_phone = COALESCE(?, admin_phone),
+              admin_email = COALESCE(?, admin_email)
+          WHERE id = ?
+        `).bind(compName || null, taxId || null, phone || null, email || null, companyId).run().catch(() => {});
+      }
     }
 
     const res = await c.env.DB.prepare('SELECT * FROM system_settings ORDER BY category, key').all();
@@ -2022,26 +2375,82 @@ app.put('/api/settings', async (c) => {
 // ========================
 app.get('/api/license/status', async (c) => {
   try {
-    await initSettingsTable(c.env.DB);
-    const license = await getLicenseStatus(c.env.DB);
+    const { companyId } = await getTenantContext(c);
+    let isDemo = true;
+    let tier = 'DEMO';
+    let planCode = 'TRIAL_2M';
+    let companyName = 'OMNI ASSETS';
+    let status = 'ACTIVE';
+    let expireDate = null;
+
+    if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      const tenant = await c.env.DB
+        .prepare('SELECT * FROM company_tenants WHERE id = ?')
+        .bind(companyId)
+        .first()
+        .catch(() => null);
+
+      if (tenant) {
+        companyName = tenant.company_name;
+        planCode = tenant.plan_code || 'TRIAL_2M';
+        status = tenant.license_status || 'ACTIVE';
+        expireDate = tenant.expire_date;
+
+        const today = new Date().toISOString().slice(0, 10);
+        const isExpired = expireDate && expireDate < today;
+
+        if (status === 'ACTIVE' && !isExpired) {
+          if (planCode === 'LIFETIME' || planCode === 'ANNUAL_1Y') {
+            tier = 'ENTERPRISE';
+            isDemo = false;
+          } else if (planCode === 'TRIAL_2M') {
+            tier = 'TRIAL';
+            isDemo = false; // Gói dùng thử 2 tháng được mở khóa toàn diện
+          }
+        } else {
+          tier = 'EXPIRED';
+          isDemo = true;
+        }
+      } else {
+        await initSettingsTable(c.env.DB);
+        const lic = await getLicenseStatus(c.env.DB);
+        isDemo = lic.isDemo;
+        tier = lic.tier;
+        companyName = lic.organization;
+      }
+    } else {
+      await initSettingsTable(c.env.DB);
+      const lic = await getLicenseStatus(c.env.DB);
+      isDemo = lic.isDemo;
+      tier = lic.tier;
+      companyName = lic.organization;
+    }
+
     const [assetsCount, usersCount, contractsCount, financeCount] = await Promise.all([
-      c.env.DB.prepare('SELECT count(*) as count FROM assets').first().catch(() => ({ count: 0 })),
-      c.env.DB.prepare('SELECT count(*) as count FROM users').first().catch(() => ({ count: 0 })),
-      c.env.DB.prepare('SELECT count(*) as count FROM contracts').first().catch(() => ({ count: 0 })),
-      c.env.DB.prepare('SELECT count(*) as count FROM finance').first().catch(() => ({ count: 0 })),
+      c.env.DB.prepare('SELECT count(*) as count FROM assets WHERE company_id = ?').bind(companyId).first().catch(() => ({ count: 0 })),
+      c.env.DB.prepare('SELECT count(*) as count FROM users WHERE company_id = ?').bind(companyId).first().catch(() => ({ count: 0 })),
+      c.env.DB.prepare('SELECT count(*) as count FROM contracts WHERE company_id = ?').bind(companyId).first().catch(() => ({ count: 0 })),
+      c.env.DB.prepare('SELECT count(*) as count FROM finance WHERE company_id = ?').bind(companyId).first().catch(() => ({ count: 0 })),
     ]);
 
     return c.json({
       success: true,
       data: {
-        ...license,
+        tier,
+        isDemo,
+        status,
+        plan_code: planCode,
+        expire_date: expireDate,
+        company_name: companyName,
+        companyName: companyName,
+        organization: companyName,
         limits: {
-          assets: { current: assetsCount?.count || 0, max: license.isDemo ? 5 : 'UNLIMITED' },
-          users: { current: usersCount?.count || 0, max: license.isDemo ? 4 : 'UNLIMITED' },
-          contracts: { current: contractsCount?.count || 0, max: license.isDemo ? 3 : 'UNLIMITED' },
-          finance: { current: financeCount?.count || 0, max: license.isDemo ? 5 : 'UNLIMITED' },
-          excelExport: !license.isDemo,
-          unwatermarkedPrint: !license.isDemo
+          assets: { current: assetsCount?.count || 0, max: isDemo ? 5 : 'UNLIMITED' },
+          users: { current: usersCount?.count || 0, max: isDemo ? 4 : 'UNLIMITED' },
+          contracts: { current: contractsCount?.count || 0, max: isDemo ? 3 : 'UNLIMITED' },
+          finance: { current: financeCount?.count || 0, max: isDemo ? 5 : 'UNLIMITED' },
+          excelExport: !isDemo,
+          unwatermarkedPrint: !isDemo
         }
       }
     });
@@ -2537,6 +2946,26 @@ app.post('/api/super-admin/companies', async (c) => {
       ).run();
     }
 
+    // Nếu có khai báo admin_email, tự động tạo tài khoản Quản trị viên cho doanh nghiệp đó
+    if (admin_email && admin_email.trim()) {
+      const emailClean = admin_email.trim().toLowerCase();
+      const existingUser = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(emailClean).first();
+      if (!existingUser) {
+        const userId = `usr_${Date.now()}`;
+        await c.env.DB.prepare(`
+          INSERT INTO users (id, company_id, name, email, password, role, status, phone, created_at)
+          VALUES (?, ?, ?, ?, ?, 'ADMIN', 'ACTIVE', ?, datetime('now'))
+        `).bind(
+          userId,
+          companyId,
+          admin_name ? admin_name.trim() : 'Quản Trị Viên',
+          emailClean,
+          '123456',
+          admin_phone ? admin_phone.trim() : null
+        ).run();
+      }
+    }
+
     return c.json({
       success: true,
       message: 'Thêm doanh nghiệp thành công!',
@@ -2612,12 +3041,23 @@ app.put('/api/super-admin/companies/:id/license', async (c) => {
   }
 });
 
-// 5. Xóa Doanh nghiệp
+// 5. Xóa Doanh nghiệp (và dọn dẹp toàn bộ dữ liệu thuộc doanh nghiệp đó)
 app.delete('/api/super-admin/companies/:id', async (c) => {
   try {
     const id = c.req.param('id');
-    await c.env.DB.prepare('DELETE FROM company_tenants WHERE id = ?').bind(id).run();
-    return c.json({ success: true, message: 'Xóa doanh nghiệp thành công!' });
+    await c.env.DB.batch([
+      c.env.DB.prepare('DELETE FROM assets WHERE company_id = ?').bind(id),
+      c.env.DB.prepare('DELETE FROM contracts WHERE company_id = ?').bind(id),
+      c.env.DB.prepare('DELETE FROM handover_protocols WHERE company_id = ?').bind(id),
+      c.env.DB.prepare('DELETE FROM finance WHERE company_id = ?').bind(id),
+      c.env.DB.prepare('DELETE FROM tasks WHERE company_id = ?').bind(id),
+      c.env.DB.prepare('DELETE FROM attendance WHERE company_id = ?').bind(id),
+      c.env.DB.prepare('DELETE FROM categories WHERE company_id = ?').bind(id),
+      c.env.DB.prepare('DELETE FROM users WHERE company_id = ?').bind(id),
+      c.env.DB.prepare('DELETE FROM license_orders WHERE company_id = ?').bind(id),
+      c.env.DB.prepare('DELETE FROM company_tenants WHERE id = ?').bind(id)
+    ]);
+    return c.json({ success: true, message: 'Xóa doanh nghiệp và dữ liệu liên quan thành công!' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
   }

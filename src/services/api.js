@@ -3,12 +3,14 @@ const API_BASE = '/api';
 async function request(endpoint, options = {}) {
   let userRole = 'STAFF';
   let userId = '';
+  let companyId = '';
   try {
     const userStr = localStorage.getItem('currentUser');
     if (userStr) {
       const u = JSON.parse(userStr);
       userRole = u.role || 'STAFF';
       userId = u.id || '';
+      companyId = u.company_id || '';
     }
   } catch {}
 
@@ -17,6 +19,7 @@ async function request(endpoint, options = {}) {
       'Content-Type': 'application/json',
       'x-user-role': userRole,
       'x-user-id': userId,
+      'x-company-id': companyId,
       ...options.headers,
     },
     ...options,
