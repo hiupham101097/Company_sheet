@@ -79,7 +79,11 @@ export const api = {
   getUsers: () => request('/users'),
   createUser: (data) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
 
-  // Cloudflare D1 Management
+  // Cài đặt hệ thống & chấm công
+  getSettings: () => request('/settings'),
+  updateSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Cấu hình kết nối hệ thống
   getCloudflareStatus: () => request('/cloudflare/status'),
   testCloudflare: (data) => request('/cloudflare/test', { method: 'POST', body: JSON.stringify(data) }),
   saveCloudflare: (data) => request('/cloudflare/save', { method: 'POST', body: JSON.stringify(data) }),

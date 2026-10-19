@@ -121,7 +121,7 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
             <span>Quản Lý Danh Mục Nghiệp Vụ</span>
           </h2>
           <p className="text-xs sm:text-sm text-slate-500">
-            Tất cả danh mục đều được lưu trữ động trên Cloudflare D1 và kết nối đồng bộ qua API.
+            Tất cả danh mục được quản lý và cập nhật đồng bộ qua API hệ thống.
           </p>
         </div>
 

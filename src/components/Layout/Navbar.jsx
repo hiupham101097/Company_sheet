@@ -6,7 +6,7 @@ import {
   Clock,
   LogOut,
   AlertTriangle,
-  Cloud,
+  Settings,
   Menu
 } from 'lucide-react';
 import { api } from '../../services/api';
@@ -16,7 +16,8 @@ export function Navbar({
   onCheckInSuccess,
   currentUser,
   onLogout,
-  onToggleSidebar
+  onToggleSidebar,
+  onNavigate
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
@@ -68,12 +69,6 @@ export function Navbar({
 
       {/* Right Action buttons */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        {/* Cloudflare Native Connected Badge */}
-        <div className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-xl bg-emerald-50/80 text-emerald-700 border border-emerald-200">
-          <Cloud size={13} className="text-emerald-500" />
-          <span>Cloudflare D1: Connected</span>
-        </div>
-
         {/* Quick Check-in/Check-out Buttons */}
         <div className="flex items-center gap-1 sm:gap-1.5 bg-pastel-50 p-1 rounded-xl border border-pastel-200/70">
           <button
@@ -95,6 +90,17 @@ export function Navbar({
             <span className="hidden sm:inline">Check-out</span>
           </button>
         </div>
+
+        {/* Settings button */}
+        {(currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER') && onNavigate && (
+          <button
+            onClick={() => onNavigate('settings')}
+            className="p-2 rounded-xl text-slate-500 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
+            title="Cài đặt hệ thống & chấm công"
+          >
+            <Settings size={18} />
+          </button>
+        )}
 
         {/* Notification Bell */}
         <div className="relative">

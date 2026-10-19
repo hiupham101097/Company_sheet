@@ -9,6 +9,7 @@ import { ContractManager } from './components/Contracts/ContractManager';
 import { AttendanceManager } from './components/Attendance/AttendanceManager';
 import { UserManager } from './components/Users/UserManager';
 import { CategoryManager } from './components/Categories/CategoryManager';
+import { SettingsManager } from './components/Settings/SettingsManager';
 import { Login } from './components/Auth/Login';
 import { api } from './services/api';
 import { Loader2 } from 'lucide-react';
@@ -129,13 +130,14 @@ export default function App() {
           currentUser={currentUser}
           onLogout={handleLogout}
           onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          onNavigate={setCurrentTab}
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
           {loading && !summaryData ? (
             <div className="h-96 flex flex-col items-center justify-center gap-3 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-pastel-500" />
-              <p className="text-xs font-medium">Đang đồng bộ dữ liệu từ Cloudflare D1 Edge Database...</p>
+              <p className="text-xs font-medium">Đang đồng bộ dữ liệu hệ thống...</p>
             </div>
           ) : (
             <>
@@ -204,6 +206,13 @@ export default function App() {
               {currentTab === 'categories' && (
                 <CategoryManager
                   userRole={currentUser?.role}
+                />
+              )}
+
+              {currentTab === 'settings' && (
+                <SettingsManager
+                  userRole={currentUser?.role}
+                  onRefresh={loadAllData}
                 />
               )}
             </>

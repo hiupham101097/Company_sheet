@@ -70,7 +70,7 @@ export function Dashboard({ summaryData, monthlyData, onNavigate }) {
             Bảng Điều Khiển Tổng Quan
           </h2>
           <p className="text-xs sm:text-sm text-pastel-100 mt-1 max-w-xl">
-            Tất cả dữ liệu tài sản, doanh thu tài chính, tiến độ công việc và hợp đồng kết nối trực tiếp Cloudflare D1.
+            Tổng quan vận hành tài sản, tài chính, hợp đồng, tiến độ công việc và nhân sự thời gian thực.
           </p>
         </div>
 

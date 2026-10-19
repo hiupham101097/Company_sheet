@@ -8,7 +8,7 @@ import {
   CalendarCheck,
   Users,
   FolderTree,
-  Cloud,
+  Settings,
   ChevronRight,
   X
 } from 'lucide-react';
@@ -37,6 +37,7 @@ export function Sidebar({
     { id: 'attendance', label: 'Chấm công', icon: CalendarCheck, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
     { id: 'users', label: 'Quản lý Nhân sự', icon: Users, roles: ['ADMIN'] },
     { id: 'categories', label: 'Quản lý Danh mục', icon: FolderTree, roles: ['ADMIN'] },
+    { id: 'settings', label: 'Cài đặt hệ thống', icon: Settings, roles: ['ADMIN', 'MANAGER'] },
   ];
 
   const menuItems = allMenuItems.filter((item) => item.roles.includes(userRole));
@@ -137,23 +138,37 @@ export function Sidebar({
           })}
         </div>
 
-        {/* Database Status indicator at bottom */}
-        <div className="p-4 border-t border-pastel-100 bg-surface-subtle/40">
-          <div className="w-full p-3 rounded-xl bg-white border border-pastel-200/80 shadow-xs flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-              <Cloud size={16} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <p className="text-xs font-semibold text-slate-700 truncate">Cloudflare D1</p>
+        {/* Quick Settings & System Info at bottom */}
+        {(userRole === 'ADMIN' || userRole === 'MANAGER') && (
+          <div className="p-3 border-t border-pastel-100 bg-surface-subtle/30">
+            <button
+              onClick={() => handleSelectTab('settings')}
+              className={`w-full p-2.5 rounded-xl border flex items-center gap-3 transition-all text-left ${
+                currentTab === 'settings'
+                  ? 'bg-pastel-500 text-white border-pastel-500 shadow-soft'
+                  : 'bg-white border-pastel-200/90 text-slate-700 hover:bg-pastel-50/70 hover:border-pastel-300 shadow-xs'
+              }`}
+            >
+              <div
+                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                  currentTab === 'settings' ? 'bg-white/20 text-white' : 'bg-pastel-100 text-pastel-700'
+                }`}
+              >
+                <Settings size={16} />
               </div>
-              <p className="text-[10px] text-emerald-600 font-semibold truncate">
-                Native Edge Connected
-              </p>
-            </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold leading-tight truncate">Cài Đặt Hệ Thống</p>
+                <p
+                  className={`text-[10px] truncate ${
+                    currentTab === 'settings' ? 'text-pastel-100' : 'text-slate-400'
+                  }`}
+                >
+                  Chấm công & Trang web
+                </p>
+              </div>
+            </button>
           </div>
-        </div>
+        )}
       </aside>
     </>
   );

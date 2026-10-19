@@ -558,8 +558,20 @@ app.post('/api/attendance/check', async (c) => {
       minute: '2-digit',
       hour12: false
     }).format(new Date()); // HH:mm
-    const [curHour, curMin] = timeStr.split(':').map(Number);
-    const isLate = curHour > 8 || (curHour === 8 && curMin > 30);
+    // Lấy cấu hình chấm công động từ bảng system_settings
+    let workStart = '08:30';
+    let graceMin = 15;
+    try {
+      const sStart = await c.env.DB.prepare("SELECT value FROM system_settings WHERE key = 'work_start_time'").first();
+      if (sStart?.value) workStart = sStart.value;
+      const sGrace = await c.env.DB.prepare("SELECT value FROM system_settings WHERE key = 'late_grace_minutes'").first();
+      if (sGrace?.value) graceMin = Number(sGrace.value) || 0;
+    } catch (_) {}
+
+    const [stdH, stdM] = workStart.includes(':') ? workStart.split(':').map(Number) : [8, 30];
+    const allowedTotalMin = stdH * 60 + stdM + graceMin;
+    const currentTotalMin = curHour * 60 + curMin;
+    const isLate = currentTotalMin > allowedTotalMin;
 
     const existing = await c.env.DB
       .prepare('SELECT * FROM attendance WHERE user_id = ? AND date = ?')
@@ -574,7 +586,7 @@ app.post('/api/attendance/check', async (c) => {
         }, 400);
       }
       const id = `att_${Date.now()}`;
-      const noteText = (notes && String(notes).trim()) ? String(notes).trim() : (isLate ? 'Đi muộn sau 08:30' : 'Đúng giờ');
+      const noteText = (notes && String(notes).trim()) ? String(notes).trim() : (isLate ? `Đi muộn (quy định ${workStart} + ${graceMin}p ân hạn)` : 'Đúng giờ');
 
       await c.env.DB.prepare(`
         INSERT INTO attendance (id, user_id, date, check_in, check_out, total_hours, status, notes)
@@ -837,6 +849,116 @@ app.delete('/api/categories/:id', async (c) => {
     const id = c.req.param('id');
     await c.env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(id).run();
     return c.json({ success: true, message: 'Đã xóa danh mục' });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// ========================
+// 10. SYSTEM SETTINGS (CÀI ĐẶT HỆ THỐNG & CHẤM CÔNG)
+// ========================
+async function initSettingsTable(db) {
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        category TEXT,
+        description TEXT,
+        updated_at TEXT
+      )
+    `).run();
+
+    const defaults = [
+      // ATTENDANCE
+      ['work_start_time', '08:30', 'ATTENDANCE', 'Giờ vào ca buổi sáng', new Date().toISOString()],
+      ['work_end_time', '17:30', 'ATTENDANCE', 'Giờ tan ca buổi chiều', new Date().toISOString()],
+      ['late_grace_minutes', '15', 'ATTENDANCE', 'Số phút cho phép đi muộn (ân hạn)', new Date().toISOString()],
+      ['overtime_start_time', '18:00', 'ATTENDANCE', 'Giờ bắt đầu tính làm thêm giờ (OT)', new Date().toISOString()],
+      ['work_days', 'Thứ 2 - Thứ 6', 'ATTENDANCE', 'Các ngày làm việc tiêu chuẩn trong tuần', new Date().toISOString()],
+      ['require_late_reason', 'true', 'ATTENDANCE', 'Yêu cầu nhân viên ghi chú lý do khi đi muộn', new Date().toISOString()],
+      ['lunch_break_start', '12:00', 'ATTENDANCE', 'Giờ bắt đầu nghỉ trưa', new Date().toISOString()],
+      ['lunch_break_end', '13:30', 'ATTENDANCE', 'Giờ kết thúc nghỉ trưa', new Date().toISOString()],
+      // GENERAL
+      ['company_name', 'OMNI ASSETS & LOGISTICS', 'GENERAL', 'Tên chính thức của doanh nghiệp', new Date().toISOString()],
+      ['system_title', 'Hệ Thống Quản Lý Tài Sản & Vận Hành Doanh Nghiệp', 'GENERAL', 'Tiêu đề hiển thị ứng dụng web', new Date().toISOString()],
+      ['company_email', 'contact@omniassets.vn', 'GENERAL', 'Email liên hệ nội bộ', new Date().toISOString()],
+      ['company_phone', '1900 6868', 'GENERAL', 'Hotline hỗ trợ kỹ thuật và văn phòng', new Date().toISOString()],
+      ['company_address', 'Tòa nhà Landmark 81, 720A Điện Biên Phủ, TP. Hồ Chí Minh', 'GENERAL', 'Địa chỉ trụ sở chính', new Date().toISOString()],
+      ['tax_id', '0109887766', 'GENERAL', 'Mã số thuế doanh nghiệp', new Date().toISOString()],
+      ['currency', 'VND', 'GENERAL', 'Đơn vị tiền tệ chính', new Date().toISOString()],
+      ['system_announcement', 'Chào mừng bạn đến với hệ thống quản trị vận hành OMNI ASSETS!', 'GENERAL', 'Thông báo chung trên bảng tin', new Date().toISOString()],
+      ['allow_user_registration', 'false', 'GENERAL', 'Cho phép nhân viên tự tạo tài khoản', new Date().toISOString()]
+    ];
+
+    for (const [key, val, cat, desc, upd] of defaults) {
+      await db.prepare(`
+        INSERT OR IGNORE INTO system_settings (key, value, category, description, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(key, val, cat, desc, upd).run();
+    }
+  } catch (e) {
+    console.error('Error initSettingsTable:', e);
+  }
+}
+
+app.get('/api/settings', async (c) => {
+  try {
+    await initSettingsTable(c.env.DB);
+    const res = await c.env.DB.prepare('SELECT * FROM system_settings ORDER BY category, key').all();
+    const rows = res.results || [];
+    const settingsMap = {};
+    rows.forEach((r) => {
+      settingsMap[r.key] = r.value;
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        raw: rows,
+        settings: settingsMap
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+app.put('/api/settings', async (c) => {
+  try {
+    const role = c.req.header('x-user-role') || 'ADMIN';
+    if (role !== 'ADMIN' && role !== 'MANAGER') {
+      return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) hoặc Quản lý mới có quyền thay đổi cấu hình' }, 403);
+    }
+
+    await initSettingsTable(c.env.DB);
+    const body = await c.req.json().catch(() => ({}));
+    const settingsToUpdate = body.settings || body;
+    const now = new Date().toISOString();
+
+    for (const [key, value] of Object.entries(settingsToUpdate)) {
+      await c.env.DB.prepare(`
+        UPDATE system_settings
+        SET value = ?, updated_at = ?
+        WHERE key = ?
+      `).bind(String(value), now, key).run();
+    }
+
+    const res = await c.env.DB.prepare('SELECT * FROM system_settings ORDER BY category, key').all();
+    const rows = res.results || [];
+    const settingsMap = {};
+    rows.forEach((r) => {
+      settingsMap[r.key] = r.value;
+    });
+
+    return c.json({
+      success: true,
+      message: 'Cập nhật cài đặt hệ thống thành công',
+      data: {
+        raw: rows,
+        settings: settingsMap
+      }
+    });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
   }

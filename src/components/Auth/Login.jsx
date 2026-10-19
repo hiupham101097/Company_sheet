@@ -154,10 +154,10 @@ export function Login({ onLoginSuccess }) {
           </button>
         </form>
 
-        {/* Cloudflare D1 Native Security Badge */}
+        {/* Security & Corporate Badge */}
         <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-          <ShieldCheck size={14} className="text-emerald-500" />
-          <span>Bảo mật & vận hành trên Cloudflare D1 Edge</span>
+          <ShieldCheck size={14} className="text-pastel-600" />
+          <span>Hệ thống bảo mật nội bộ & mã hóa dữ liệu đa tầng</span>
         </div>
       </div>
     </div>
