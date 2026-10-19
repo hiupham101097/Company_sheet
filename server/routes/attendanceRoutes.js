@@ -42,7 +42,16 @@ router.post('/check', async (req, res) => {
 
     if (action === 'CHECK_IN') {
       if (record) {
-        return res.status(400).json({ success: false, message: 'Nhân viên đã điểm danh vào sáng nay' });
+        if (record.check_out) {
+          return res.status(400).json({
+            success: false,
+            message: `Nhân viên đã hoàn tất ca hôm nay (đã Check-out lúc ${record.check_out}). Vui lòng chờ đến ngày mai để bắt đầu ca mới!`
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          message: `Nhân viên đã điểm danh vào ca hôm nay lúc ${record.check_in}. Một ngày chỉ được điểm danh vào ca 1 lần!`
+        });
       }
 
       // Giờ quy chuẩn vào ca là 08:30
@@ -61,7 +70,16 @@ router.post('/check', async (req, res) => {
 
     if (action === 'CHECK_OUT') {
       if (!record) {
-        return res.status(400).json({ success: false, message: 'Chưa có bản ghi điểm danh vào hôm nay' });
+        return res.status(400).json({
+          success: false,
+          message: 'Chưa có bản ghi điểm danh vào hôm nay nên chưa thể tan ca.'
+        });
+      }
+      if (record.check_out) {
+        return res.status(400).json({
+          success: false,
+          message: `Nhân viên đã điểm danh tan ca hôm nay lúc ${record.check_out} rồi!`
+        });
       }
 
       // Tính số giờ làm

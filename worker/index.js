@@ -705,6 +705,11 @@ app.post('/api/attendance/check', async (c) => {
       minute: '2-digit',
       hour12: false
     }).format(new Date()); // HH:mm
+
+    const [curHour, curMin] = timeStr.includes(':')
+      ? timeStr.split(':').map(Number)
+      : [new Date().getHours(), new Date().getMinutes()];
+
     // Lấy cấu hình chấm công động từ bảng system_settings
     let workStart = '08:30';
     let graceMin = 15;
@@ -727,11 +732,18 @@ app.post('/api/attendance/check', async (c) => {
 
     if (action === 'CHECK_IN') {
       if (existing) {
+        if (existing.check_out) {
+          return c.json({
+            success: false,
+            message: `Nhân viên ${targetUser.name} đã hoàn tất ca hôm nay (đã Check-out lúc ${existing.check_out}). Vui lòng chờ đến ngày mai để bắt đầu ca mới!`
+          }, 400);
+        }
         return c.json({
           success: false,
-          message: `Nhân viên ${targetUser.name} đã điểm danh vào lúc ${existing.check_in || 'hôm nay'}${existing.check_out ? ` (Đã tan ca lúc ${existing.check_out})` : ''}`
+          message: `Nhân viên ${targetUser.name} đã điểm danh vào ca hôm nay lúc ${existing.check_in || 'trước đó'}. Một ngày chỉ được điểm danh vào ca 1 lần!`
         }, 400);
       }
+
       const id = `att_${Date.now()}`;
       const noteText = (notes && String(notes).trim()) ? String(notes).trim() : (isLate ? `Đi muộn (quy định ${workStart} + ${graceMin}p ân hạn)` : 'Đúng giờ');
 
@@ -757,9 +769,16 @@ app.post('/api/attendance/check', async (c) => {
       if (!existing) {
         return c.json({
           success: false,
-          message: `Chưa có bản ghi Check-in ngày ${today} của ${targetUser.name} để tính giờ tan ca`
+          message: `Nhân viên ${targetUser.name} chưa điểm danh vào ca (Check-in) trong ngày ${today} nên chưa thể tan ca!`
         }, 400);
       }
+      if (existing.check_out) {
+        return c.json({
+          success: false,
+          message: `Nhân viên ${targetUser.name} đã điểm danh tan ca hôm nay lúc ${existing.check_out} rồi (Tổng giờ: ${existing.total_hours || 0}h). Không thể Check-out lần nữa!`
+        }, 400);
+      }
+
       const checkInTime = existing.check_in || '08:30';
       const [inH, inM] = checkInTime.includes(':') ? checkInTime.split(':').map(Number) : [8, 30];
       const totalMinutes = Math.max(0, (curHour * 60 + curMin) - (inH * 60 + inM));

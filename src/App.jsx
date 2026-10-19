@@ -147,6 +147,7 @@ export default function App() {
           urgentReminders={summaryData?.urgentReminders || []}
           onCheckInSuccess={loadAllData}
           currentUser={currentUser}
+          attendanceList={attendanceList}
           onLogout={handleLogout}
           onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
           onNavigate={setCurrentTab}

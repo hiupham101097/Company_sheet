@@ -18,6 +18,7 @@ export function Navbar({
   urgentReminders = [],
   onCheckInSuccess,
   currentUser,
+  attendanceList = [],
   onLogout,
   onToggleSidebar,
   onNavigate,
@@ -27,7 +28,37 @@ export function Navbar({
   const [showNotifications, setShowNotifications] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
 
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+  const currentUserId = currentUser?.id || 'usr_1';
+  const myTodayRecord = attendanceList?.find(
+    (att) => att.user_id === currentUserId && att.date === todayStr
+  );
+  const isCheckedIn = !!myTodayRecord?.check_in;
+  const isCheckedOut = !!myTodayRecord?.check_out;
+
   const handleQuickCheck = async (action) => {
+    if (action === 'CHECK_IN') {
+      if (isCheckedIn) {
+        if (isCheckedOut) {
+          alert(`Bạn đã hoàn tất ca làm việc hôm nay (đã Check-out lúc ${myTodayRecord.check_out}). Vui lòng chờ đến ngày mai để bắt đầu ca mới!`);
+        } else {
+          alert(`Bạn đã điểm danh vào ca hôm nay lúc ${myTodayRecord.check_in}. Một ngày chỉ được điểm danh vào ca 1 lần!`);
+        }
+        return;
+      }
+    }
+
+    if (action === 'CHECK_OUT') {
+      if (!isCheckedIn) {
+        alert('Bạn chưa điểm danh vào ca (Check-in) trong ngày hôm nay nên chưa thể tan ca!');
+        return;
+      }
+      if (isCheckedOut) {
+        alert(`Bạn đã điểm danh tan ca hôm nay lúc ${myTodayRecord.check_out} rồi!`);
+        return;
+      }
+    }
+
     const targetUserId = currentUser?.id || 'usr_1';
     try {
       setIsChecking(true);
@@ -75,27 +106,48 @@ export function Navbar({
 
       {/* Right Action buttons */}
       <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-        {/* Quick Check-in/Check-out Buttons */}
-        <div className="flex items-center gap-1 bg-pastel-50 p-1 rounded-xl border border-pastel-200/70">
-          <button
-            onClick={() => handleQuickCheck('CHECK_IN')}
-            disabled={isChecking}
-            title="Điểm danh vào ca"
-            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white text-pastel-700 hover:text-pastel-800 shadow-xs hover:bg-pastel-100/60 transition-all disabled:opacity-50"
+        {/* Quick Check-in/Check-out Buttons with Strict Daily State */}
+        {isCheckedOut ? (
+          <div
+            title={`Bạn đã hoàn thành ca làm việc hôm nay lúc ${myTodayRecord.check_out} (Tổng giờ: ${myTodayRecord.total_hours || 0}h). Hẹn gặp lại ngày mai!`}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs cursor-default select-none"
           >
-            <CheckCircle2 size={13} className="text-pastel-500" />
-            <span className="hidden sm:inline">Vào ca</span>
-          </button>
-          <button
-            onClick={() => handleQuickCheck('CHECK_OUT')}
-            disabled={isChecking}
-            title="Điểm danh tan ca"
-            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-800 hover:bg-white/80 transition-all disabled:opacity-50"
-          >
-            <Clock size={13} className="text-slate-400" />
-            <span className="hidden sm:inline">Tan ca</span>
-          </button>
-        </div>
+            <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+            <span className="hidden sm:inline">Hoàn thành ca ({myTodayRecord.check_out})</span>
+            <span className="sm:hidden">Đã tan ca</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 bg-pastel-50 p-1 rounded-xl border border-pastel-200/70">
+            <button
+              onClick={() => handleQuickCheck('CHECK_IN')}
+              disabled={isChecking || isCheckedIn}
+              title={isCheckedIn ? `Đã vào ca lúc ${myTodayRecord.check_in}. Một ngày chỉ check-in 1 lần!` : "Điểm danh vào ca hôm nay"}
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                isCheckedIn
+                  ? 'bg-emerald-50 text-emerald-700 opacity-80 cursor-not-allowed font-bold'
+                  : 'bg-white text-pastel-700 hover:text-pastel-800 shadow-xs hover:bg-pastel-100/60'
+              } disabled:opacity-60`}
+            >
+              <CheckCircle2 size={13} className={isCheckedIn ? 'text-emerald-600' : 'text-pastel-500'} />
+              <span className="hidden sm:inline">
+                {isCheckedIn ? `Đã vào (${myTodayRecord.check_in})` : 'Vào ca'}
+              </span>
+            </button>
+            <button
+              onClick={() => handleQuickCheck('CHECK_OUT')}
+              disabled={isChecking || !isCheckedIn}
+              title={!isCheckedIn ? "Cần vào ca trước khi tan ca" : "Điểm danh tan ca"}
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                isCheckedIn
+                  ? 'bg-slate-700 text-white hover:bg-slate-800 shadow-xs'
+                  : 'text-slate-400 bg-slate-100/60 opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <Clock size={13} className={isCheckedIn ? 'text-white' : 'text-slate-400'} />
+              <span className="hidden sm:inline">Tan ca</span>
+            </button>
+          </div>
+        )}
 
         {/* License Status Badge */}
         {licenseInfo?.isDemo ? (

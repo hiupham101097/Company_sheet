@@ -50,11 +50,41 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
     ABSENT: { label: 'Vắng mặt', variant: 'danger', dot: 'bg-rose-500' },
   };
 
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+  const selectedUserTodayRecord = attendanceList.find(
+    (att) => att.user_id === selectedUser && att.date === todayStr
+  );
+  const isCheckedIn = !!selectedUserTodayRecord?.check_in;
+  const isCheckedOut = !!selectedUserTodayRecord?.check_out;
+
   const handleAction = async (action) => {
     if (!selectedUser) {
       alert('Vui lòng chọn nhân viên cần điểm danh');
       return;
     }
+
+    if (action === 'CHECK_IN') {
+      if (isCheckedIn) {
+        if (isCheckedOut) {
+          alert(`Nhân viên đã hoàn tất ca làm việc hôm nay (đã Check-out lúc ${selectedUserTodayRecord.check_out}). Vui lòng chờ đến ngày mai để bắt đầu ca mới!`);
+        } else {
+          alert(`Nhân viên đã điểm danh vào ca hôm nay lúc ${selectedUserTodayRecord.check_in}. Một ngày chỉ được điểm danh vào ca 1 lần!`);
+        }
+        return;
+      }
+    }
+
+    if (action === 'CHECK_OUT') {
+      if (!isCheckedIn) {
+        alert('Nhân viên chưa điểm danh vào ca (Check-in) trong ngày hôm nay nên chưa thể tan ca!');
+        return;
+      }
+      if (isCheckedOut) {
+        alert(`Nhân viên đã điểm danh tan ca hôm nay lúc ${selectedUserTodayRecord.check_out} rồi!`);
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       const res = await api.checkAttendance({
@@ -195,24 +225,54 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
               className="w-full sm:w-60 px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-pastel-400 text-slate-800"
             />
 
-            <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
-              <button
-                onClick={() => handleAction('CHECK_IN')}
-                disabled={loading}
-                className="justify-center px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all disabled:opacity-50"
-              >
-                <CheckCircle2 size={15} />
-                <span>Vào Ca (Check-in)</span>
-              </button>
+            <div className="flex flex-col gap-1.5 w-full sm:w-auto">
+              <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={() => handleAction('CHECK_IN')}
+                  disabled={loading || isCheckedIn}
+                  title={
+                    isCheckedIn
+                      ? `Đã vào ca lúc ${selectedUserTodayRecord.check_in}. Một ngày chỉ check-in 1 lần!`
+                      : 'Điểm danh vào ca'
+                  }
+                  className={`justify-center px-4 py-2.5 rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all ${
+                    isCheckedIn
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 opacity-80 cursor-not-allowed font-semibold'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95'
+                  } disabled:opacity-60`}
+                >
+                  <CheckCircle2 size={15} />
+                  <span>{isCheckedIn ? `Đã vào (${selectedUserTodayRecord.check_in})` : 'Vào Ca (Check-in)'}</span>
+                </button>
 
-              <button
-                onClick={() => handleAction('CHECK_OUT')}
-                disabled={loading}
-                className="justify-center px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all disabled:opacity-50"
-              >
-                <Clock size={15} />
-                <span>Tan Ca (Check-out)</span>
-              </button>
+                <button
+                  onClick={() => handleAction('CHECK_OUT')}
+                  disabled={loading || !isCheckedIn || isCheckedOut}
+                  title={
+                    !isCheckedIn
+                      ? 'Cần vào ca trước khi tan ca'
+                      : isCheckedOut
+                      ? `Đã tan ca lúc ${selectedUserTodayRecord.check_out}. Chờ đến ngày mai để bắt đầu ca mới!`
+                      : 'Điểm danh tan ca'
+                  }
+                  className={`justify-center px-4 py-2.5 rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all ${
+                    isCheckedOut
+                      ? 'bg-slate-100 text-slate-500 border border-slate-200 opacity-60 cursor-not-allowed font-semibold'
+                      : isCheckedIn
+                      ? 'bg-slate-700 hover:bg-slate-800 text-white active:scale-95'
+                      : 'bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed'
+                  }`}
+                >
+                  <Clock size={15} />
+                  <span>{isCheckedOut ? `Đã ra (${selectedUserTodayRecord.check_out})` : 'Tan Ca (Check-out)'}</span>
+                </button>
+              </div>
+
+              {isCheckedOut && (
+                <p className="text-[11px] text-emerald-700 font-semibold bg-emerald-50/90 px-2.5 py-1 rounded-lg border border-emerald-200/70 text-center sm:text-left">
+                  ✓ Đã hoàn tất ca hôm nay ({selectedUserTodayRecord.check_in} → {selectedUserTodayRecord.check_out} • {selectedUserTodayRecord.total_hours}h). Hẹn gặp ngày mai!
+                </p>
+              )}
             </div>
           </div>
         </div>
