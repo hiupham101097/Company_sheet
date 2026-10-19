@@ -48,8 +48,10 @@ export const api = {
   updateCategory: (id, data) => request(`/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCategory: (id) => request(`/categories/${id}`, { method: 'DELETE' }),
 
-  // Tổng quan & Báo cáo
+  // Tổng quan & Báo cáo & Nhắc hạn 6:00 AM
   getDashboardSummary: () => request('/reports/dashboard-summary'),
+  getRemindersStatus: () => request('/reminders/status'),
+  refreshReminders: () => request('/reminders/refresh', { method: 'POST' }),
   getHealth: () => request('/health'),
 
   // Tài sản

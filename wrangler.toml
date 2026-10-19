@@ -16,3 +16,7 @@ database_id = "f3eb46fc-b6e0-4c24-9e87-032ce24abb7d"
 [vars]
 GEMINI_MODEL = "gemini-3.8-flash"
 GEMINI_PROJECT = "projects/800116604540"
+
+# Tự động quét và làm mới thông báo nhắc hạn mỗi ngày lúc 6:00 sáng (Giờ Việt Nam UTC+7 = 23:00 UTC)
+[triggers]
+crons = ["0 23 * * *"]

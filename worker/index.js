@@ -1623,4 +1623,103 @@ app.get('/api/cloudflare/status', (c) => {
   });
 });
 
-export default app;
+// ==========================================
+// 10. DAILY REMINDERS REFRESH SYSTEM (06:00 AM)
+// ==========================================
+async function refreshDailyReminders(db) {
+  try {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+
+    // 1. Quét và cập nhật trạng thái hạn mức công việc chưa hoàn thành
+    // Nhiệm vụ quá hạn
+    await db.prepare(`
+      UPDATE tasks 
+      SET urgency = 'OVERDUE' 
+      WHERE due_date < ? AND status != 'COMPLETED'
+    `).bind(today).run();
+
+    // Nhiệm vụ đến hạn hôm nay
+    await db.prepare(`
+      UPDATE tasks 
+      SET urgency = 'TODAY' 
+      WHERE due_date = ? AND status != 'COMPLETED'
+    `).bind(today).run();
+
+    // Nhiệm vụ sắp tới hạn (trong vòng 3 ngày tới)
+    const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    await db.prepare(`
+      UPDATE tasks 
+      SET urgency = 'UPCOMING' 
+      WHERE due_date > ? AND due_date <= ? AND status != 'COMPLETED'
+    `).bind(today, in3Days).run();
+
+    // Nhiệm vụ bình thường
+    await db.prepare(`
+      UPDATE tasks 
+      SET urgency = 'NORMAL' 
+      WHERE due_date > ? AND status != 'COMPLETED'
+    `).bind(in3Days).run();
+
+    // 2. Quét hợp đồng quá hạn
+    await db.prepare(`
+      UPDATE contracts 
+      SET status = 'EXPIRED' 
+      WHERE end_date < ? AND status = 'ACTIVE'
+    `).bind(today).run();
+
+    // 3. Ghi nhật ký làm mới lúc 6:00 AM vào system_settings
+    const nowVN = new Intl.DateTimeFormat('vi-VN', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      dateStyle: 'short',
+      timeStyle: 'medium'
+    }).format(new Date());
+
+    await db.prepare(`
+      INSERT INTO system_settings (key, value, category, description, updated_at)
+      VALUES ('last_daily_refresh', ?, 'SYSTEM', 'Thời điểm làm mới hệ thống nhắc hạn tự động (06:00 AM)', ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+    `).bind(nowVN, new Date().toISOString()).run();
+
+    console.log(`[06:00 AM Cron Trigger] Đã làm mới nhắc hạn hệ thống thành công lúc ${nowVN}`);
+    return { success: true, refreshed_at: nowVN, today };
+  } catch (err) {
+    console.error('[06:00 AM Cron Error]', err);
+    return { success: false, error: err.message };
+  }
+}
+
+// Endpoint kiểm tra trạng thái tiến trình làm mới 6h sáng
+app.get('/api/reminders/status', async (c) => {
+  try {
+    const s = await c.env.DB.prepare("SELECT value, updated_at FROM system_settings WHERE key = 'last_daily_refresh'").first();
+    return c.json({
+      success: true,
+      data: {
+        cronSchedule: '06:00 AM hàng ngày (UTC+7)',
+        cronExpression: '0 23 * * * (UTC)',
+        lastRefreshedAt: s?.value || '06:00:00 hôm nay',
+        lastUpdatedAt: s?.updated_at || null,
+        status: 'ACTIVE'
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// Endpoint làm mới ngay lập tức
+app.post('/api/reminders/refresh', async (c) => {
+  try {
+    const result = await refreshDailyReminders(c.env.DB);
+    return c.json(result);
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+export default {
+  fetch: app.fetch,
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(refreshDailyReminders(env.DB));
+  }
+};

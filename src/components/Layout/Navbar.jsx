@@ -10,9 +10,11 @@ import {
   Menu,
   Crown,
   Zap,
-  ShieldCheck
+  ShieldCheck,
+  RotateCw
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { formatDateVN } from '../../utils/formatters';
 
 export function Navbar({
   urgentReminders = [],
@@ -27,6 +29,19 @@ export function Navbar({
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [isRefreshingReminders, setIsRefreshingReminders] = useState(false);
+
+  const handleRefreshReminders = async () => {
+    try {
+      setIsRefreshingReminders(true);
+      await api.refreshReminders();
+      if (onCheckInSuccess) onCheckInSuccess();
+    } catch (err) {
+      console.error('Lỗi làm mới nhắc hạn:', err);
+    } finally {
+      setIsRefreshingReminders(false);
+    }
+  };
 
   const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
   const currentUserId = currentUser?.id || 'usr_1';
@@ -197,13 +212,29 @@ export function Navbar({
           {/* Notifications Dropdown */}
           {showNotifications && (
             <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl shadow-soft-lg border border-pastel-200 py-2 z-50 animate-scale-in">
-              <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between bg-pastel-50/50">
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Thông Báo & Nhắc Hạn
-                </span>
-                <span className="text-[11px] font-semibold text-pastel-700 bg-pastel-100 px-2 py-0.5 rounded-full">
-                  {urgentReminders.length} việc
-                </span>
+              <div className="px-4 py-2.5 border-b border-slate-100 bg-pastel-50/50">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Thông Báo & Nhắc Hạn
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-semibold text-pastel-700 bg-pastel-100 px-2 py-0.5 rounded-full">
+                      {urgentReminders.length} việc
+                    </span>
+                    <button
+                      onClick={handleRefreshReminders}
+                      disabled={isRefreshingReminders}
+                      className="p-1 rounded-lg hover:bg-pastel-100 text-pastel-600 transition-colors"
+                      title="Làm mới nhắc hạn ngay (Hệ thống tự động chạy lúc 06:00 AM mỗi ngày)"
+                    >
+                      <RotateCw size={13} className={isRefreshingReminders ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[10px] text-pastel-700 font-medium mt-1 flex items-center gap-1">
+                  <Clock size={11} className="text-pastel-500 shrink-0" />
+                  <span>Tự động làm mới: 06:00 sáng mỗi ngày</span>
+                </p>
               </div>
 
               <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
@@ -232,7 +263,9 @@ export function Navbar({
                         <p className="text-xs text-slate-700 font-medium leading-relaxed">
                           {item.title}
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5 font-mono">Hạn: {item.date}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-mono">
+                          Hạn: {formatDateVN(item.date)}
+                        </p>
                       </div>
                     </div>
                   ))

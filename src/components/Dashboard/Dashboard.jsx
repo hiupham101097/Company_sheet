@@ -23,6 +23,7 @@ import {
 } from 'recharts';
 import { Badge } from '../Common/Badge';
 import { exportToExcel } from '../../utils/exportExcel';
+import { formatDateVN } from '../../utils/formatters';
 
 export function Dashboard({ summaryData, monthlyData, onNavigate }) {
   const stats = summaryData?.stats || {};
@@ -270,11 +271,16 @@ export function Dashboard({ summaryData, monthlyData, onNavigate }) {
         {/* Right 1 Col: Urgent Reminders */}
         <div className="bg-white p-6 rounded-3xl border border-pastel-200/80 shadow-soft flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <Clock size={16} className="text-pastel-600" />
-                <span>Nhắc Hạn Trọng Tâm</span>
-              </h3>
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 flex-wrap gap-2">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Clock size={16} className="text-pastel-600" />
+                  <span>Nhắc Hạn Trọng Tâm</span>
+                </h3>
+                <span className="text-[10px] text-pastel-700 font-semibold bg-pastel-50 px-2 py-0.5 rounded-full border border-pastel-200/70 inline-block mt-1">
+                  ⏱ Làm mới 06:00 AM mỗi ngày
+                </span>
+              </div>
               <button
                 onClick={() => onNavigate('tasks')}
                 className="text-xs text-pastel-700 hover:text-pastel-800 font-bold transition-colors"
@@ -308,7 +314,9 @@ export function Dashboard({ summaryData, monthlyData, onNavigate }) {
                         {item.level === 'danger' ? 'Quá hạn' : 'Sắp tới'}
                       </Badge>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1 font-mono">Hạn xử lý: {item.date}</p>
+                    <p className="text-[11px] text-slate-400 mt-1 font-mono">
+                      Hạn xử lý: {formatDateVN(item.date)}
+                    </p>
                   </div>
                 ))
               )}
