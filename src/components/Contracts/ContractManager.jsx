@@ -166,28 +166,53 @@ export function ContractManager({
     reader.readAsText(file);
   };
 
-  // Helper thực thi Gemini trực tiếp từ trình duyệt người dùng (IP Việt Nam)
-  const callDirectGemini = async (prompt, apiKey, model = 'gemini-3.8-flash', temp = 0.2) => {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: temp,
-          maxOutputTokens: 3072,
-          thinkingConfig: { thinkingBudget: 0 }
+  // Helper thực thi Gemini trực tiếp từ trình duyệt người dùng (IP Việt Nam) với chuỗi fallback đa model
+  const callDirectGemini = async (prompt, apiKey, model = 'gemini-flash-latest', temp = 0.2) => {
+    const candidateModels = [
+      'gemini-flash-latest',
+      'gemini-3.5-flash',
+      'gemini-3.8-flash',
+      'gemini-3.1-flash-lite'
+    ];
+    if (model && !candidateModels.includes(model)) {
+      candidateModels.unshift(model);
+    }
+
+    let lastErr = null;
+
+    for (const m of candidateModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: temp,
+              maxOutputTokens: 3072
+            }
+          })
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          const parts = json?.candidates?.[0]?.content?.parts || [];
+          const textParts = parts.filter(p => typeof p.text === 'string' && !p.thought).map(p => p.text);
+          const raw = textParts.join('\n\n') || parts.map(p => p.text).filter(Boolean).join('\n\n');
+          const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+          return JSON.parse(clean);
+        } else {
+          lastErr = new Error(`Gemini API error on ${m}: ${res.status}`);
+          if (res.status === 429 || res.status === 503) {
+            await new Promise(r => setTimeout(r, 350));
+          }
         }
-      })
-    });
-    if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
-    const json = await res.json();
-    const parts = json?.candidates?.[0]?.content?.parts || [];
-    const textParts = parts.filter(p => typeof p.text === 'string' && !p.thought).map(p => p.text);
-    const raw = textParts.join('\n\n') || parts.map(p => p.text).filter(Boolean).join('\n\n');
-    const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(clean);
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr || new Error('Không thể kết nối đến máy chủ Google Gemini');
   };
 
   // 1. Cho AI phân tích và học mẫu hợp đồng

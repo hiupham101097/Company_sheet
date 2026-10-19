@@ -14,7 +14,7 @@ database_name = "company_assets_db"
 database_id = "f3eb46fc-b6e0-4c24-9e87-032ce24abb7d"
 
 [vars]
-GEMINI_MODEL = "gemini-3.8-flash"
+GEMINI_MODEL = "gemini-flash-latest"
 GEMINI_PROJECT = "projects/1010606382387"
 
 # Tự động quét và làm mới thông báo nhắc hạn mỗi ngày lúc 6:00 sáng (Giờ Việt Nam UTC+7 = 23:00 UTC)

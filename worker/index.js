@@ -1210,7 +1210,7 @@ app.post('/api/contracts/ai/learn', async (c) => {
 
     // Lấy API Key từ DB hoặc env
     let geminiApiKey = c.env?.GEMINI_API_KEY || '';
-    let geminiModel = c.env?.GEMINI_MODEL || 'gemini-3.8-flash';
+    let geminiModel = c.env?.GEMINI_MODEL || 'gemini-flash-latest';
     try {
       const sKey = await c.env.DB.prepare("SELECT value FROM system_settings WHERE key = 'gemini_api_key'").first();
       if (sKey?.value) geminiApiKey = sKey.value.trim();
@@ -1348,7 +1348,7 @@ app.post('/api/contracts/ai/generate', async (c) => {
     }
 
     let geminiApiKey = c.env?.GEMINI_API_KEY || '';
-    let geminiModel = c.env?.GEMINI_MODEL || 'gemini-3.8-flash';
+    let geminiModel = c.env?.GEMINI_MODEL || 'gemini-flash-latest';
     try {
       const sKey = await c.env.DB.prepare("SELECT value FROM system_settings WHERE key = 'gemini_api_key'").first();
       if (sKey?.value) geminiApiKey = sKey.value.trim();
@@ -2165,7 +2165,7 @@ app.post('/api/ai/chat', async (c) => {
     const workDays = settingsMap.work_days || 'Thứ 2 - Thứ 6';
 
     const geminiApiKey = (settingsMap.gemini_api_key || c.env?.GEMINI_API_KEY || '').trim();
-    const geminiModel = (settingsMap.gemini_model || c.env?.GEMINI_MODEL || 'gemini-3.8-flash').trim();
+    const geminiModel = (settingsMap.gemini_model || c.env?.GEMINI_MODEL || 'gemini-flash-latest').trim();
 
     // Lấy ngày giờ hiện tại theo giờ Việt Nam
     const nowVN = new Date();
@@ -2307,6 +2307,7 @@ Phong cách phản hồi của AI:
         needClientGemini,
         geminiApiKey,
         geminiModel,
+        candidateModels: ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'],
         systemPrompt,
         message,
         suggestions,

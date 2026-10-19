@@ -95,45 +95,57 @@ export function AIAssistantWidget({
         // Nếu máy chủ Cloudflare bị Google hạn chế theo IP datacenter ("User location is not supported"),
         // Trình duyệt tại máy người dùng (IP Việt Nam) sẽ tự động gọi trực tiếp Gemini API (CORS được hỗ trợ 100%)
         if (res.data.needClientGemini && res.data.geminiApiKey) {
-          try {
-            const geminiModel = res.data.geminiModel || 'gemini-3.8-flash';
-            const clientGeminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${res.data.geminiApiKey}`;
-            const geminiRes = await fetch(clientGeminiUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [
-                  {
-                    role: 'user',
-                    parts: [
-                      { text: `${res.data.systemPrompt || ''}\n\n---\nNgười dùng hỏi: "${query}"` }
-                    ]
-                  }
-                ],
-                generationConfig: {
-                  temperature: 0.7,
-                  maxOutputTokens: 3072,
-                  thinkingConfig: {
-                    thinkingBudget: 0
-                  }
-                }
-              })
-            });
+          const candidateModels = [
+            'gemini-flash-latest',
+            'gemini-3.5-flash',
+            'gemini-3.8-flash',
+            'gemini-3.1-flash-lite'
+          ];
+          if (res.data.geminiModel && !candidateModels.includes(res.data.geminiModel)) {
+            candidateModels.unshift(res.data.geminiModel);
+          }
 
-            if (geminiRes.ok) {
-              const geminiJson = await geminiRes.json();
-              const candidate = geminiJson.candidates?.[0];
-              const parts = candidate?.content?.parts || [];
-              const textParts = parts.filter(p => typeof p.text === 'string' && !p.thought).map(p => p.text);
-              const fullText = textParts.length > 0 ? textParts.join('\n\n') : parts.map(p => p.text).filter(Boolean).join('\n\n');
-              if (fullText && fullText.trim()) {
-                finalReply = fullText.trim();
+          for (const modelName of candidateModels) {
+            try {
+              const clientGeminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${res.data.geminiApiKey}`;
+              const geminiRes = await fetch(clientGeminiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [
+                    {
+                      role: 'user',
+                      parts: [
+                        { text: `${res.data.systemPrompt || ''}\n\n---\nNgười dùng hỏi: "${query}"` }
+                      ]
+                    }
+                  ],
+                  generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 3072
+                  }
+                })
+              });
+
+              if (geminiRes.ok) {
+                const geminiJson = await geminiRes.json();
+                const candidate = geminiJson.candidates?.[0];
+                const parts = candidate?.content?.parts || [];
+                const textParts = parts.filter(p => typeof p.text === 'string' && !p.thought).map(p => p.text);
+                const fullText = textParts.length > 0 ? textParts.join('\n\n') : parts.map(p => p.text).filter(Boolean).join('\n\n');
+                if (fullText && fullText.trim()) {
+                  finalReply = fullText.trim();
+                  break; // Thành công, thoát vòng lặp fallback
+                }
+              } else {
+                console.warn(`Direct Gemini call with model ${modelName} returned status ${geminiRes.status}. Trying next fallback model...`);
+                if (geminiRes.status === 429 || geminiRes.status === 503) {
+                  await new Promise(resolve => setTimeout(resolve, 350));
+                }
               }
-            } else {
-              console.warn('Direct Gemini call failed with status:', geminiRes.status);
+            } catch (geminiClientErr) {
+              console.warn(`Direct client Gemini fetch error on ${modelName}:`, geminiClientErr);
             }
-          } catch (geminiClientErr) {
-            console.warn('Direct client Gemini fetch error:', geminiClientErr);
           }
         }
 
