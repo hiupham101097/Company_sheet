@@ -13,6 +13,7 @@ import {
   Crown,
   Zap,
   ShieldCheck,
+  User,
   X
 } from 'lucide-react';
 
@@ -24,7 +25,8 @@ export function Sidebar({
   isOpen = false,
   onClose,
   licenseInfo,
-  onOpenUpgrade
+  onOpenUpgrade,
+  onOpenProfile
 }) {
   const allMenuItems = [
     {
@@ -197,9 +199,26 @@ export function Sidebar({
           )}
         </div>
 
-        {/* Quick Settings & System Info at bottom */}
-        {(userRole === 'ADMIN' || userRole === 'MANAGER') && (
-          <div className="p-3 border-t border-pastel-100 bg-surface-subtle/30">
+        {/* User Personal Profile Quick Button */}
+        <div className="p-3 border-t border-pastel-100 bg-surface-subtle/30 space-y-2">
+          <button
+            onClick={() => {
+              if (onOpenProfile) onOpenProfile();
+              if (onClose) onClose();
+            }}
+            className="w-full p-2.5 rounded-xl border border-pastel-200/90 bg-white hover:bg-purple-50/70 hover:border-purple-300 text-slate-700 flex items-center gap-3 transition shadow-xs group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 group-hover:bg-purple-600 group-hover:text-white transition">
+              <User size={16} />
+            </div>
+            <div className="flex-1 min-w-0 text-left">
+              <p className="text-xs font-bold leading-tight truncate text-slate-800 group-hover:text-purple-700">Thông Tin Cá Nhân</p>
+              <p className="text-[10px] text-slate-400 truncate">Hồ sơ & Đổi mật khẩu</p>
+            </div>
+          </button>
+
+          {/* Quick Settings & System Info at bottom */}
+          {(userRole === 'ADMIN' || userRole === 'MANAGER' || userRole === 'SUPER_ADMIN') && (
             <button
               onClick={() => handleSelectTab('settings')}
               className={`w-full p-2.5 rounded-xl border flex items-center gap-3 transition-all text-left ${
@@ -226,8 +245,8 @@ export function Sidebar({
                 </p>
               </div>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
     </>
   );

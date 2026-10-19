@@ -282,6 +282,130 @@ app.post('/api/auth/register-company', async (c) => {
   }
 });
 
+// Cập nhật thông tin cá nhân (Profile) & Đổi mật khẩu của người dùng hiện tại
+app.put('/api/auth/profile', async (c) => {
+  try {
+    const body = await c.req.json();
+    const userId = body.id || c.req.header('x-user-id');
+    if (!userId) {
+      return c.json({ success: false, message: 'Thiếu định danh tài khoản người dùng' }, 400);
+    }
+
+    const existingUser = await c.env.DB
+      .prepare('SELECT id, name, email, password, role, department, phone, avatar, status FROM users WHERE id = ?')
+      .bind(userId)
+      .first();
+
+    if (!existingUser) {
+      return c.json({ success: false, message: 'Không tìm thấy thông tin tài khoản người dùng' }, 404);
+    }
+
+    const {
+      name,
+      phone,
+      avatar,
+      department,
+      current_password,
+      new_password
+    } = body;
+
+    let updatedPassword = existingUser.password;
+
+    // Nếu người dùng muốn đổi mật khẩu
+    if (new_password && new_password.trim()) {
+      if (!current_password) {
+        return c.json({ success: false, message: 'Vui lòng nhập mật khẩu hiện tại để xác thực đổi mật khẩu' }, 400);
+      }
+      if (current_password.trim() !== existingUser.password) {
+        return c.json({ success: false, message: 'Mật khẩu hiện tại không chính xác. Vui lòng kiểm tra lại!' }, 400);
+      }
+      if (new_password.trim().length < 6) {
+        return c.json({ success: false, message: 'Mật khẩu mới phải có tối thiểu 6 ký tự' }, 400);
+      }
+      updatedPassword = new_password.trim();
+    }
+
+    const newName = name !== undefined ? name.trim() : existingUser.name;
+    const newPhone = phone !== undefined ? phone.trim() : existingUser.phone;
+    const newAvatar = avatar !== undefined ? avatar.trim() : existingUser.avatar;
+    const newDept = (department !== undefined && department.trim()) ? department.trim() : existingUser.department;
+
+    await c.env.DB.prepare(`
+      UPDATE users
+      SET name = ?,
+          phone = ?,
+          avatar = ?,
+          department = ?,
+          password = ?
+      WHERE id = ?
+    `).bind(
+      newName,
+      newPhone,
+      newAvatar,
+      newDept,
+      updatedPassword,
+      userId
+    ).run();
+
+    const updatedUser = {
+      id: existingUser.id,
+      name: newName,
+      email: existingUser.email,
+      role: existingUser.role,
+      department: newDept,
+      phone: newPhone,
+      avatar: newAvatar,
+      status: existingUser.status
+    };
+
+    return c.json({
+      success: true,
+      message: 'Cập nhật thông tin cá nhân thành công!',
+      data: { user: updatedUser }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// Lấy thông tin cá nhân và thống kê hoạt động của User
+app.get('/api/auth/profile', async (c) => {
+  try {
+    const userId = c.req.query('id') || c.req.header('x-user-id');
+    if (!userId) {
+      return c.json({ success: false, message: 'Thiếu định danh tài khoản' }, 400);
+    }
+
+    const user = await c.env.DB
+      .prepare('SELECT id, name, email, role, department, phone, avatar, status FROM users WHERE id = ?')
+      .bind(userId)
+      .first();
+
+    if (!user) {
+      return c.json({ success: false, message: 'Không tìm thấy người dùng' }, 404);
+    }
+
+    // Thống kê cá nhân
+    const totalAttendance = await c.env.DB.prepare('SELECT count(*) as count FROM attendance WHERE user_id = ?').bind(userId).first('count') || 0;
+    const assignedTasks = await c.env.DB.prepare('SELECT count(*) as count FROM tasks WHERE assigned_to_user_id = ?').bind(userId).first('count') || 0;
+    const completedTasks = await c.env.DB.prepare("SELECT count(*) as count FROM tasks WHERE assigned_to_user_id = ? AND status = 'COMPLETED'").bind(userId).first('count') || 0;
+
+    return c.json({
+      success: true,
+      data: {
+        user,
+        stats: {
+          totalAttendance: Number(totalAttendance),
+          assignedTasks: Number(assignedTasks),
+          completedTasks: Number(completedTasks)
+        }
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
 // ========================
 // 2. DASHBOARD & REPORTS
 // ========================

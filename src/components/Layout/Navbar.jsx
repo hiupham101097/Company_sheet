@@ -25,7 +25,8 @@ export function Navbar({
   onToggleSidebar,
   onNavigate,
   licenseInfo,
-  onOpenUpgrade
+  onOpenUpgrade,
+  onOpenProfile
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
@@ -277,14 +278,27 @@ export function Navbar({
 
         {/* User Profile Info & Logout */}
         <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-200/80">
-          <img
-            src={currentUser?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"}
-            alt="Avatar"
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl object-cover ring-2 ring-pastel-200"
-          />
-          <div className="hidden lg:block text-left">
-            <p className="text-xs font-bold text-slate-800 leading-tight">{currentUser?.name || 'Nguyễn Văn An'}</p>
-            <p className="text-[10px] text-pastel-600 font-semibold">{currentUser?.department || 'Ban Giám Đốc'}</p>
+          <div
+            onClick={onOpenProfile}
+            role="button"
+            tabIndex={0}
+            className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition group p-1 -m-1 rounded-xl hover:bg-slate-100/80 select-none"
+            title="Nhấp để cập nhật thông tin cá nhân & đổi mật khẩu"
+          >
+            <div className="relative">
+              <img
+                src={currentUser?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"}
+                alt="Avatar"
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl object-cover ring-2 ring-pastel-200 group-hover:ring-purple-400 transition"
+              />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
+            </div>
+            <div className="hidden lg:block text-left">
+              <p className="text-xs font-bold text-slate-800 leading-tight group-hover:text-purple-700 transition">
+                {currentUser?.name || 'Nguyễn Văn An'}
+              </p>
+              <p className="text-[10px] text-pastel-600 font-semibold">{currentUser?.department || 'Ban Giám Đốc'}</p>
+            </div>
           </div>
           <button
             onClick={onLogout}
