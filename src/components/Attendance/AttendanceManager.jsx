@@ -183,98 +183,126 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
       </div>
 
       {/* Quick Check-in Terminal Card with Real-time Clock */}
-      <div className="p-6 bg-gradient-to-r from-pastel-50 via-white to-pastel-50/60 rounded-3xl border border-pastel-200 shadow-soft">
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-          {/* Left: Terminal Info & Clock */}
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-pastel-500 text-white flex items-center justify-center shadow-soft shrink-0">
+      <div className="p-5 sm:p-6 bg-gradient-to-br from-white via-pastel-50/50 to-indigo-50/30 rounded-3xl border border-pastel-200/90 shadow-soft space-y-4 sm:space-y-5">
+        {/* Top Header Row: Icon + Title + Digital Clock + Shift Info */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-pastel-100">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-pastel-600 to-indigo-600 text-white flex items-center justify-center shadow-soft shrink-0">
               <UserCheck size={24} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="text-sm font-bold text-slate-800">Bảng Chấm Công Trực Tiếp</h4>
-                <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-pastel-100 text-pastel-800 font-mono text-xs font-bold">
-                  <Timer size={12} className="text-pastel-600 animate-spin" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h4 className="text-base font-bold text-slate-800 tracking-tight whitespace-nowrap">
+                  Bảng Chấm Công Trực Tiếp
+                </h4>
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-pastel-100 text-pastel-800 font-mono text-xs font-bold border border-pastel-200/60 shadow-xs shrink-0">
+                  <Timer size={13} className="text-pastel-600 animate-spin" />
                   <span>{currentTime || '08:30:00'}</span>
                 </div>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5 capitalize">
-                {todayVN} • Chọn nhân sự và nhấn nút để điểm danh vào ca / tan ca
+              <p className="text-xs text-slate-500 mt-1 capitalize">
+                {todayVN} • Chọn nhân sự và thực hiện điểm danh vào ca hoặc tan ca
               </p>
             </div>
           </div>
 
-          {/* Right: Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full sm:w-auto">
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+            <span className="px-3 py-1.5 rounded-xl bg-white border border-pastel-200 text-slate-600 text-xs font-semibold shadow-xs flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Ca tiêu chuẩn: 08:30 - 17:30</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Bottom Form Controls Row: Select User + Note + Check-in & Check-out Buttons */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+          {/* User Select (4 cols on desktop) */}
+          <div className="md:col-span-4 min-w-0">
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Nhân Sự Điểm Danh
+            </label>
             <select
               value={selectedUser}
               onChange={(e) => setSelectedUser(e.target.value)}
-              className="w-full sm:w-auto px-3.5 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-pastel-400 text-slate-800"
+              className="w-full px-3.5 py-2.5 text-xs font-bold border border-pastel-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-400 text-slate-800 shadow-xs truncate"
             >
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.name} - {u.department}
+                  {u.name} — {u.department}
                 </option>
               ))}
             </select>
+          </div>
 
+          {/* Note Input (4 cols on desktop) */}
+          <div className="md:col-span-4 min-w-0">
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Ghi Chú Đính Kèm (Tùy chọn)
+            </label>
             <input
               type="text"
-              placeholder="Ghi chú (lý do đi muộn, tăng ca)..."
+              placeholder="Lý do đi muộn, công tác, tăng ca..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full sm:w-60 px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-pastel-400 text-slate-800"
+              className="w-full px-3.5 py-2.5 text-xs border border-pastel-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-400 text-slate-800 shadow-xs"
             />
+          </div>
 
-            <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-              <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
-                <button
-                  onClick={() => handleAction('CHECK_IN')}
-                  disabled={loading || isCheckedIn}
-                  title={
-                    isCheckedIn
-                      ? `Đã vào ca lúc ${selectedUserTodayRecord.check_in}. Một ngày chỉ check-in 1 lần!`
-                      : 'Điểm danh vào ca'
-                  }
-                  className={`justify-center px-4 py-2.5 rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all ${isCheckedIn
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 opacity-80 cursor-not-allowed font-semibold'
-                      : 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95'
-                    } disabled:opacity-60`}
-                >
-                  <CheckCircle2 size={15} />
-                  <span>{isCheckedIn ? `Đã vào (${selectedUserTodayRecord.check_in})` : 'Vào Ca (Check-in)'}</span>
-                </button>
+          {/* Action Buttons (4 cols on desktop) */}
+          <div className="md:col-span-4 min-w-0">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => handleAction('CHECK_IN')}
+                disabled={loading || isCheckedIn}
+                title={
+                  isCheckedIn
+                    ? `Đã vào ca lúc ${selectedUserTodayRecord.check_in}. Một ngày chỉ check-in 1 lần!`
+                    : 'Điểm danh vào ca'
+                }
+                className={`justify-center px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all ${
+                  isCheckedIn
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 opacity-90 cursor-not-allowed font-semibold'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95'
+                } disabled:opacity-60`}
+              >
+                <CheckCircle2 size={15} className="shrink-0" />
+                <span className="truncate">{isCheckedIn ? `Đã vào (${selectedUserTodayRecord.check_in})` : 'Vào Ca'}</span>
+              </button>
 
-                <button
-                  onClick={() => handleAction('CHECK_OUT')}
-                  disabled={loading || !isCheckedIn || isCheckedOut}
-                  title={
-                    !isCheckedIn
-                      ? 'Cần vào ca trước khi tan ca'
-                      : isCheckedOut
-                        ? `Đã tan ca lúc ${selectedUserTodayRecord.check_out}. Chờ đến ngày mai để bắt đầu ca mới!`
-                        : 'Điểm danh tan ca'
-                  }
-                  className={`justify-center px-4 py-2.5 rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all ${isCheckedOut
-                      ? 'bg-slate-100 text-slate-500 border border-slate-200 opacity-60 cursor-not-allowed font-semibold'
-                      : isCheckedIn
-                        ? 'bg-slate-700 hover:bg-slate-800 text-white active:scale-95'
-                        : 'bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed'
-                    }`}
-                >
-                  <Clock size={15} />
-                  <span>{isCheckedOut ? `Đã ra (${selectedUserTodayRecord.check_out})` : 'Tan Ca (Check-out)'}</span>
-                </button>
-              </div>
-
-              {isCheckedOut && (
-                <p className="text-[11px] text-emerald-700 font-semibold bg-emerald-50/90 px-2.5 py-1 rounded-lg border border-emerald-200/70 text-center sm:text-left">
-                  ✓ Đã hoàn tất ca hôm nay ({selectedUserTodayRecord.check_in} → {selectedUserTodayRecord.check_out} • {selectedUserTodayRecord.total_hours}h). Hẹn gặp ngày mai!
-                </p>
-              )}
+              <button
+                onClick={() => handleAction('CHECK_OUT')}
+                disabled={loading || !isCheckedIn || isCheckedOut}
+                title={
+                  !isCheckedIn
+                    ? 'Cần vào ca trước khi tan ca'
+                    : isCheckedOut
+                      ? `Đã tan ca lúc ${selectedUserTodayRecord.check_out}. Chờ đến ngày mai để bắt đầu ca mới!`
+                      : 'Điểm danh tan ca'
+                }
+                className={`justify-center px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all ${
+                  isCheckedOut
+                    ? 'bg-slate-100 text-slate-500 border border-slate-200 opacity-60 cursor-not-allowed font-semibold'
+                    : isCheckedIn
+                      ? 'bg-slate-800 hover:bg-slate-900 text-white active:scale-95'
+                      : 'bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <Clock size={15} className="shrink-0" />
+                <span className="truncate">{isCheckedOut ? `Đã ra (${selectedUserTodayRecord.check_out})` : 'Tan Ca'}</span>
+              </button>
             </div>
           </div>
         </div>
+
+        {/* Finished Shift Notice */}
+        {isCheckedOut && (
+          <div className="p-3 rounded-xl bg-emerald-50/90 border border-emerald-200 text-xs font-semibold text-emerald-800 flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+            <span>
+              Nhân viên <strong>{selectedUserTodayRecord?.user_name}</strong> đã hoàn tất ca làm việc hôm nay ({selectedUserTodayRecord.check_in} → {selectedUserTodayRecord.check_out} • {selectedUserTodayRecord.total_hours}h). Hẹn gặp vào ngày mai!
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Attendance History Table Card */}
