@@ -5,6 +5,133 @@ const app = new Hono();
 
 app.use('/api/*', cors({ origin: '*' }));
 
+// ========================================================
+// SEO & SOCIAL SHARE (ZALO, FACEBOOK, TWITTER, TELEGRAM)
+// ========================================================
+const SEO_SLUG_MAP = {
+  '/': {
+    title: 'OMNI ASSETS - Hệ Thống Quản Lý Tài Sản & Vận Hành Doanh Nghiệp',
+    description: 'Nền tảng số hóa quản trị tài sản, trang thiết bị, tài chính doanh thu, hợp đồng biên bản, chấm công nhân sự và tự động nhắc hạn thông minh cho doanh nghiệp.'
+  },
+  '/tong-quan': {
+    title: 'Tổng Quan Vận Hành & Chỉ Số Doanh Nghiệp | OMNI ASSETS',
+    description: 'Báo cáo chỉ số điều hành, biểu đồ tài chính, kiểm soát tài sản và dòng tiền doanh nghiệp thời gian thực.'
+  },
+  '/tai-san': {
+    title: 'Quản Lý Tài Sản & Trang Thiết Bị Doanh Nghiệp | OMNI ASSETS',
+    description: 'Theo dõi, phân bổ, khấu hao, kiểm kê tình trạng và bàn giao tài sản thiết bị doanh nghiệp tập trung.'
+  },
+  '/tai-chinh': {
+    title: 'Báo Cáo Doanh Thu & Dòng Tiền Doanh Nghiệp | OMNI ASSETS',
+    description: 'Quản lý thu chi, hóa đơn, dòng tiền và phân tích lợi nhuận doanh nghiệp minh bạch và trực quan.'
+  },
+  '/cong-viec': {
+    title: 'Quản Lý Công Việc & Nhắc Hạn Tự Động 6:00 AM | OMNI ASSETS',
+    description: 'Giao việc phòng ban, kiểm soát tiến độ, hạn chót và cơ chế tự động gửi cảnh báo nhắc nhở mỗi sáng.'
+  },
+  '/hop-dong': {
+    title: 'Quản Lý Hợp Đồng & Biên Bản Bàn Giao Thông Minh | OMNI ASSETS',
+    description: 'Lưu trữ, theo dõi phụ lục hợp đồng, điều khoản thanh toán, biên bản nghiệm thu và AI tự động soạn thảo.'
+  },
+  '/cham-cong': {
+    title: 'Hệ Thống Chấm Công & Quản Lý Ca Làm Việc | OMNI ASSETS',
+    description: 'Chấm công trực tuyến 1 lần/ngày, chống gian lận, tính công tự động và báo cáo chuyên cần nhân sự.'
+  },
+  '/nhan-su': {
+    title: 'Quản Lý Nhân Sự & Phân Quyền Phòng Ban | OMNI ASSETS',
+    description: 'Hồ sơ nhân viên, gắn kết phòng ban, phân quyền bảo mật nhiều cấp Admin, Manager, Staff.'
+  },
+  '/danh-muc': {
+    title: 'Quản Lý Danh Mục Hệ Thống Động | OMNI ASSETS',
+    description: 'Tự do thiết lập phòng ban, nhóm tài sản, danh mục thu chi và cấu hình hệ thống linh hoạt.'
+  },
+  '/cai-dat': {
+    title: 'Cài Đặt Hệ Thống & Đồng Bộ Dữ Liệu Cloudflare | OMNI ASSETS',
+    description: 'Cấu hình quy chuẩn chấm công, ca làm việc, thông tin pháp nhân và đồng bộ dữ liệu thời gian thực.'
+  },
+  '/quan-tri-tong': {
+    title: 'Cổng Quản Trị Nền Tảng Tối Cao (Master Admin) | OMNI ASSETS',
+    description: 'Cấp quyền bản quyền doanh nghiệp, quản lý các gói cước 1 năm, vĩnh viễn, dùng thử và thống kê doanh thu.'
+  }
+};
+
+function generateSeoHtml(path, origin) {
+  const cleanPath = path.toLowerCase().replace(/\/+$/, '') || '/';
+  const meta = SEO_SLUG_MAP[cleanPath] || SEO_SLUG_MAP['/'];
+  const canonicalUrl = `${origin}${cleanPath === '/' ? '' : cleanPath}`;
+  const logoUrl = `${origin}/logo.png`;
+  const bannerUrl = `${origin}/og-image.jpg`;
+
+  return `<!doctype html>
+<html lang="vi" prefix="og: https://ogp.me/ns#">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${meta.title}</title>
+  <meta name="title" content="${meta.title}" />
+  <meta name="description" content="${meta.description}" />
+  <meta name="keywords" content="omni assets, quản lý tài sản, quản lý doanh nghiệp, phần mềm quản lý thiết bị, quản lý hợp đồng, chấm công nhân sự" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="${canonicalUrl}" />
+
+  <!-- Open Graph for Facebook, Zalo, Messenger, Telegram, LinkedIn, Skype -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="OMNI ASSETS" />
+  <meta property="og:url" content="${canonicalUrl}" />
+  <meta property="og:title" content="${meta.title}" />
+  <meta property="og:description" content="${meta.description}" />
+  <meta property="og:locale" content="vi_VN" />
+
+  <!-- Primary Logo for Social Share -->
+  <meta property="og:image" content="${logoUrl}" />
+  <meta property="og:image:secure_url" content="${logoUrl}" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1024" />
+  <meta property="og:image:height" content="1024" />
+  <meta property="og:image:alt" content="Logo OMNI ASSETS" />
+
+  <!-- High-Res 16:9 Banner -->
+  <meta property="og:image" content="${bannerUrl}" />
+  <meta property="og:image:secure_url" content="${bannerUrl}" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="675" />
+
+  <!-- Twitter / X Cards -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${meta.title}" />
+  <meta name="twitter:description" content="${meta.description}" />
+  <meta name="twitter:image" content="${bannerUrl}" />
+</head>
+<body style="font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; text-align: center;">
+  <img src="${logoUrl}" alt="OMNI ASSETS Logo" style="width: 120px; height: 120px; border-radius: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); margin-bottom: 24px;" />
+  <h1 style="font-size: 24px; margin-bottom: 12px;">${meta.title}</h1>
+  <p style="font-size: 15px; color: #94a3b8; max-width: 600px; margin: 0 auto 24px;">${meta.description}</p>
+  <a href="${canonicalUrl}" style="display: inline-block; background: #6366f1; color: #fff; padding: 12px 24px; border-radius: 12px; text-decoration: none; font-weight: bold;">Truy Cập Nền Tảng OMNI ASSETS</a>
+</body>
+</html>`;
+}
+
+// Bắt các request từ Zalo, Facebook, Twitter, Telegram crawlers để trả về đầy đủ thẻ SEO Open Graph & Logo
+app.use('*', async (c, next) => {
+  const url = new URL(c.req.url);
+  const path = url.pathname.toLowerCase();
+
+  // Bỏ qua các API và file tĩnh
+  if (path.startsWith('/api') || path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|json|xml|txt)$/)) {
+    return next();
+  }
+
+  const userAgent = (c.req.header('user-agent') || '').toLowerCase();
+  const isSocialCrawler = /facebookexternalhit|zalo|twitterbot|linkedinbot|telegrambot|skypeuripreview|whatsapp|slackbot|discordbot|googlebot|bingbot|applebot/i.test(userAgent);
+
+  if (isSocialCrawler) {
+    return c.html(generateSeoHtml(path, url.origin));
+  }
+
+  return next();
+});
+
 // ========================
 // 1. AUTHENTICATION & LOGIN
 // ========================

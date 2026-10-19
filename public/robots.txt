@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://company-sheet.hieupham101097.workers.dev/sitemap.xml

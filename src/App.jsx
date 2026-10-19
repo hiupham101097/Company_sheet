@@ -14,6 +14,7 @@ import { AIAssistantWidget } from './components/AI/AIAssistantWidget';
 import { UpgradeModal } from './components/License/UpgradeModal';
 import { Login } from './components/Auth/Login';
 import { SuperAdminPortal } from './components/SuperAdmin/SuperAdminPortal';
+import { getTabFromPath, syncTabToUrlAndSeo } from './utils/seoRoutes';
 import { api } from './services/api';
 import { Loader2 } from 'lucide-react';
 
@@ -30,12 +31,11 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState(() => {
     try {
       const saved = localStorage.getItem('currentUser');
-      if (saved) {
-        const u = JSON.parse(saved);
-        if (u.role === 'SUPER_ADMIN') return 'super-admin';
-      }
-    } catch {}
-    return 'dashboard';
+      const u = saved ? JSON.parse(saved) : null;
+      return getTabFromPath(window.location.pathname, u?.role);
+    } catch {
+      return 'dashboard';
+    }
   });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -119,9 +119,26 @@ export default function App() {
     }
   }, [currentUser]);
 
+  // Đồng bộ hóa URL Slug, Document Title và Canonical SEO khi chuyển tab
+  useEffect(() => {
+    syncTabToUrlAndSeo(currentTab, true);
+  }, [currentTab]);
+
+  // Lắng nghe phím Back / Forward trên trình duyệt
+  useEffect(() => {
+    const handlePopState = (e) => {
+      const targetTab = e.state?.tab || getTabFromPath(window.location.pathname, currentUser?.role);
+      setCurrentTab(targetTab);
+      syncTabToUrlAndSeo(targetTab, false);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentUser]);
+
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
     setCurrentUser(null);
+    syncTabToUrlAndSeo('dashboard', true);
   };
 
   // Nếu chưa đăng nhập -> Hiển thị Màn hình Đăng Nhập
@@ -130,11 +147,9 @@ export default function App() {
       <Login
         onLoginSuccess={(user) => {
           setCurrentUser(user);
-          if (user?.role === 'SUPER_ADMIN') {
-            setCurrentTab('super-admin');
-          } else {
-            setCurrentTab('dashboard');
-          }
+          const initialTab = getTabFromPath(window.location.pathname, user?.role);
+          setCurrentTab(initialTab);
+          syncTabToUrlAndSeo(initialTab, true);
         }}
       />
     );
