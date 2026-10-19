@@ -76,6 +76,7 @@ export const api = {
   createContract: (data) => request('/contracts', { method: 'POST', body: JSON.stringify(data) }),
   updateContract: (id, data) => request(`/contracts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteContract: (id) => request(`/contracts/${id}`, { method: 'DELETE' }),
+  addContractAppendix: (id, data) => request(`/contracts/${id}/appendices`, { method: 'POST', body: JSON.stringify(data) }),
   getHandovers: () => request('/contracts/handover/list'),
   createHandover: (data) => request('/contracts/handover/create', { method: 'POST', body: JSON.stringify(data) }),
 

@@ -22,6 +22,7 @@ import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
+import { formatDateVN, formatMoneyVN } from '../../utils/formatters';
 
 export function FinanceManager({ 
   financeList = [], 
@@ -69,8 +70,7 @@ export function FinanceManager({
     );
   }
 
-  const formatVND = (num) =>
-    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
+  const formatVND = (num) => formatMoneyVN(num);
 
   const totalRevenue = financeList
     .filter((f) => f.type === 'REVENUE')
@@ -96,10 +96,10 @@ export function FinanceManager({
     }
     const exportData = filteredList.map((item) => ({
       'Số hóa đơn / Chứng từ': item.invoice_number,
-      'Ngày phát sinh': item.date,
+      'Ngày phát sinh': formatDateVN(item.date),
       'Phân loại': item.type === 'REVENUE' ? 'Thu' : 'Chi',
       'Hạng mục': item.category,
-      'Số tiền (VNĐ)': item.amount,
+      'Số tiền (VNĐ)': formatMoneyVN(item.amount, false),
       'Nội dung diễn giải': item.description
     }));
     exportToExcel(exportData, 'Bao_Cao_Thu_Chi_Doanh_Thu', 'Tài Chính');
@@ -316,7 +316,7 @@ export function FinanceManager({
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
-                  <span className="font-mono text-[11px]">{item.date}</span>
+                  <span className="font-mono text-[11px]">{formatDateVN(item.date)}</span>
                   <button
                     onClick={() => handleDelete(item.id)}
                     className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
@@ -342,7 +342,7 @@ export function FinanceManager({
               <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
                 <tr>
                   <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Chứng Từ</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày (dd/MM/yyyy)</th>
                   <th className="py-3.5 px-4 font-bold whitespace-nowrap">Loại</th>
                   <th className="py-3.5 px-4 font-bold whitespace-nowrap" style={{ minWidth: '200px' }}>Hạng Mục</th>
                   <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Tiền</th>
@@ -363,7 +363,7 @@ export function FinanceManager({
                       <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">
                         {item.invoice_number}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-500 font-mono text-xs whitespace-nowrap">{item.date}</td>
+                      <td className="py-3.5 px-4 text-slate-600 font-mono text-xs whitespace-nowrap">{formatDateVN(item.date)}</td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <Badge variant={item.type === 'REVENUE' ? 'success' : 'danger'}>
                           {item.type === 'REVENUE' ? '+ Thu' : '- Chi'}

@@ -18,6 +18,7 @@ import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
+import { formatMoneyVN } from '../../utils/formatters';
 
 export function AssetManager({ 
   assets = [], 
@@ -57,8 +58,7 @@ export function AssetManager({
       .catch((err) => console.error('Error fetching asset categories:', err));
   }, []);
 
-  const formatVND = (num) =>
-    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
+  const formatVND = (num) => formatMoneyVN(num);
 
   const statusMap = {
     IN_USE: { label: 'Đang sử dụng', variant: 'primary', icon: Laptop, dotColor: 'bg-pastel-500' },

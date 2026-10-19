@@ -13,6 +13,7 @@ import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
+import { formatDateVN } from '../../utils/formatters';
 
 export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId = 'usr_1' }) {
   const [filterTab, setFilterTab] = useState('ALL'); // ALL, MY_TASKS, UPCOMING, OVERDUE, COMPLETED
@@ -83,7 +84,7 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
     const exportData = filteredTasks.map((t) => ({
       'Tiêu đề': t.title,
       'Người được giao': t.assigned_user_name,
-      'Hạn chót': t.due_date,
+      'Hạn chót': formatDateVN(t.due_date),
       'Mức ưu tiên': priorityMap[t.priority]?.label || t.priority,
       'Trạng thái': t.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Đang thực hiện',
       'Cảnh báo thời hạn': t.urgency === 'OVERDUE' ? 'Quá hạn' : t.urgency === 'UPCOMING' ? 'Sắp tới' : 'Bình thường',
@@ -240,7 +241,7 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
                       }`}
                     >
                       <Clock size={13} />
-                      <span>{task.due_date}</span>
+                      <span>{formatDateVN(task.due_date)}</span>
                       {isOverdue && <span className="font-bold font-sans">(Quá hạn)</span>}
                       {isUpcoming && <span className="font-bold font-sans">(Sắp tới)</span>}
                     </div>

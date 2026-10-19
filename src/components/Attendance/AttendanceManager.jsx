@@ -11,6 +11,7 @@ import {
 import { Badge } from '../Common/Badge';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
+import { formatDateVN } from '../../utils/formatters';
 
 export function AttendanceManager({ attendanceList = [], users = [], summary, onRefresh }) {
   const [selectedUser, setSelectedUser] = useState(users[0]?.id || 'usr_1');
@@ -104,7 +105,7 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
 
   const handleExportExcel = () => {
     const exportData = attendanceList.map((att) => ({
-      'Ngày': att.date,
+      'Ngày': formatDateVN(att.date),
       'Mã nhân viên': att.user_id,
       'Họ và tên': att.user_name,
       'Phòng ban': att.user_department,
@@ -327,7 +328,7 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-                    <span className="font-mono font-medium">{att.date}</span>
+                    <span className="font-mono font-medium">{formatDateVN(att.date)}</span>
                     {att.notes && <span className="text-slate-500 italic truncate max-w-[180px]">{att.notes}</span>}
                   </div>
                 </div>
@@ -341,7 +342,7 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
           <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '850px' }}>
             <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
               <tr>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày (dd/MM/yyyy)</th>
                 <th className="py-3.5 px-4 font-bold whitespace-nowrap">Nhân Sự</th>
                 <th className="py-3.5 px-4 font-bold whitespace-nowrap">Phòng Ban</th>
                 <th className="py-3.5 px-4 font-bold whitespace-nowrap">Giờ Vào</th>
@@ -363,7 +364,7 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
                   const st = statusMap[att.status] || { label: att.status, variant: 'default' };
                   return (
                     <tr key={att.id} className="hover:bg-pastel-50/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono text-slate-600 font-medium whitespace-nowrap">{att.date}</td>
+                      <td className="py-3.5 px-4 font-mono text-slate-600 font-medium whitespace-nowrap">{formatDateVN(att.date)}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">{att.user_name}</td>
                       <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">{att.user_department}</td>
                       <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">{att.check_in || '--:--'}</td>

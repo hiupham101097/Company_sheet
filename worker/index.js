@@ -558,8 +558,20 @@ app.delete('/api/tasks/:id', async (c) => {
 // ========================
 // 6. CONTRACTS & HANDOVERS
 // ========================
+// 5. CONTRACTS & PROTOCOLS (HỢP ĐỒNG & BIÊN BẢN)
+// ========================
+async function initContractColumns(db) {
+  try {
+    await db.prepare("ALTER TABLE contracts ADD COLUMN terms TEXT").run();
+  } catch (_) {}
+  try {
+    await db.prepare("ALTER TABLE contracts ADD COLUMN appendices TEXT").run();
+  } catch (_) {}
+}
+
 app.get('/api/contracts', async (c) => {
   try {
+    await initContractColumns(c.env.DB);
     const res = await c.env.DB.prepare('SELECT * FROM contracts ORDER BY start_date DESC').all();
     return c.json({ success: true, data: res.results || [] });
   } catch (err) {
@@ -569,6 +581,7 @@ app.get('/api/contracts', async (c) => {
 
 app.post('/api/contracts', async (c) => {
   try {
+    await initContractColumns(c.env.DB);
     const license = await getLicenseStatus(c.env.DB);
     if (license.isDemo) {
       const count = (await c.env.DB.prepare('SELECT count(*) as count FROM contracts').first())?.count || 0;
@@ -584,9 +597,12 @@ app.post('/api/contracts', async (c) => {
     const body = await c.req.json();
     const id = `ctr_${Date.now()}`;
     const code = body.code || `HĐ-${new Date().getFullYear()}/${Math.floor(10 + Math.random() * 90)}`;
+    const terms = typeof body.terms === 'string' ? body.terms : (body.terms ? JSON.stringify(body.terms) : '');
+    const appendices = typeof body.appendices === 'string' ? body.appendices : (body.appendices ? JSON.stringify(body.appendices) : '[]');
+
     await c.env.DB.prepare(`
-      INSERT INTO contracts (id, code, title, type, partner_name, value, start_date, end_date, status, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO contracts (id, code, title, type, partner_name, value, start_date, end_date, status, notes, terms, appendices)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       code,
@@ -597,10 +613,100 @@ app.post('/api/contracts', async (c) => {
       body.start_date,
       body.end_date,
       body.status || 'ACTIVE',
-      body.notes || ''
+      body.notes || '',
+      terms,
+      appendices
     ).run();
 
-    return c.json({ success: true, message: 'Đã thêm hợp đồng' });
+    return c.json({ success: true, message: 'Đã thêm hợp đồng', data: { id, code } });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// Cập nhật hợp đồng
+app.put('/api/contracts/:id', async (c) => {
+  try {
+    await initContractColumns(c.env.DB);
+    const id = c.req.param('id');
+    const body = await c.req.json();
+
+    const existing = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first();
+    if (!existing) {
+      return c.json({ success: false, message: 'Hợp đồng không tồn tại' }, 404);
+    }
+
+    const terms = body.terms !== undefined 
+      ? (typeof body.terms === 'string' ? body.terms : JSON.stringify(body.terms))
+      : existing.terms;
+
+    const appendices = body.appendices !== undefined
+      ? (typeof body.appendices === 'string' ? body.appendices : JSON.stringify(body.appendices))
+      : existing.appendices;
+
+    await c.env.DB.prepare(`
+      UPDATE contracts
+      SET title = ?, type = ?, partner_name = ?, value = ?, start_date = ?, end_date = ?, status = ?, notes = ?, terms = ?, appendices = ?
+      WHERE id = ?
+    `).bind(
+      body.title ?? existing.title,
+      body.type ?? existing.type,
+      body.partner_name ?? existing.partner_name,
+      Number(body.value ?? existing.value) || 0,
+      body.start_date ?? existing.start_date,
+      body.end_date ?? existing.end_date,
+      body.status ?? existing.status,
+      body.notes ?? existing.notes,
+      terms,
+      appendices,
+      id
+    ).run();
+
+    return c.json({ success: true, message: 'Cập nhật hợp đồng thành công' });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// Thêm phụ lục hợp đồng
+app.post('/api/contracts/:id/appendices', async (c) => {
+  try {
+    await initContractColumns(c.env.DB);
+    const id = c.req.param('id');
+    const body = await c.req.json();
+
+    const contract = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first();
+    if (!contract) {
+      return c.json({ success: false, message: 'Không tìm thấy hợp đồng' }, 404);
+    }
+
+    let appendicesList = [];
+    try {
+      if (contract.appendices) appendicesList = JSON.parse(contract.appendices);
+    } catch (_) {}
+    if (!Array.isArray(appendicesList)) appendicesList = [];
+
+    const newAppendix = {
+      id: `pl_${Date.now()}`,
+      code: body.code || `PL-${String(appendicesList.length + 1).padStart(2, '0')}/${contract.code}`,
+      title: body.title || `Phụ lục số ${appendicesList.length + 1}`,
+      date: body.date || new Date().toISOString().split('T')[0],
+      adjustment_value: Number(body.adjustment_value) || 0,
+      content: body.content || '',
+      created_at: new Date().toISOString()
+    };
+
+    appendicesList.push(newAppendix);
+
+    await c.env.DB.prepare('UPDATE contracts SET appendices = ? WHERE id = ?')
+      .bind(JSON.stringify(appendicesList), id)
+      .run();
+
+    return c.json({
+      success: true,
+      message: `Đã thêm ${newAppendix.title} thành công!`,
+      data: newAppendix
+    });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
   }

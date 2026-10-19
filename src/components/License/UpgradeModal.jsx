@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
-import { 
-  X, 
-  Crown, 
-  ShieldCheck, 
-  Sparkles, 
-  CheckCircle2, 
-  XCircle, 
-  Key, 
-  CreditCard, 
-  PhoneCall, 
-  Copy, 
-  Check, 
-  RefreshCw, 
+import {
+  X,
+  Crown,
+  ShieldCheck,
+  Sparkles,
+  CheckCircle2,
+  XCircle,
+  Key,
+  CreditCard,
+  PhoneCall,
+  Copy,
+  Check,
+  RefreshCw,
   Lock,
   ArrowRight,
   Zap,
@@ -19,12 +19,12 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 
-export function UpgradeModal({ 
-  isOpen, 
-  onClose, 
-  licenseInfo, 
+export function UpgradeModal({
+  isOpen,
+  onClose,
+  licenseInfo,
   onLicenseUpdated,
-  triggerReason 
+  triggerReason
 }) {
   const [activeTab, setActiveTab] = useState('activate'); // 'activate' | 'pricing' | 'contact'
   const [licenseKey, setLicenseKey] = useState('');
@@ -103,7 +103,7 @@ export function UpgradeModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
       <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
-        
+
         {/* Header gradient */}
         <div className="relative bg-gradient-to-r from-amber-500 via-indigo-600 to-purple-600 p-6 text-white overflow-hidden">
           <div className="absolute -right-8 -top-8 w-44 h-44 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
@@ -131,7 +131,7 @@ export function UpgradeModal({
                 </p>
               </div>
             </div>
-            <button 
+            <button
               onClick={onClose}
               className="p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/20 transition-colors"
             >
@@ -150,31 +150,28 @@ export function UpgradeModal({
           <div className="flex gap-2 mt-4 pt-2 border-t border-white/15">
             <button
               onClick={() => setActiveTab('activate')}
-              className={`px-4 py-1.5 rounded-xl text-xs md:text-sm font-semibold transition-all ${
-                activeTab === 'activate' 
-                  ? 'bg-white text-slate-900 shadow-md' 
+              className={`px-4 py-1.5 rounded-xl text-xs md:text-sm font-semibold transition-all ${activeTab === 'activate'
+                  ? 'bg-white text-slate-900 shadow-md'
                   : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
+                }`}
             >
               🔑 Nhập Mã Bản Quyền
             </button>
             <button
               onClick={() => setActiveTab('pricing')}
-              className={`px-4 py-1.5 rounded-xl text-xs md:text-sm font-semibold transition-all ${
-                activeTab === 'pricing' 
-                  ? 'bg-white text-slate-900 shadow-md' 
+              className={`px-4 py-1.5 rounded-xl text-xs md:text-sm font-semibold transition-all ${activeTab === 'pricing'
+                  ? 'bg-white text-slate-900 shadow-md'
                   : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
+                }`}
             >
               ⚡ So Sánh Tính Năng
             </button>
             <button
               onClick={() => setActiveTab('contact')}
-              className={`px-4 py-1.5 rounded-xl text-xs md:text-sm font-semibold transition-all ${
-                activeTab === 'contact' 
-                  ? 'bg-white text-slate-900 shadow-md' 
+              className={`px-4 py-1.5 rounded-xl text-xs md:text-sm font-semibold transition-all ${activeTab === 'contact'
+                  ? 'bg-white text-slate-900 shadow-md'
                   : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
+                }`}
             >
               💳 Mua Bản Quyền & Hotline
             </button>
@@ -224,7 +221,7 @@ export function UpgradeModal({
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                       <Key className="w-5 h-5" />
                     </div>
-                    <input 
+                    <input
                       type="text"
                       value={licenseKey}
                       onChange={(e) => {
@@ -407,7 +404,7 @@ export function UpgradeModal({
           {activeTab === 'contact' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
+
                 {/* Bank transfer info */}
                 <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/40 border border-indigo-200 dark:border-indigo-800/60">
                   <div className="flex items-center gap-2.5 text-indigo-700 dark:text-indigo-400 font-bold text-sm mb-3">
@@ -417,15 +414,15 @@ export function UpgradeModal({
                   <div className="space-y-2 text-xs md:text-sm text-slate-700 dark:text-slate-300">
                     <div>
                       <span className="text-slate-500 dark:text-slate-400 block text-xs">Ngân hàng:</span>
-                      <strong className="text-indigo-600 dark:text-indigo-300">MB BANK (Ngân hàng Quân Đội)</strong>
+                      <strong className="text-indigo-600 dark:text-indigo-300">ACB (Ngân hàng Á Châu)</strong>
                     </div>
                     <div>
                       <span className="text-slate-500 dark:text-slate-400 block text-xs">Số tài khoản:</span>
-                      <strong className="text-base font-mono font-bold text-slate-900 dark:text-white">0988 888 6868</strong>
+                      <strong className="text-base font-mono font-bold text-slate-900 dark:text-white">7909707</strong>
                     </div>
                     <div>
                       <span className="text-slate-500 dark:text-slate-400 block text-xs">Chủ tài khoản:</span>
-                      <strong className="text-slate-900 dark:text-white">CÔNG TY PHẦN MỀM OMNIASSETS VN</strong>
+                      <strong className="text-slate-900 dark:text-white">PHAM MINH HIEU</strong>
                     </div>
                     <div>
                       <span className="text-slate-500 dark:text-slate-400 block text-xs">Cú pháp chuyển khoản:</span>
@@ -450,17 +447,17 @@ export function UpgradeModal({
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                         <span className="text-slate-500">Hotline:</span>
-                        <strong className="text-slate-900 dark:text-white">1900 6868 (Phím 1)</strong>
+                        <strong className="text-slate-900 dark:text-white">0394264400</strong>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                         <span className="text-slate-500">Zalo CSKH:</span>
-                        <strong className="text-indigo-600 dark:text-indigo-400">0988.888.686</strong>
+                        <strong className="text-indigo-600 dark:text-indigo-400">0394264400</strong>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                         <span className="text-slate-500">Email:</span>
-                        <strong className="text-slate-700 dark:text-slate-300">support@omniassets.vn</strong>
+                        <strong className="text-slate-700 dark:text-slate-300">hieupham101097@gmail.com</strong>
                       </div>
                     </div>
                   </div>
