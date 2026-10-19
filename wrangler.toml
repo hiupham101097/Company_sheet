@@ -12,3 +12,7 @@ not_found_handling = "single-page-application"
 binding = "DB"
 database_name = "company_assets_db"
 database_id = "f3eb46fc-b6e0-4c24-9e87-032ce24abb7d"
+
+[vars]
+GEMINI_MODEL = "gemini-3.8-flash"
+GEMINI_PROJECT = "projects/800116604540"

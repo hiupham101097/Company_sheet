@@ -888,7 +888,8 @@ async function initSettingsTable(db) {
       ['tax_id', '0109887766', 'GENERAL', 'Mã số thuế doanh nghiệp', new Date().toISOString()],
       ['currency', 'VND', 'GENERAL', 'Đơn vị tiền tệ chính', new Date().toISOString()],
       ['system_announcement', 'Chào mừng bạn đến với hệ thống quản trị vận hành OMNI ASSETS!', 'GENERAL', 'Thông báo chung trên bảng tin', new Date().toISOString()],
-      ['allow_user_registration', 'false', 'GENERAL', 'Cho phép nhân viên tự tạo tài khoản', new Date().toISOString()]
+      ['allow_user_registration', 'false', 'GENERAL', 'Cho phép nhân viên tự tạo tài khoản', new Date().toISOString()],
+      ['gemini_api_key', '', 'GENERAL', 'Google Gemini AI API Key', new Date().toISOString()]
     ];
 
     for (const [key, val, cat, desc, upd] of defaults) {
@@ -986,11 +987,105 @@ app.post('/api/ai/chat', async (c) => {
     const graceMin = settingsMap.late_grace_minutes || '15';
     const workDays = settingsMap.work_days || 'Thứ 2 - Thứ 6';
 
+    const geminiApiKey = c.env.GEMINI_API_KEY || settingsMap.gemini_api_key || '';
+    const geminiModel = c.env.GEMINI_MODEL || 'gemini-3.8-flash';
+
+    // System Prompt for Gemini with live corporate context
+    const systemPrompt = `Bạn là OMNI-Bot, linh vật trợ lý AI thông minh, nhiệt tình và thân thiện của hệ thống quản lý doanh nghiệp OMNI ASSETS.
+Nhiệm vụ của bạn là hỗ trợ, giải đáp mọi thắc mắc và hướng dẫn người dùng thao tác xử lý công việc hiệu quả trên trang web này.
+
+Bối cảnh hệ thống thực tế hiện tại:
+- Tên công ty: ${settingsMap.company_name || 'OMNI ASSETS & LOGISTICS'}
+- Người đang trò chuyện: ${userName || 'Nhân sự'} (Vai trò hệ thống: ${userRole || 'STAFF'})
+- Tab người dùng đang đứng: '${activeTab || 'dashboard'}'
+- Quy định giờ làm việc: Vào ca lúc ${workStart}, Tan ca lúc ${workEnd}, Ân hạn đi muộn ${graceMin} phút, Lịch làm việc ${workDays}.
+- Tài sản: Đang quản lý ${assetsCount?.count || 0} tài sản (${assetsCount?.maint_count || 0} thiết bị đang bảo trì).
+- Công việc: Có ${tasksRes?.results?.length || 0} công việc đang xử lý (gồm các việc gần nhất).
+- Danh sách các phân hệ chính trên trang web:
+  1. 'dashboard' (Tổng quan): Bảng thống kê toàn diện về tài sản, doanh thu, việc cần làm, nhắc hạn.
+  2. 'assets' (Tài sản & Thiết bị): Thêm mới, bàn giao máy móc, bảo trì, sửa chữa, theo dõi serial và tình trạng.
+  3. 'finance' (Doanh thu & Chi phí): Ghi nhận thu/chi, phân tích dòng tiền, tính lợi nhuận ròng.
+  4. 'tasks' (Công việc & Nhắc hạn): Giao việc cho nhân viên, quản lý deadline, cảnh báo việc quá hạn.
+  5. 'contracts' (Hợp đồng & Biên bản): Quản lý hợp đồng đối tác và Lập/In Biên bản bàn giao tài sản chuẩn A4 có chữ ký 2 bên.
+  6. 'attendance' (Chấm công): Check-in ca sáng, Check-out ca chiều, tự động tính số giờ làm và ghi nhận đi muộn.
+  7. 'users' (Quản lý Nhân sự): Danh sách nhân viên, gán quyền (ADMIN: toàn quyền, MANAGER: quản lý, STAFF: nhân viên).
+  8. 'categories' (Quản lý Danh mục): Quản lý động danh mục tài sản, phòng ban, phân loại thu chi.
+  9. 'settings' (Cài đặt hệ thống): Chỉnh giờ ca làm việc, ân hạn đi muộn, thông tin công ty, hotline.
+
+Yêu cầu định dạng câu trả lời:
+- Luôn xưng hô thân thiện: "Mình / Tôi là OMNI-Bot", gọi người dùng là "${userName || 'bạn'}".
+- Dùng tiếng Việt chuẩn mực, rõ ràng, gạch đầu dòng (•), in đậm (**text**) để người dùng dễ đọc.
+- Trả lời đúng trọng tâm câu hỏi của người dùng, đưa ra hướng dẫn từng bước cụ thể.
+- Nhắc đến tab chức năng cụ thể trên thanh menu để người dùng biết chỗ bấm vào.`;
+
     let answer = '';
     let suggestions = [];
     let navigateTab = null;
 
-    if (q.includes('chấm công') || q.includes('điểm danh') || q.includes('check-in') || q.includes('check in') || q.includes('muộn') || q.includes('giờ làm')) {
+    // Gợi ý tab điều hướng theo ngữ cảnh câu hỏi
+    if (q.includes('chấm công') || q.includes('điểm danh') || q.includes('check-in') || q.includes('muộn')) {
+      navigateTab = 'attendance';
+      suggestions = ['Xem bảng chấm công', 'Cài đặt lại giờ ca làm việc', 'Quy định làm thêm giờ (OT)'];
+    } else if (q.includes('tài sản') || q.includes('thiết bị') || q.includes('máy tính') || q.includes('laptop')) {
+      navigateTab = 'assets';
+      suggestions = ['Mở Quản lý tài sản', 'Hướng dẫn tạo biên bản bàn giao', 'Lập kế hoạch bảo trì'];
+    } else if (q.includes('biên bản') || q.includes('bàn giao') || q.includes('in a4') || q.includes('hợp đồng')) {
+      navigateTab = 'contracts';
+      suggestions = ['Mở Hợp đồng & Biên bản', 'Xem danh sách biên bản', 'Quy định thu hồi tài sản'];
+    } else if (q.includes('doanh thu') || q.includes('chi phí') || q.includes('tài chính') || q.includes('tiền')) {
+      navigateTab = 'finance';
+      suggestions = ['Xem Báo cáo tài chính', 'Thêm khoản thu mới', 'Thêm chi phí phát sinh'];
+    } else if (q.includes('công việc') || q.includes('task') || q.includes('quá hạn') || q.includes('deadline')) {
+      navigateTab = 'tasks';
+      suggestions = ['Xem danh sách công việc', 'Tạo công việc mới', 'Lọc việc cần làm gấp'];
+    } else if (q.includes('phân quyền') || q.includes('vai trò') || q.includes('role') || q.includes('nhân sự')) {
+      navigateTab = 'users';
+      suggestions = ['Mở Quản lý nhân sự', 'Thêm nhân viên mới', 'Cài đặt hệ thống'];
+    } else if (q.includes('cài đặt') || q.includes('setting') || q.includes('đổi giờ') || q.includes('công ty')) {
+      navigateTab = 'settings';
+      suggestions = ['Mở Cài đặt hệ thống', 'Quy định giờ chấm công', 'Đổi thông tin công ty'];
+    } else {
+      suggestions = ['Quy định giờ chấm công', 'Cách xuất biên bản bàn giao A4', 'Kiểm tra việc quá hạn', 'Hướng dẫn thêm tài sản'];
+    }
+
+    // 1. Gọi trực tiếp Google Gemini API bằng Key được cấu hình
+    if (geminiApiKey) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
+        const geminiReq = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  { text: `${systemPrompt}\n\nCâu hỏi của người dùng: "${message}"` }
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.6,
+              maxOutputTokens: 1200
+            }
+          })
+        });
+
+        if (geminiReq.ok) {
+          const geminiData = await geminiReq.json();
+          const generatedText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (generatedText && generatedText.trim()) {
+            answer = generatedText.trim();
+          }
+        }
+      } catch (geminiError) {
+        console.error('Gemini API fetch error:', geminiError);
+      }
+    }
+
+    // 2. Dự phòng nội bộ nếu Gemini chưa trả lời
+    if (!answer) {
+      if (q.includes('chấm công') || q.includes('điểm danh') || q.includes('check-in') || q.includes('check in') || q.includes('muộn') || q.includes('giờ làm')) {
       answer = `⏰ **Quy định Chấm công & Giờ làm việc:**\n\n` +
         `• **Giờ vào ca chuẩn:** \`${workStart}\` (Ân hạn đi muộn: **+${graceMin} phút**)\n` +
         `• **Giờ tan ca:** \`${workEnd}\`\n` +
@@ -1066,6 +1161,7 @@ app.post('/api/ai/chat', async (c) => {
         'Hướng dẫn quản lý tài sản'
       ];
     }
+  }
 
     return c.json({
       success: true,
