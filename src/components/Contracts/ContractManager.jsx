@@ -52,6 +52,21 @@ const DEFAULT_TERMS = `ĐIỀU 1: ĐỐI TƯỢNG VÀ NỘI DUNG THỰC HIỆN
 5.1. Hai bên cam kết thực hiện nghiêm túc mọi điều khoản đã thỏa thuận trong hợp đồng và các phụ lục đính kèm (nếu có).
 5.2. Mọi tranh chấp phát sinh sẽ được giải quyết trước hết thông qua thương lượng hòa giải. Nếu không giải quyết được sẽ đưa ra Tòa án có thẩm quyền để giải quyết.`;
 
+// Helper trích xuất an toàn danh sách phụ lục từ hợp đồng (dù lưu dạng Array hay chuỗi JSON)
+export function getAppendices(contract) {
+  if (!contract) return [];
+  if (Array.isArray(contract.appendices)) return contract.appendices;
+  if (typeof contract.appendices === 'string' && contract.appendices.trim()) {
+    try {
+      const parsed = JSON.parse(contract.appendices);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export function ContractManager({ 
   contracts = [], 
   handovers = [], 
