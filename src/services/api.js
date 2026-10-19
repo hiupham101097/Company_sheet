@@ -82,6 +82,13 @@ export const api = {
   getHandovers: () => request('/contracts/handover/list'),
   createHandover: (data) => request('/contracts/handover/create', { method: 'POST', body: JSON.stringify(data) }),
 
+  // AI Học & Tự Động Xây Dựng Hợp Đồng / Biên Bản
+  getAiContractTemplates: () => request('/contracts/ai/templates'),
+  saveAiContractTemplate: (data) => request('/contracts/ai/templates', { method: 'POST', body: JSON.stringify(data) }),
+  deleteAiContractTemplate: (id) => request(`/contracts/ai/templates/${id}`, { method: 'DELETE' }),
+  learnAiContract: (data) => request('/contracts/ai/learn', { method: 'POST', body: JSON.stringify(data) }),
+  generateAiContract: (data) => request('/contracts/ai/generate', { method: 'POST', body: JSON.stringify(data) }),
+
   // Chấm công
   getAttendance: () => request('/attendance'),
   getAttendanceSummary: () => request('/attendance/summary'),

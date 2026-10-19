@@ -764,6 +764,422 @@ app.post('/api/contracts/handover/create', async (c) => {
   }
 });
 
+// ==========================================
+// 6.1. AI CONTRACT TEMPLATE LEARNING & DRAFTING
+// ==========================================
+async function initAiTemplateTable(db) {
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS ai_contract_templates (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        type TEXT NOT NULL,
+        category_name TEXT,
+        summary TEXT,
+        structure_schema TEXT,
+        sample_content TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+  } catch (_) {}
+}
+
+// Lấy danh sách mẫu hợp đồng đã học
+app.get('/api/contracts/ai/templates', async (c) => {
+  try {
+    await initAiTemplateTable(c.env.DB);
+    let res = await c.env.DB.prepare('SELECT * FROM ai_contract_templates ORDER BY created_at DESC').all();
+    let templates = res.results || [];
+
+    // Nếu kho mẫu trống, nạp sẵn 3 mẫu tiêu chuẩn doanh nghiệp
+    if (templates.length === 0) {
+      const initialSeed = [
+        {
+          id: 'tpl_service_it',
+          title: 'Hợp Đồng Cung Cấp Dịch Vụ Vận Hành IT & Phần Mềm',
+          type: 'SERVICE',
+          category_name: 'Hợp Đồng Dịch Vụ',
+          summary: 'Cung ứng dịch vụ triển khai hệ thống, phần mềm và bảo trì vận hành định kỳ cho đối tác.',
+          structure_schema: JSON.stringify({
+            requiredFields: ['Bên A (Khách hàng)', 'Bên B (Đơn vị cung cấp)', 'Phạm vi công việc', 'Giá trị hợp đồng', 'Thời hạn thanh toán', 'Tiêu chuẩn nghiệm thu SLA'],
+            articles: ['Điều 1: Nội dung và phạm vi dịch vụ', 'Điều 2: Giá trị hợp đồng & Tiến độ thanh toán', 'Điều 3: Cam kết chất lượng & Bảo hành', 'Điều 4: Quyền và nghĩa vụ hai bên', 'Điều 5: Bảo mật thông tin & Giải quyết tranh chấp']
+          }),
+          sample_content: `ĐIỀU 1: PHẠM VI DỊCH VỤ VÀ NỘI DUNG THỰC HIỆN
+1.1. Bên B cung cấp dịch vụ quản trị, vận hành và tối ưu hóa hệ thống máy chủ, phần mềm quản lý cho Bên A.
+1.2. Bên B cam kết duy trì hệ thống hoạt động ổn định 99.9%, hỗ trợ kỹ thuật 24/7 khi phát sinh sự cố khẩn cấp.
+
+ĐIỀU 2: GIÁ TRỊ VÀ PHƯƠNG THỨC THANH TOÁN
+2.1. Chi phí dịch vụ được quy định chi tiết theo từng giai đoạn nghiệm thu thực tế.
+2.2. Hình thức thanh toán: Chuyển khoản ngân hàng trong vòng 07 ngày làm việc kể từ ngày nhận đủ hóa đơn tài chính hợp lệ.
+
+ĐIỀU 3: BẢO HÀNH VÀ BẢO TRÌ ĐỊNH KỲ
+3.1. Bên B thực hiện bảo trì, kiểm tra an ninh và sao lưu dữ liệu hệ thống định kỳ hàng tháng.
+3.2. Khi phát sinh sự cố, thời gian phản hồi kỹ thuật viên không quá 30 phút và khắc phục trong vòng 04 giờ.
+
+ĐIỀU 4: BẢO MẬT VÀ ĐIỀU KHOẢN CHUNG
+4.1. Hai bên cam kết bảo mật tuyệt đối dữ liệu nội bộ và bí mật kinh doanh của nhau.
+4.2. Mọi sửa đổi, bổ sung hợp đồng phải được lập thành Phụ lục văn bản có chữ ký của đại diện hai bên.`
+        },
+        {
+          id: 'tpl_rental_hardware',
+          title: 'Hợp Đồng Cho Thuê Thiết Bị Tin Học & Máy Móc Văn Phòng',
+          type: 'RENTAL',
+          category_name: 'Hợp Đồng Thuê Tài Sản',
+          summary: 'Hợp đồng cho thuê laptop, máy tính để bàn, máy in kèm điều khoản đổi mới thiết bị khi xảy ra hỏng hóc kỹ thuật.',
+          structure_schema: JSON.stringify({
+            requiredFields: ['Danh mục máy móc thuê', 'Tiền đặt cọc', 'Đơn giá thuê theo tháng', 'Địa điểm lắp đặt', 'Quy định bảo hành đổi máy trong 4h'],
+            articles: ['Điều 1: Đối tượng tài sản cho thuê', 'Điều 2: Thời hạn thuê và phí dịch vụ', 'Điều 3: Tiền đặt cọc và phương thức hoàn cọc', 'Điều 4: Trách nhiệm sử dụng và bảo dưỡng', 'Điều 5: Bàn giao và thu hồi thiết bị']
+          }),
+          sample_content: `ĐIỀU 1: ĐỐI TƯỢNG VÀ TÌNH TRẠNG THIẾT BỊ CHO THUÊ
+1.1. Bên A đồng ý cho Bên B thuê danh mục thiết bị tin học (laptop/máy tính/máy in) theo chi tiết trong Phụ lục đính kèm.
+1.2. Toàn bộ thiết bị bàn giao đều nguyên tem niêm phong, hoạt động ổn định và có đầy đủ phụ kiện chính hãng.
+
+ĐIỀU 2: GIÁ THUÊ VÀ TIỀN ĐẶT CỌC
+2.1. Đơn giá thuê được tính trọn gói theo tháng, đã bao gồm chi phí bảo dưỡng định kỳ và thay thế linh kiện hao mòn.
+2.2. Tiền đặt cọc được Bên A hoàn trả nguyên vẹn cho Bên B trong vòng 03 ngày làm việc sau khi kết thúc hợp đồng và thanh lý tài sản.
+
+ĐIỀU 3: BẢO HÀNH VÀ ĐỔI MÁY THAY THẾ
+3.1. Nếu thiết bị gặp lỗi phần cứng do nhà sản xuất, Bên A cam kết cung cấp thiết bị tương đương thay thế trong vòng 04 giờ làm việc.
+3.2. Bên B chịu trách nhiệm bảo quản tài sản tại địa chỉ đã đăng ký, không tự ý tháo mở hoặc sửa chữa khi chưa có sự đồng ý của Bên A.`
+        },
+        {
+          id: 'tpl_handover_asset',
+          title: 'Biên Bản Bàn Giao Thiết Bị & Phương Tiện Làm Việc Chuẩn A4',
+          type: 'HANDOVER',
+          category_name: 'Biên Bản Bàn Giao',
+          summary: 'Mẫu biên bản bàn giao máy móc, công cụ làm việc cho nhân viên mới có xác nhận phụ kiện và quy định bảo quản.',
+          structure_schema: JSON.stringify({
+            requiredFields: ['Đại diện Bên giao', 'Nhân viên Bên nhận', 'Mã tài sản & Serial máy', 'Tình trạng ngoại quan & phụ kiện', 'Cam kết hoàn trả khi nghỉ việc'],
+            articles: ['Điều 1: Thông tin tài sản bàn giao', 'Điều 2: Tình trạng phụ kiện và phần mềm', 'Điều 3: Trách nhiệm sử dụng và cam kết bồi thường nếu làm mất']
+          }),
+          sample_content: `CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+Độc lập - Tự do - Hạnh phúc
+-------------------------
+BIÊN BẢN BÀN GIAO TÀI SẢN & THIẾT BỊ LÀM VIỆC
+
+Hôm nay, ngày bàn giao thực tế tại văn phòng Công ty, chúng tôi gồm có:
+- BÊN GIAO (Đại diện Bộ phận Quản trị Thiết bị / IT)
+- BÊN NHẬN (Cán bộ nhân viên tiếp nhận sử dụng)
+
+NỘI DUNG BÀN GIAO:
+1. Thiết bị được cấp phát theo đúng chức danh công việc, gồm máy chính, sạc nguồn zin, chuột, túi chống sốc và phụ kiện kèm theo.
+2. Thiết bị hoạt động ổn định, màn hình sáng rõ, không trầy xước hay móp méo vỏ máy, tem niêm phong còn nguyên vẹn.
+3. Bên nhận cam kết sử dụng đúng mục đích công việc, chịu trách nhiệm bảo quản cẩn thận và có nghĩa vụ hoàn trả nguyên trạng cho công ty khi thôi việc hoặc chuyển vị trí.`
+        }
+      ];
+
+      for (const item of initialSeed) {
+        await c.env.DB.prepare(`
+          INSERT OR REPLACE INTO ai_contract_templates (id, title, type, category_name, summary, structure_schema, sample_content)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(item.id, item.title, item.type, item.category_name, item.summary, item.structure_schema, item.sample_content).run();
+      }
+
+      res = await c.env.DB.prepare('SELECT * FROM ai_contract_templates ORDER BY created_at DESC').all();
+      templates = res.results || [];
+    }
+
+    return c.json({ success: true, data: templates });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// Lưu mẫu hợp đồng thủ công hoặc từ AI
+app.post('/api/contracts/ai/templates', async (c) => {
+  try {
+    await initAiTemplateTable(c.env.DB);
+    const body = await c.req.json();
+    const id = body.id || `tpl_${Date.now()}`;
+    const schemaStr = typeof body.structure_schema === 'object' ? JSON.stringify(body.structure_schema) : (body.structure_schema || '{}');
+
+    await c.env.DB.prepare(`
+      INSERT OR REPLACE INTO ai_contract_templates (id, title, type, category_name, summary, structure_schema, sample_content)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      body.title || 'Mẫu Hợp Đồng Tùy Biến',
+      body.type || 'CONTRACT',
+      body.category_name || 'Hợp Đồng Thương Mại',
+      body.summary || '',
+      schemaStr,
+      body.sample_content || ''
+    ).run();
+
+    return c.json({ success: true, message: 'Đã lưu mẫu hợp đồng thành công', data: { id } });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// Xóa mẫu hợp đồng đã học
+app.delete('/api/contracts/ai/templates/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    await c.env.DB.prepare('DELETE FROM ai_contract_templates WHERE id = ?').bind(id).run();
+    return c.json({ success: true, message: 'Đã xóa mẫu hợp đồng' });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// AI Phân tích & Học mô hình hợp đồng từ tài liệu người dùng import
+app.post('/api/contracts/ai/learn', async (c) => {
+  try {
+    await initAiTemplateTable(c.env.DB);
+    const body = await c.req.json();
+    const { rawContent, titleHint, categoryHint, typeHint } = body;
+
+    if (!rawContent || !rawContent.trim()) {
+      return c.json({ success: false, message: 'Vui lòng cung cấp nội dung văn bản hợp đồng hoặc biên bản để AI phân tích' }, 400);
+    }
+
+    // Lấy API Key từ DB hoặc env
+    let geminiApiKey = c.env?.GEMINI_API_KEY || '';
+    let geminiModel = c.env?.GEMINI_MODEL || 'gemini-3.8-flash';
+    try {
+      const sKey = await c.env.DB.prepare("SELECT value FROM system_settings WHERE key = 'gemini_api_key'").first();
+      if (sKey?.value) geminiApiKey = sKey.value.trim();
+    } catch (_) {}
+
+    const prompt = `Bạn là một chuyên gia pháp chế doanh nghiệp và kiến trúc sư tri thức hợp đồng cao cấp.
+Nhiệm vụ của bạn là đọc hiểu, phân tích sâu và trích xuất cấu trúc văn bản hợp đồng / biên bản dưới đây để học thành một "MẪU HỢP ĐỒNG / BIÊN BẢN CHUẨN":
+
+--- VĂN BẢN IMPORT ---
+${rawContent.slice(0, 12000)}
+--- HẾT VĂN BẢN ---
+
+Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown \`\`\`json ở ngoài), có cấu trúc chính xác như sau:
+{
+  "title": "Tên chuẩn hóa của mẫu văn bản (Ví dụ: Hợp Đồng Thuê Máy Móc, Hợp Đồng Dịch Vụ...)",
+  "type": "Một trong các mã: SERVICE | RENTAL | LABOR | PURCHASE | HANDOVER | APPENDIX | PARTNER",
+  "category_name": "Tên phân loại (Ví dụ: Hợp Đồng Dịch Vụ, Hợp Đồng Thuê Tài Sản, Biên Bản Bàn Giao...)",
+  "summary": "Tóm tắt ngắn gọn 2-3 câu về mục đích, đối tượng áp dụng và điểm then chốt của văn bản này",
+  "structure_schema": {
+    "requiredFields": ["Các trường thông tin bắt buộc cần khách hàng cung cấp khi ký kết (Ví dụ: Tên khách hàng, Mã số thuế, Giá trị, Thời hạn, Đại diện...)"],
+    "articles": ["Danh sách các điều khoản trọng tâm của mẫu (Ví dụ: Điều 1: Phạm vi..., Điều 2: Giá trị..., Điều 3: Nghiệm thu...)"]
+  },
+  "sample_content": "Nội dung điều khoản chuẩn hóa (các ĐIỀU 1, ĐIỀU 2, ĐIỀU 3...) với các biến số dạng {{TEN_DOI_TAC}}, {{GIA_TRI_HOP_DONG}}, {{THOI_HAN}} để sau này dễ áp dụng."
+}`;
+
+    let learnedData = null;
+    let needClientGemini = true;
+
+    if (geminiApiKey) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
+        const res = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-goog-api-key': geminiApiKey
+          },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 3072,
+              thinkingConfig: { thinkingBudget: 0 }
+            }
+          })
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          const parts = json?.candidates?.[0]?.content?.parts || [];
+          const textParts = parts.filter(p => typeof p.text === 'string' && !p.thought).map(p => p.text);
+          const rawText = textParts.join('\n\n') || parts.map(p => p.text).filter(Boolean).join('\n\n');
+          
+          // Trích xuất JSON từ phản hồi
+          const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          try {
+            learnedData = JSON.parse(cleanedText);
+            needClientGemini = false;
+          } catch (_) {
+            console.warn('Cannot parse server Gemini JSON, fallback to client');
+          }
+        }
+      } catch (err) {
+        console.error('Server gemini learn error:', err);
+      }
+    }
+
+    // Nếu server xử lý thành công thì lưu ngay vào DB
+    if (learnedData) {
+      const id = `tpl_${Date.now()}`;
+      await c.env.DB.prepare(`
+        INSERT INTO ai_contract_templates (id, title, type, category_name, summary, structure_schema, sample_content)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        id,
+        learnedData.title || titleHint || 'Mẫu Hợp Đồng Đã Học',
+        learnedData.type || typeHint || 'CONTRACT',
+        learnedData.category_name || categoryHint || 'Hợp Đồng Doanh Nghiệp',
+        learnedData.summary || '',
+        JSON.stringify(learnedData.structure_schema || {}),
+        learnedData.sample_content || rawContent
+      ).run();
+
+      return c.json({
+        success: true,
+        message: 'AI đã học và mô hình hóa văn bản hợp đồng thành công!',
+        data: {
+          id,
+          ...learnedData,
+          needClientGemini: false
+        }
+      });
+    }
+
+    // Nếu server gặp lỗi vùng miền IP Cloudflare, gửi payload cho client tự gọi
+    return c.json({
+      success: true,
+      message: 'Chuẩn bị dữ liệu để AI phân tích tại trình duyệt',
+      data: {
+        needClientGemini: true,
+        prompt,
+        geminiApiKey,
+        geminiModel,
+        rawContent,
+        titleHint: titleHint || 'Mẫu Hợp Đồng Đã Học'
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// AI Xây dựng / Soạn thảo hợp đồng mới dựa trên mẫu đã học và yêu cầu khách hàng
+app.post('/api/contracts/ai/generate', async (c) => {
+  try {
+    const body = await c.req.json();
+    const {
+      templateId,
+      contractType = 'SERVICE',
+      partner_name = '',
+      representative = '',
+      value = '0',
+      start_date = '',
+      end_date = '',
+      custom_requirements = ''
+    } = body;
+
+    // Lấy thông tin mẫu đã học từ DB
+    let template = null;
+    if (templateId) {
+      template = await c.env.DB.prepare('SELECT * FROM ai_contract_templates WHERE id = ?').bind(templateId).first();
+    }
+    if (!template) {
+      template = await c.env.DB.prepare('SELECT * FROM ai_contract_templates ORDER BY created_at DESC LIMIT 1').first();
+    }
+
+    let geminiApiKey = c.env?.GEMINI_API_KEY || '';
+    let geminiModel = c.env?.GEMINI_MODEL || 'gemini-3.8-flash';
+    try {
+      const sKey = await c.env.DB.prepare("SELECT value FROM system_settings WHERE key = 'gemini_api_key'").first();
+      if (sKey?.value) geminiApiKey = sKey.value.trim();
+    } catch (_) {}
+
+    const prompt = `Bạn là chuyên gia pháp chế và soạn thảo hợp đồng thương mại xuất sắc.
+Nhiệm vụ của bạn: Dựa trên MẪU HỢP ĐỒNG ĐÃ HỌC bên dưới, hãy xây dựng một bản hợp đồng HOÀN CHỈNH, CHUYÊN NGHIỆP, CHUẨN MỰC PHÁP LÝ cho khách hàng theo đúng các thông tin thực tế được cung cấp.
+
+--- THÔNG TIN MẪU HỢP ĐỒNG ĐÃ HỌC ---
+Tên mẫu: ${template?.title || 'Hợp Đồng Dịch Vụ'}
+Phân loại: ${template?.category_name || 'Hợp Đồng Doanh Nghiệp'}
+Cấu trúc mẫu:
+${template?.sample_content || ''}
+--- HẾT THÔNG TIN MẪU ---
+
+--- THÔNG TIN KHÁCH HÀNG & THỎA THUẬN MỚI ---
+• Tên đối tác / Khách hàng (Bên B): ${partner_name || 'Đối tác / Khách hàng'}
+• Người đại diện pháp luật: ${representative || 'Đại diện theo pháp luật'}
+• Tổng giá trị hợp đồng: ${value} VNĐ
+• Thời hạn thực hiện: Từ ngày ${start_date || 'ngày ký'} đến ngày ${end_date || 'ngày kết thúc'}
+• Các điều khoản / yêu cầu đặc thù của khách hàng: ${custom_requirements || 'Thực hiện theo tiêu chuẩn nghiệp vụ chuẩn mực, bảo hành đầy đủ, hóa đơn tài chính hợp lệ.'}
+--- HẾT THÔNG TIN MỚI ---
+
+YÊU CẦU ĐẦU RA:
+Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown \`\`\`json ở ngoài) với cấu trúc:
+{
+  "title": "Tiêu đề hợp đồng (Ví dụ: HỢP ĐỒNG CUNG CẤP DỊCH VỤ CÔNG NGHỆ VÀ VẬN HÀNH)",
+  "partner_name": "${partner_name}",
+  "value": "${value}",
+  "start_date": "${start_date}",
+  "end_date": "${end_date}",
+  "terms": "Toàn bộ các điều khoản chi tiết (ĐIỀU 1: ĐỐI TƯỢNG..., ĐIỀU 2: GIÁ TRỊ VÀ PHƯƠNG THỨC THANH TOÁN..., ĐIỀU 3: TIẾN ĐỘ VÀ NGHIỆM THU..., ĐIỀU 4: BẢO HÀNH VÀ CAM KẾT ĐẶC THÙ..., ĐIỀU 5: BẢO MẬT VÀ PHẠT VI PHẠM..., ĐIỀU 6: HIỆU LỰC HỢP ĐỒNG) đã được tích hợp nhuần nhuyễn yêu cầu đặc thù của khách hàng.",
+  "notes": "Ghi chú tóm tắt điểm nổi bật và cam kết quan trọng trong hợp đồng này."
+}`;
+
+    let generatedContract = null;
+    let needClientGemini = true;
+
+    if (geminiApiKey) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
+        const res = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-goog-api-key': geminiApiKey
+          },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.4,
+              maxOutputTokens: 3072,
+              thinkingConfig: { thinkingBudget: 0 }
+            }
+          })
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          const parts = json?.candidates?.[0]?.content?.parts || [];
+          const textParts = parts.filter(p => typeof p.text === 'string' && !p.thought).map(p => p.text);
+          const rawText = textParts.join('\n\n') || parts.map(p => p.text).filter(Boolean).join('\n\n');
+          const cleanedText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          try {
+            generatedContract = JSON.parse(cleanedText);
+            needClientGemini = false;
+          } catch (_) {
+            console.warn('Cannot parse server Gemini JSON, fallback to client');
+          }
+        }
+      } catch (err) {
+        console.error('Server gemini generate error:', err);
+      }
+    }
+
+    if (generatedContract) {
+      return c.json({
+        success: true,
+        message: 'Đã xây dựng hợp đồng bằng AI thành công!',
+        data: {
+          ...generatedContract,
+          needClientGemini: false
+        }
+      });
+    }
+
+    return c.json({
+      success: true,
+      message: 'Chuẩn bị dữ liệu soạn thảo hợp đồng bằng AI',
+      data: {
+        needClientGemini: true,
+        prompt,
+        geminiApiKey,
+        geminiModel,
+        partner_name,
+        value,
+        start_date,
+        end_date
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
 // ========================
 // 7. ATTENDANCE (CHẤM CÔNG)
 // ========================

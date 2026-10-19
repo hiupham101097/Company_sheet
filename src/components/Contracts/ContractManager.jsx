@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FileText,
   Plus,
@@ -12,7 +12,19 @@ import {
   ScrollText,
   FilePlus,
   Eye,
-  AlertCircle
+  AlertCircle,
+  Sparkles,
+  UploadCloud,
+  Wand2,
+  BrainCircuit,
+  Trash2,
+  BookOpen,
+  FileUp,
+  CheckCircle2,
+  FolderPlus,
+  Zap,
+  ArrowRight,
+  HelpCircle
 } from 'lucide-react';
 import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
@@ -84,14 +96,211 @@ export function ContractManager({
   });
   const [isSubmittingAppendix, setIsSubmittingAppendix] = useState(false);
 
-  // Helper để lấy danh sách phụ lục của 1 hợp đồng
-  const getAppendices = (ctr) => {
-    if (!ctr) return [];
+  // ================= AI CONTRACT TEMPLATES STATE =================
+  const [aiTemplates, setAiTemplates] = useState([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [isLearnModalOpen, setIsLearnModalOpen] = useState(false);
+  const [isAiDraftModalOpen, setIsAiDraftModalOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState(null);
+
+  // Form Học Mẫu Hợp Đồng
+  const [learnForm, setLearnForm] = useState({
+    rawContent: '',
+    titleHint: '',
+    categoryHint: 'Hợp Đồng Dịch Vụ',
+    typeHint: 'SERVICE',
+    fileName: ''
+  });
+  const [isLearning, setIsLearning] = useState(false);
+  const [learnedSuccessInfo, setLearnedSuccessInfo] = useState(null);
+
+  // Form Xây Dựng Hợp Đồng Bằng AI
+  const [draftForm, setDraftForm] = useState({
+    templateId: '',
+    partner_name: '',
+    representative: '',
+    value: '',
+    start_date: new Date().toISOString().split('T')[0],
+    end_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    custom_requirements: ''
+  });
+  const [isDrafting, setIsDrafting] = useState(false);
+
+  // Tải danh sách mẫu đã học
+  const loadAiTemplates = async () => {
     try {
-      if (typeof ctr.appendices === 'string') return JSON.parse(ctr.appendices);
-      if (Array.isArray(ctr.appendices)) return ctr.appendices;
-    } catch (_) {}
-    return [];
+      setIsLoadingTemplates(true);
+      const res = await api.getAiContractTemplates();
+      if (res.success && res.data) {
+        setAiTemplates(res.data);
+      }
+    } catch (err) {
+      console.warn('Lỗi khi tải mẫu hợp đồng AI:', err);
+    } finally {
+      setIsLoadingTemplates(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAiTemplates();
+  }, []);
+
+  // Xử lý đọc file khi người dùng upload (.txt, .md, .doc, .docx)
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const baseTitle = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+    setLearnForm((prev) => ({
+      ...prev,
+      fileName: file.name,
+      titleHint: prev.titleHint || baseTitle
+    }));
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result;
+      if (typeof text === 'string') {
+        setLearnForm((prev) => ({ ...prev, rawContent: text }));
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Helper thực thi Gemini trực tiếp từ trình duyệt người dùng (IP Việt Nam)
+  const callDirectGemini = async (prompt, apiKey, model = 'gemini-3.8-flash', temp = 0.2) => {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: temp,
+          maxOutputTokens: 3072,
+          thinkingConfig: { thinkingBudget: 0 }
+        }
+      })
+    });
+    if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
+    const json = await res.json();
+    const parts = json?.candidates?.[0]?.content?.parts || [];
+    const textParts = parts.filter(p => typeof p.text === 'string' && !p.thought).map(p => p.text);
+    const raw = textParts.join('\n\n') || parts.map(p => p.text).filter(Boolean).join('\n\n');
+    const clean = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(clean);
+  };
+
+  // 1. Cho AI phân tích và học mẫu hợp đồng
+  const handleLearnContract = async (e) => {
+    if (e) e.preventDefault();
+    if (!learnForm.rawContent.trim()) {
+      alert('Vui lòng tải lên file hoặc dán nội dung văn bản hợp đồng mẫu để AI học tập!');
+      return;
+    }
+
+    try {
+      setIsLearning(true);
+      setLearnedSuccessInfo(null);
+      const res = await api.learnAiContract(learnForm);
+
+      let resultTemplate = res.data;
+
+      // Nếu Cloudflare Worker bị giới hạn IP, Frontend gọi thẳng Gemini
+      if (res.data?.needClientGemini && res.data?.geminiApiKey) {
+        const clientParsed = await callDirectGemini(
+          res.data.prompt,
+          res.data.geminiApiKey,
+          res.data.geminiModel,
+          0.2
+        );
+
+        // Lưu mẫu đã học vào hệ thống
+        const saveRes = await api.saveAiContractTemplate({
+          title: clientParsed.title || learnForm.titleHint || 'Mẫu Hợp Đồng Đã Học',
+          type: clientParsed.type || learnForm.typeHint || 'CONTRACT',
+          category_name: clientParsed.category_name || learnForm.categoryHint || 'Hợp Đồng Doanh Nghiệp',
+          summary: clientParsed.summary || '',
+          structure_schema: clientParsed.structure_schema || {},
+          sample_content: clientParsed.sample_content || learnForm.rawContent
+        });
+
+        resultTemplate = { id: saveRes.data?.id, ...clientParsed };
+      }
+
+      setLearnedSuccessInfo(resultTemplate);
+      await loadAiTemplates();
+    } catch (err) {
+      console.error('Lỗi khi học mẫu hợp đồng:', err);
+      alert('Không thể hoàn tất quá trình học mẫu: ' + (err.message || 'Lỗi không xác định'));
+    } finally {
+      setIsLearning(false);
+    }
+  };
+
+  // 2. Dùng AI xây dựng hợp đồng mới từ mẫu đã học
+  const handleGenerateContract = async (e) => {
+    if (e) e.preventDefault();
+    if (!draftForm.partner_name.trim()) {
+      alert('Vui lòng nhập tên đối tác / khách hàng ký kết hợp đồng!');
+      return;
+    }
+
+    try {
+      setIsDrafting(true);
+      const res = await api.generateAiContract(draftForm);
+
+      let generated = res.data;
+
+      // Client Gemini execution fallback
+      if (res.data?.needClientGemini && res.data?.geminiApiKey) {
+        generated = await callDirectGemini(
+          res.data.prompt,
+          res.data.geminiApiKey,
+          res.data.geminiModel,
+          0.4
+        );
+      }
+
+      // Tự động điền dữ liệu AI tạo ra vào form Hợp đồng chuẩn
+      setContractForm({
+        title: generated.title || `Hợp Đồng Hợp Tác - ${draftForm.partner_name}`,
+        type: 'PARTNER',
+        partner_name: generated.partner_name || draftForm.partner_name,
+        value: generated.value || draftForm.value || '0',
+        start_date: generated.start_date || draftForm.start_date,
+        end_date: generated.end_date || draftForm.end_date,
+        terms: generated.terms || DEFAULT_TERMS,
+        notes: generated.notes || `Soạn thảo tự động bởi Google Gemini theo thỏa thuận với ${draftForm.partner_name}`
+      });
+
+      setIsAiDraftModalOpen(false);
+      setIsContractModalOpen(true);
+    } catch (err) {
+      console.error('Lỗi khi tạo hợp đồng bằng AI:', err);
+      alert('Không thể tạo hợp đồng bằng AI: ' + (err.message || 'Lỗi không xác định'));
+    } finally {
+      setIsDrafting(false);
+    }
+  };
+
+  // 3. Xóa mẫu đã học
+  const handleDeleteTemplate = async (templateId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa mẫu hợp đồng này khỏi kho tri thức AI?')) return;
+    try {
+      await api.deleteAiContractTemplate(templateId);
+      await loadAiTemplates();
+    } catch (err) {
+      alert('Lỗi xóa mẫu: ' + (err.message || 'Thất bại'));
+    }
+  };
+
+  // 4. Chọn nhanh 1 mẫu để mở form soạn thảo
+  const handleUseTemplateToDraft = (tpl) => {
+    setDraftForm((prev) => ({
+      ...prev,
+      templateId: tpl.id
+    }));
+    setIsAiDraftModalOpen(true);
   };
 
   const handleExportContracts = () => {
@@ -228,7 +437,30 @@ export function ContractManager({
         </div>
 
         {/* Action Buttons in Clean Grid on Mobile */}
-        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+          {/* Nút 1: Học Mẫu Mới Bằng AI */}
+          <button
+            onClick={() => {
+              setLearnedSuccessInfo(null);
+              setIsLearnModalOpen(true);
+            }}
+            className="justify-center inline-flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all active:scale-95"
+            title="Tải lên hoặc dán hợp đồng để AI học mô hình cấu trúc"
+          >
+            <BrainCircuit size={15} />
+            <span>AI Học Mẫu Mới</span>
+          </button>
+
+          {/* Nút 2: Soạn Thảo Bằng AI */}
+          <button
+            onClick={() => setIsAiDraftModalOpen(true)}
+            className="justify-center inline-flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all active:scale-95"
+            title="Dựa trên mẫu đã học để tự động viết hợp đồng cho khách hàng"
+          >
+            <Wand2 size={15} />
+            <span>Soạn Thảo Bằng AI</span>
+          </button>
+
           <button
             onClick={activeSubTab === 'CONTRACTS' ? handleExportContracts : handleExportHandovers}
             className="justify-center inline-flex items-center gap-2 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all active:scale-95"
@@ -245,7 +477,7 @@ export function ContractManager({
               <Plus size={15} />
               <span>Thêm Hợp Đồng</span>
             </button>
-          ) : (
+          ) : activeSubTab === 'HANDOVERS' ? (
             <button
               onClick={() => setIsHandoverModalOpen(true)}
               className="justify-center inline-flex items-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all active:scale-95"
@@ -253,12 +485,12 @@ export function ContractManager({
               <Plus size={15} />
               <span>Lập Biên Bản Mới</span>
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
       {/* Sub Tabs Selection */}
-      <div className="flex items-center gap-2 border-b border-pastel-200/80 pb-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-pastel-200/80 pb-3">
         <button
           onClick={() => setActiveSubTab('CONTRACTS')}
           className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all ${
@@ -281,6 +513,21 @@ export function ContractManager({
         >
           <FileCheck size={15} />
           <span>Biên Bản Bàn Giao Thiết Bị ({handovers.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('AI_TEMPLATES')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all ${
+            activeSubTab === 'AI_TEMPLATES'
+              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-soft'
+              : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'
+          }`}
+        >
+          <Sparkles size={15} className={activeSubTab === 'AI_TEMPLATES' ? 'text-amber-300' : 'text-indigo-500'} />
+          <span>Mẫu Hợp Đồng AI Đã Học ({aiTemplates.length})</span>
+          <span className="text-[10px] bg-amber-400 text-amber-950 px-1.5 py-0.2 rounded-full font-black">
+            AI Gemini
+          </span>
         </button>
       </div>
 
@@ -576,6 +823,166 @@ export function ContractManager({
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ================= TAB 3: MẪU HỢP ĐỒNG AI ĐÃ HỌC ================= */}
+      {activeSubTab === 'AI_TEMPLATES' && (
+        <div className="space-y-6">
+          {/* AI Banner */}
+          <div className="p-6 rounded-3xl bg-gradient-to-r from-indigo-950 via-purple-900 to-slate-900 text-white shadow-soft-lg relative overflow-hidden">
+            <div className="absolute right-0 top-0 bottom-0 opacity-10 pointer-events-none flex items-center pr-8">
+              <BrainCircuit size={200} />
+            </div>
+
+            <div className="relative z-10 max-w-3xl space-y-3">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-semibold text-amber-300">
+                <Sparkles size={14} />
+                <span>Trí Tuệ Nhân Tạo Google Gemini 3.8 Flash</span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+                Mô Hình Học Tri Thức Hợp Đồng & Biên Bản Doanh Nghiệp
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Tải lên hoặc dán các văn bản hợp đồng / biên bản bàn giao mẫu của doanh nghiệp bạn. 
+                AI sẽ tự động đọc hiểu, bóc tách cấu trúc pháp lý, điều khoản và các biến số. 
+                Khi khách hàng đưa ra yêu cầu mới, AI sẽ đối chiếu mô hình đã học để tự động xây dựng hợp đồng chính xác, đầy đủ và chuyên nghiệp chỉ trong tích tắc!
+              </p>
+
+              <div className="pt-2 flex flex-wrap gap-3">
+                <button
+                  onClick={() => {
+                    setLearnedSuccessInfo(null);
+                    setIsLearnModalOpen(true);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 font-bold text-xs shadow-md transition-all active:scale-95 flex items-center gap-2"
+                >
+                  <UploadCloud size={16} className="text-indigo-600" />
+                  <span>Nhập File & Cho AI Học Mẫu Mới</span>
+                </button>
+                <button
+                  onClick={() => setIsAiDraftModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition-all active:scale-95 flex items-center gap-2"
+                >
+                  <Wand2 size={16} />
+                  <span>Soạn Thảo Hợp Đồng Bằng AI</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Template Cards Grid */}
+          {isLoadingTemplates ? (
+            <div className="p-12 text-center text-slate-400 bg-white rounded-3xl border border-pastel-200">
+              <BrainCircuit size={32} className="animate-spin text-pastel-500 mx-auto mb-2" />
+              <p className="text-xs font-semibold">Đang tải kho tri thức mẫu hợp đồng AI...</p>
+            </div>
+          ) : aiTemplates.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 bg-white rounded-3xl border border-pastel-200 space-y-3">
+              <BookOpen size={36} className="text-slate-300 mx-auto" />
+              <h4 className="text-sm font-bold text-slate-700">Chưa có mẫu hợp đồng nào trong kho tri thức</h4>
+              <p className="text-xs max-w-md mx-auto text-slate-500">
+                Hãy nhấn nút "Nhập File & Cho AI Học Mẫu Mới" ở trên để nạp các văn bản hợp đồng mẫu đầu tiên của bạn nhé!
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {aiTemplates.map((tpl) => {
+                let schema = {};
+                try {
+                  schema = typeof tpl.structure_schema === 'string' ? JSON.parse(tpl.structure_schema) : (tpl.structure_schema || {});
+                } catch (_) {}
+
+                return (
+                  <div
+                    key={tpl.id}
+                    className="bg-white rounded-3xl border border-pastel-200/90 hover:border-indigo-400 hover:shadow-soft-lg transition-all p-5 flex flex-col justify-between space-y-4 group"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/70">
+                          {tpl.category_name || 'Hợp Đồng'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {tpl.type || 'CONTRACT'}
+                        </span>
+                      </div>
+
+                      <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-snug">
+                        {tpl.title}
+                      </h4>
+
+                      <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
+                        {tpl.summary || 'Mẫu hợp đồng đã được AI phân tích và chuẩn hóa cấu trúc.'}
+                      </p>
+
+                      {/* Required Placeholders */}
+                      {schema.requiredFields && schema.requiredFields.length > 0 && (
+                        <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Trường thông tin cần nhập:
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {schema.requiredFields.slice(0, 4).map((f, fIdx) => (
+                              <span key={fIdx} className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-medium">
+                                {f}
+                              </span>
+                            ))}
+                            {schema.requiredFields.length > 4 && (
+                              <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md">
+                                +{schema.requiredFields.length - 4}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Articles / Clauses preview */}
+                      {schema.articles && schema.articles.length > 0 && (
+                        <div className="space-y-1 pt-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Điều khoản cốt lõi:
+                          </p>
+                          <ul className="text-[11px] text-slate-600 space-y-0.5 list-disc list-inside">
+                            {schema.articles.slice(0, 3).map((art, aIdx) => (
+                              <li key={aIdx} className="truncate">{art}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setPreviewTemplate(tpl)}
+                          className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                          title="Xem chi tiết mẫu"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTemplate(tpl.id)}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                          title="Xóa mẫu này"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => handleUseTemplateToDraft(tpl)}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs hover:shadow-soft transition-all flex items-center gap-1.5"
+                      >
+                        <Wand2 size={13} />
+                        <span>Dùng Mẫu Này</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1230,6 +1637,394 @@ export function ContractManager({
               >
                 <Printer size={15} />
                 <span>In Biên Bản (Khổ A4)</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ================= MODAL 1: AI HỌC MÔ HÌNH HỢP ĐỒNG / BIÊN BẢN ================= */}
+      <Modal
+        isOpen={isLearnModalOpen}
+        onClose={() => {
+          if (!isLearning) setIsLearnModalOpen(false);
+        }}
+        title="🧠 AI Học & Mô Hình Hóa Mẫu Hợp Đồng / Biên Bản"
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-5 text-xs">
+          {/* Header Explanation */}
+          <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 flex items-start gap-3">
+            <Sparkles size={20} className="text-indigo-600 mt-0.5 shrink-0" />
+            <div className="space-y-1">
+              <p className="font-bold text-slate-800">
+                Nhập văn bản mẫu để huấn luyện mô hình cho Google Gemini AI
+              </p>
+              <p className="text-slate-600 leading-relaxed text-[11px]">
+                AI sẽ đọc hiểu, tự động bóc tách cấu trúc (tiêu đề, căn cứ, các điều khoản quyền và nghĩa vụ, trường thông tin biến số). 
+                Sau đó, khi bạn cần làm hợp đồng loại này cho khách hàng bất kỳ, AI sẽ đối chiếu mô hình đã học để tự động viết văn bản!
+              </p>
+            </div>
+          </div>
+
+          {learnedSuccessInfo ? (
+            /* Khi học thành công */
+            <div className="space-y-4 p-5 bg-emerald-50/70 rounded-2xl border border-emerald-200 animate-fade-in">
+              <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                <CheckCircle2 size={20} className="text-emerald-600" />
+                <span>AI Đã Học Và Chuẩn Hóa Thành Công Mẫu Hợp Đồng!</span>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-emerald-200/80 space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Tên mẫu:</span>
+                  <span className="font-bold text-slate-900">{learnedSuccessInfo.title}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Phân loại:</span>
+                  <span className="font-bold text-indigo-700">{learnedSuccessInfo.category_name}</span>
+                </div>
+                <div className="pt-2 border-t border-slate-100">
+                  <span className="text-slate-400 block mb-1">Tóm tắt mô hình:</span>
+                  <p className="text-slate-700 italic text-[11px] leading-relaxed">
+                    "{learnedSuccessInfo.summary}"
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLearnedSuccessInfo(null);
+                    setIsLearnModalOpen(false);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-white text-slate-700 font-semibold border border-slate-200"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLearnModalOpen(false);
+                    handleUseTemplateToDraft(learnedSuccessInfo);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center gap-1.5 shadow-soft"
+                >
+                  <Wand2 size={14} />
+                  <span>Dùng Mẫu Này Soạn Thảo Ngay</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Form Nhập File và Nội Dung */
+            <form onSubmit={handleLearnContract} className="space-y-4">
+              {/* File Upload Box */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  1. Tải lên tệp hợp đồng mẫu (.txt, .md, .docx, .doc)
+                </label>
+                <div className="border-2 border-dashed border-pastel-300 hover:border-indigo-400 rounded-2xl p-4 text-center bg-slate-50/50 hover:bg-indigo-50/20 transition-all cursor-pointer relative">
+                  <input
+                    type="file"
+                    accept=".txt,.md,.doc,.docx"
+                    onChange={handleFileUpload}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  />
+                  <div className="flex flex-col items-center gap-1.5 pointer-events-none">
+                    <FileUp size={24} className="text-indigo-600" />
+                    <span className="font-bold text-slate-800 text-xs">
+                      {learnForm.fileName ? `Đã chọn: ${learnForm.fileName}` : 'Nhấn để chọn tệp hoặc kéo thả file vào đây'}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Hỗ trợ văn bản hợp đồng, biên bản bàn giao, thỏa thuận hợp tác
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Textarea Paste */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-slate-700">
+                    2. Hoặc dán trực tiếp toàn bộ nội dung hợp đồng mẫu *
+                  </label>
+                  {learnForm.rawContent && (
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {learnForm.rawContent.length} ký tự
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  rows={8}
+                  required
+                  value={learnForm.rawContent}
+                  onChange={(e) => setLearnForm({ ...learnForm, rawContent: e.target.value })}
+                  placeholder="Dán toàn bộ văn bản hợp đồng mẫu vào đây (bao gồm tiêu ngữ, các điều khoản, quy định nghiệm thu, điều khoản thanh toán, bảo hành...)..."
+                  className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none text-slate-800 font-mono text-[11px] leading-relaxed bg-slate-50/30"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tên mẫu gợi ý (Tùy chọn)</label>
+                  <input
+                    type="text"
+                    placeholder="VD: Hợp Đồng Thuê Máy Móc IT Văn Phòng"
+                    value={learnForm.titleHint}
+                    onChange={(e) => setLearnForm({ ...learnForm, titleHint: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Phân loại mẫu</label>
+                  <select
+                    value={learnForm.categoryHint}
+                    onChange={(e) => setLearnForm({ ...learnForm, categoryHint: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-400 outline-none text-slate-800 bg-white"
+                  >
+                    <option value="Hợp Đồng Dịch Vụ">Hợp Đồng Dịch Vụ</option>
+                    <option value="Hợp Đồng Thuê Tài Sản">Hợp Đồng Thuê Tài Sản / Thiết Bị</option>
+                    <option value="Biên Bản Bàn Giao">Biên Bản Bàn Giao</option>
+                    <option value="Hợp Đồng Lao Động">Hợp Đồng Lao Động / NDA</option>
+                    <option value="Hợp Đồng Mua Bán">Hợp Đồng Mua Bán / Cung Cấp</option>
+                    <option value="Phụ Lục Hợp Đồng">Phụ Lục Hợp Đồng</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  disabled={isLearning}
+                  onClick={() => setIsLearnModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLearning}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold shadow-soft flex items-center gap-2 active:scale-95 disabled:opacity-50"
+                >
+                  {isLearning ? (
+                    <>
+                      <BrainCircuit size={15} className="animate-spin" />
+                      <span>AI Đang Phân Tích & Học Mẫu...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={15} />
+                      <span>Bắt Đầu Cho AI Học Mẫu Này</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </Modal>
+
+      {/* ================= MODAL 2: SOẠN THẢO HỢP ĐỒNG BẰNG AI ================= */}
+      <Modal
+        isOpen={isAiDraftModalOpen}
+        onClose={() => {
+          if (!isDrafting) setIsAiDraftModalOpen(false);
+        }}
+        title="✨ Soạn Thảo Hợp Đồng Tự Động Bằng AI (Từ Mẫu Đã Học)"
+        maxWidth="max-w-2xl"
+      >
+        <form onSubmit={handleGenerateContract} className="space-y-4 text-xs">
+          <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 flex items-center gap-2.5">
+            <Wand2 size={18} className="text-amber-600 shrink-0" />
+            <p className="text-amber-900 leading-relaxed text-[11px]">
+              Chỉ cần chọn <strong>loại hợp đồng đã học</strong> và nhập yêu cầu của khách hàng. 
+              Google Gemini sẽ tự động lồng ghép chính xác các điều khoản, thỏa thuận riêng và hoàn thiện hợp đồng ngay lập tức!
+            </p>
+          </div>
+
+          {/* Chọn mẫu hợp đồng đã học */}
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">
+              Chọn mẫu hợp đồng / biên bản đã học làm cơ sở *
+            </label>
+            <select
+              required
+              value={draftForm.templateId}
+              onChange={(e) => setDraftForm({ ...draftForm, templateId: e.target.value })}
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none bg-white text-slate-800 font-medium"
+            >
+              <option value="">-- Chọn mô hình hợp đồng mẫu --</option>
+              {aiTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  [{t.category_name}] {t.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Tên đối tác / Khách hàng (Bên B) *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="VD: Công ty TNHH Giải Pháp Công Nghệ XYZ"
+                value={draftForm.partner_name}
+                onChange={(e) => setDraftForm({ ...draftForm, partner_name: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none text-slate-800"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Người đại diện pháp luật & Chức vụ
+              </label>
+              <input
+                type="text"
+                placeholder="VD: Ông Nguyễn Văn A - Giám đốc"
+                value={draftForm.representative}
+                onChange={(e) => setDraftForm({ ...draftForm, representative: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none text-slate-800"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Giá trị hợp đồng (VNĐ)</label>
+              <input
+                type="number"
+                placeholder="VD: 150000000"
+                value={draftForm.value}
+                onChange={(e) => setDraftForm({ ...draftForm, value: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none text-slate-800 font-semibold"
+              />
+              {draftForm.value && (
+                <p className="text-[10px] text-pastel-700 font-bold mt-1">
+                  {formatMoneyVN(draftForm.value)}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Ngày bắt đầu</label>
+              <input
+                type="date"
+                value={draftForm.start_date}
+                onChange={(e) => setDraftForm({ ...draftForm, start_date: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none text-slate-800 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Ngày kết thúc</label>
+              <input
+                type="date"
+                value={draftForm.end_date}
+                onChange={(e) => setDraftForm({ ...draftForm, end_date: e.target.value })}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none text-slate-800 font-mono"
+              />
+            </div>
+          </div>
+
+          {/* Yêu cầu đặc thù của khách */}
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">
+              Các yêu cầu đặc thù / Thỏa thuận riêng của khách hàng
+            </label>
+            <textarea
+              rows={3}
+              value={draftForm.custom_requirements}
+              onChange={(e) => setDraftForm({ ...draftForm, custom_requirements: e.target.value })}
+              placeholder="VD: Khách hàng yêu cầu hỗ trợ kỹ thuật bảo hành đổi máy trong 4 giờ, thanh toán chia làm 3 đợt, cung cấp hóa đơn VAT điện tử, cam kết bảo mật thông tin nội bộ..."
+              className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none text-slate-800 leading-relaxed bg-slate-50/50"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">
+              * AI sẽ tự động phân tích và viết thêm các điều khoản cam kết này vào hợp đồng một cách chặt chẽ.
+            </p>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              disabled={isDrafting}
+              onClick={() => setIsAiDraftModalOpen(false)}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-semibold"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={isDrafting}
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold shadow-soft flex items-center gap-2 active:scale-95 disabled:opacity-50"
+            >
+              {isDrafting ? (
+                <>
+                  <Wand2 size={15} className="animate-spin" />
+                  <span>AI Đang Xây Dựng Hợp Đồng...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={15} />
+                  <span>⚡ Tạo Hợp Đồng Bằng AI</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ================= MODAL 3: XEM CHI TIẾT MẪU HỢP ĐỒNG ĐÃ HỌC ================= */}
+      <Modal
+        isOpen={Boolean(previewTemplate)}
+        onClose={() => setPreviewTemplate(null)}
+        title={previewTemplate ? `Mẫu Tri Thức: ${previewTemplate.title}` : ''}
+        maxWidth="max-w-2xl"
+      >
+        {previewTemplate && (
+          <div className="space-y-4 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <span className="font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200 text-xs">
+                {previewTemplate.category_name}
+              </span>
+              <span className="text-slate-400 font-mono text-[11px]">
+                Mã: {previewTemplate.id}
+              </span>
+            </div>
+
+            <div>
+              <p className="font-bold text-slate-800 text-xs mb-1">Tóm tắt mục đích & phạm vi:</p>
+              <p className="text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                {previewTemplate.summary || 'Chưa có tóm tắt.'}
+              </p>
+            </div>
+
+            <div>
+              <p className="font-bold text-slate-800 text-xs mb-1">Cấu trúc các điều khoản mẫu:</p>
+              <pre className="p-3.5 bg-slate-900 text-slate-100 rounded-xl overflow-x-auto font-mono text-[11px] max-h-72 leading-relaxed whitespace-pre-wrap">
+                {previewTemplate.sample_content}
+              </pre>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setPreviewTemplate(null)}
+                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const tpl = previewTemplate;
+                  setPreviewTemplate(null);
+                  handleUseTemplateToDraft(tpl);
+                }}
+                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center gap-1.5 shadow-soft"
+              >
+                <Wand2 size={14} />
+                <span>Dùng Mẫu Này Soạn Thảo Hợp Đồng</span>
               </button>
             </div>
           </div>
