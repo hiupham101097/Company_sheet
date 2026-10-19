@@ -27,27 +27,35 @@ export function Sidebar({
   onOpenUpgrade
 }) {
   const allMenuItems = [
-    { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-    { id: 'assets', label: 'Tài sản & Thiết bị', icon: Laptop, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-    { id: 'finance', label: 'Doanh thu & Chi phí', icon: TrendingUp, roles: ['ADMIN', 'MANAGER'] },
+    {
+      id: 'super-admin',
+      label: 'Quản Trị Nền Tảng (Tổng)',
+      icon: Crown,
+      badge: 'Master',
+      roles: ['SUPER_ADMIN']
+    },
+    { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'assets', label: 'Tài sản & Thiết bị', icon: Laptop, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'finance', label: 'Doanh thu & Chi phí', icon: TrendingUp, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
     {
       id: 'tasks',
       label: 'Công việc & Nhắc hạn',
       icon: CheckSquare,
       badge: overdueCount > 0 ? `${overdueCount}` : null,
       badgeType: 'danger',
-      roles: ['ADMIN', 'MANAGER', 'STAFF']
+      roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']
     },
-    { id: 'contracts', label: 'Hợp đồng & Biên bản', icon: FileText, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-    { id: 'attendance', label: 'Chấm công', icon: CalendarCheck, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-    { id: 'users', label: 'Quản lý Nhân sự', icon: Users, roles: ['ADMIN'] },
-    { id: 'categories', label: 'Quản lý Danh mục', icon: FolderTree, roles: ['ADMIN'] },
-    { id: 'settings', label: 'Cài đặt hệ thống', icon: Settings, roles: ['ADMIN', 'MANAGER'] },
+    { id: 'contracts', label: 'Hợp đồng & Biên bản', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'attendance', label: 'Chấm công', icon: CalendarCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'users', label: 'Quản lý Nhân sự', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN'] },
+    { id: 'categories', label: 'Quản lý Danh mục', icon: FolderTree, roles: ['SUPER_ADMIN', 'ADMIN'] },
+    { id: 'settings', label: 'Cài đặt hệ thống', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
   ];
 
   const menuItems = allMenuItems.filter((item) => item.roles.includes(userRole));
 
   const roleLabels = {
+    SUPER_ADMIN: { label: 'Tài Khoản Tổng (Master)', color: 'bg-purple-50 text-purple-700 border-purple-200' },
     ADMIN: { label: 'Quản Trị Viên (Admin)', color: 'bg-rose-50 text-rose-700 border-rose-200' },
     MANAGER: { label: 'Quản Lý (Manager)', color: 'bg-amber-50 text-amber-700 border-amber-200' },
     STAFF: { label: 'Nhân Viên (Staff)', color: 'bg-sky-50 text-sky-700 border-sky-200' }
@@ -83,7 +91,7 @@ export function Sidebar({
             <div className="min-w-0">
               <h1 className="text-sm font-bold tracking-tight text-slate-800 leading-tight">OMNI ASSETS</h1>
               <p className="text-[10px] text-pastel-600 font-bold uppercase tracking-wider truncate">
-                {userRole === 'ADMIN' ? 'Quản Trị Viên' : userRole === 'MANAGER' ? 'Quản Lý Cấp Cao' : 'Nhân Viên'}
+                {userRole === 'SUPER_ADMIN' ? 'Quản Trị Nền Tảng (Tổng)' : userRole === 'ADMIN' ? 'Quản Trị Viên' : userRole === 'MANAGER' ? 'Quản Lý Cấp Cao' : 'Nhân Viên'}
               </p>
             </div>
           </div>

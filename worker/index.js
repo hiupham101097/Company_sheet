@@ -15,13 +15,20 @@ app.post('/api/auth/login', async (c) => {
       return c.json({ success: false, message: 'Vui lòng nhập email và mật khẩu' }, 400);
     }
 
+    const cleanAccount = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
     const user = await c.env.DB
-      .prepare('SELECT id, name, email, role, department, phone, avatar, status FROM users WHERE email = ? AND password = ?')
-      .bind(email.trim(), password.trim())
+      .prepare('SELECT id, name, email, role, department, phone, avatar, status FROM users WHERE (lower(email) = ? OR lower(id) = ?) AND password = ?')
+      .bind(cleanAccount, cleanAccount, cleanPassword)
       .first();
 
     if (!user) {
-      return c.json({ success: false, message: 'Email hoặc mật khẩu không chính xác' }, 401);
+      return c.json({ success: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác' }, 401);
+    }
+
+    if (user.status && user.status.toUpperCase() === 'LOCKED') {
+      return c.json({ success: false, message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Quản trị viên hệ thống.' }, 403);
     }
 
     return c.json({
@@ -2118,6 +2125,385 @@ async function refreshDailyReminders(db) {
     return { success: false, error: err.message };
   }
 }
+
+// ==========================================
+// SUPER ADMIN PORTAL: ENTERPRISE & LICENSING
+// ==========================================
+
+// 1. Thống kê tổng quan (Dashboard Overview)
+app.get('/api/super-admin/overview', async (c) => {
+  try {
+    const totalCompanies = await c.env.DB.prepare('SELECT count(*) as count FROM company_tenants').first('count') || 0;
+    const activeCompanies = await c.env.DB.prepare("SELECT count(*) as count FROM company_tenants WHERE license_status = 'ACTIVE'").first('count') || 0;
+    const trialCompanies = await c.env.DB.prepare("SELECT count(*) as count FROM company_tenants WHERE plan_code = 'TRIAL_2M'").first('count') || 0;
+    const expiredCompanies = await c.env.DB.prepare("SELECT count(*) as count FROM company_tenants WHERE license_status = 'EXPIRED'").first('count') || 0;
+    const lockedCompanies = await c.env.DB.prepare("SELECT count(*) as count FROM company_tenants WHERE license_status = 'LOCKED'").first('count') || 0;
+
+    const totalRevenueRes = await c.env.DB.prepare("SELECT sum(amount) as total FROM license_orders WHERE payment_status IN ('PAID', 'COMPLETED')").first('total') || 0;
+    const totalOrders = await c.env.DB.prepare('SELECT count(*) as count FROM license_orders').first('count') || 0;
+
+    const planStats = await c.env.DB.prepare(`
+      SELECT plan_code, count(*) as count, sum(revenue) as plan_revenue 
+      FROM company_tenants 
+      GROUP BY plan_code
+    `).all();
+
+    const recentOrders = await c.env.DB.prepare(`
+      SELECT * FROM license_orders 
+      ORDER BY created_at DESC 
+      LIMIT 8
+    `).all();
+
+    const recentCompanies = await c.env.DB.prepare(`
+      SELECT * FROM company_tenants 
+      ORDER BY created_at DESC 
+      LIMIT 6
+    `).all();
+
+    return c.json({
+      success: true,
+      data: {
+        stats: {
+          totalCompanies: Number(totalCompanies),
+          activeCompanies: Number(activeCompanies),
+          trialCompanies: Number(trialCompanies),
+          expiredCompanies: Number(expiredCompanies),
+          lockedCompanies: Number(lockedCompanies),
+          totalRevenue: Number(totalRevenueRes),
+          totalOrders: Number(totalOrders)
+        },
+        planDistribution: planStats.results || [],
+        recentOrders: recentOrders.results || [],
+        recentCompanies: recentCompanies.results || []
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 2. Danh sách Doanh nghiệp (Company Tenants)
+app.get('/api/super-admin/companies', async (c) => {
+  try {
+    const list = await c.env.DB.prepare('SELECT * FROM company_tenants ORDER BY created_at DESC').all();
+    return c.json({
+      success: true,
+      data: list.results || []
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 3. Thêm mới Doanh nghiệp thủ công từ Super Admin
+app.post('/api/super-admin/companies', async (c) => {
+  try {
+    const body = await c.req.json();
+    const {
+      company_name,
+      tax_id,
+      admin_name,
+      admin_email,
+      admin_phone,
+      plan_code = 'TRIAL_2M',
+      license_status = 'ACTIVE',
+      start_date,
+      expire_date,
+      revenue = 0,
+      notes = ''
+    } = body;
+
+    if (!company_name?.trim()) {
+      return c.json({ success: false, message: 'Vui lòng nhập tên công ty / doanh nghiệp' }, 400);
+    }
+
+    const companyId = `comp_${Date.now()}`;
+    const today = new Date().toISOString().slice(0, 10);
+    const startDateVal = start_date || today;
+
+    // Calculate expire date if missing based on plan
+    let expireDateVal = expire_date;
+    if (!expireDateVal) {
+      const plan = await c.env.DB.prepare('SELECT duration_months FROM pricing_plans WHERE code = ?').bind(plan_code).first();
+      const months = plan ? plan.duration_months : 2;
+      const d = new Date(startDateVal);
+      d.setMonth(d.getMonth() + months);
+      expireDateVal = d.toISOString().slice(0, 10);
+    }
+
+    await c.env.DB.prepare(`
+      INSERT INTO company_tenants (id, company_name, tax_id, admin_name, admin_email, admin_phone, plan_code, license_status, start_date, expire_date, revenue, notes, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `).bind(
+      companyId,
+      company_name.trim(),
+      tax_id ? tax_id.trim() : null,
+      admin_name ? admin_name.trim() : null,
+      admin_email ? admin_email.trim() : null,
+      admin_phone ? admin_phone.trim() : null,
+      plan_code,
+      license_status,
+      startDateVal,
+      expireDateVal,
+      Number(revenue) || 0,
+      notes ? notes.trim() : ''
+    ).run();
+
+    // Nếu có phát sinh doanh thu > 0, tạo một license order ghi nhận
+    if (Number(revenue) > 0) {
+      const orderId = `ord_${Date.now()}`;
+      await c.env.DB.prepare(`
+        INSERT INTO license_orders (id, company_id, company_name, plan_code, plan_name, amount, payment_status, order_date, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'PAID', ?, ?, datetime('now'))
+      `).bind(
+        orderId,
+        companyId,
+        company_name.trim(),
+        plan_code,
+        plan_code,
+        Number(revenue),
+        startDateVal,
+        'Khởi tạo đơn hàng từ cổng Quản trị Tổng'
+      ).run();
+    }
+
+    return c.json({
+      success: true,
+      message: 'Thêm doanh nghiệp thành công!',
+      data: { id: companyId }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 4. Cấp quyền / Gia hạn bản quyền / Khóa mở khóa Doanh nghiệp
+app.put('/api/super-admin/companies/:id/license', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const body = await c.req.json();
+    const {
+      plan_code,
+      license_status,
+      expire_date,
+      add_revenue = 0,
+      notes
+    } = body;
+
+    const existing = await c.env.DB.prepare('SELECT * FROM company_tenants WHERE id = ?').bind(id).first();
+    if (!existing) {
+      return c.json({ success: false, message: 'Không tìm thấy doanh nghiệp' }, 404);
+    }
+
+    const newPlan = plan_code || existing.plan_code;
+    const newStatus = license_status || existing.license_status;
+    const newExpire = expire_date || existing.expire_date;
+    const newNotes = notes !== undefined ? notes : existing.notes;
+    const newRevenue = Number(existing.revenue || 0) + Number(add_revenue || 0);
+
+    await c.env.DB.prepare(`
+      UPDATE company_tenants 
+      SET plan_code = ?, license_status = ?, expire_date = ?, revenue = ?, notes = ?
+      WHERE id = ?
+    `).bind(
+      newPlan,
+      newStatus,
+      newExpire,
+      newRevenue,
+      newNotes,
+      id
+    ).run();
+
+    // Nếu có phát sinh doanh thu khi gia hạn
+    if (Number(add_revenue) > 0) {
+      const orderId = `ord_${Date.now()}`;
+      const today = new Date().toISOString().slice(0, 10);
+      await c.env.DB.prepare(`
+        INSERT INTO license_orders (id, company_id, company_name, plan_code, plan_name, amount, payment_status, order_date, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'PAID', ?, ?, datetime('now'))
+      `).bind(
+        orderId,
+        existing.id,
+        existing.company_name,
+        newPlan,
+        newPlan,
+        Number(add_revenue),
+        today,
+        `Gia hạn / Nâng cấp gói: ${newPlan}`
+      ).run();
+    }
+
+    return c.json({
+      success: true,
+      message: 'Cập nhật bản quyền doanh nghiệp thành công!'
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 5. Xóa Doanh nghiệp
+app.delete('/api/super-admin/companies/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    await c.env.DB.prepare('DELETE FROM company_tenants WHERE id = ?').bind(id).run();
+    return c.json({ success: true, message: 'Xóa doanh nghiệp thành công!' });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 6. Quản lý danh sách Gói Cước (Pricing Plans)
+app.get('/api/super-admin/plans', async (c) => {
+  try {
+    const plans = await c.env.DB.prepare('SELECT * FROM pricing_plans ORDER BY price ASC').all();
+    return c.json({
+      success: true,
+      data: plans.results || []
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 7. Tạo mới / Cập nhật Gói Cước (Xây dựng gói 1 năm, vĩnh viễn, 2 tháng dùng thử...)
+app.post('/api/super-admin/plans', async (c) => {
+  try {
+    const body = await c.req.json();
+    const {
+      id,
+      code,
+      name,
+      duration_months,
+      price,
+      features,
+      badge,
+      is_active = 1
+    } = body;
+
+    if (!code || !name) {
+      return c.json({ success: false, message: 'Mã gói (Code) và Tên gói không được để trống' }, 400);
+    }
+
+    const featuresJson = typeof features === 'string' ? features : JSON.stringify(features || []);
+    const cleanCode = code.trim().toUpperCase();
+
+    if (id) {
+      // Update existing
+      await c.env.DB.prepare(`
+        UPDATE pricing_plans 
+        SET code = ?, name = ?, duration_months = ?, price = ?, features = ?, badge = ?, is_active = ?
+        WHERE id = ?
+      `).bind(
+        cleanCode,
+        name.trim(),
+        Number(duration_months) || 1,
+        Number(price) || 0,
+        featuresJson,
+        badge ? badge.trim() : null,
+        is_active ? 1 : 0,
+        id
+      ).run();
+
+      return c.json({ success: true, message: 'Cập nhật gói dịch vụ thành công!' });
+    } else {
+      // Create new
+      const planId = `plan_${cleanCode.toLowerCase()}_${Date.now()}`;
+      await c.env.DB.prepare(`
+        INSERT INTO pricing_plans (id, code, name, duration_months, price, features, badge, is_active, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `).bind(
+        planId,
+        cleanCode,
+        name.trim(),
+        Number(duration_months) || 1,
+        Number(price) || 0,
+        featuresJson,
+        badge ? badge.trim() : null,
+        is_active ? 1 : 0
+      ).run();
+
+      return c.json({ success: true, message: 'Thêm gói dịch vụ mới thành công!', data: { id: planId } });
+    }
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 8. Xóa Gói Cước
+app.delete('/api/super-admin/plans/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    await c.env.DB.prepare('DELETE FROM pricing_plans WHERE id = ?').bind(id).run();
+    return c.json({ success: true, message: 'Xóa gói dịch vụ thành công!' });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 9. Danh sách Đơn hàng & Doanh thu Đăng ký Gói
+app.get('/api/super-admin/revenue-orders', async (c) => {
+  try {
+    const orders = await c.env.DB.prepare('SELECT * FROM license_orders ORDER BY order_date DESC, created_at DESC').all();
+    return c.json({
+      success: true,
+      data: orders.results || []
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 10. Tạo đơn hàng mới / xác nhận thu tiền
+app.post('/api/super-admin/orders', async (c) => {
+  try {
+    const body = await c.req.json();
+    const {
+      company_id,
+      company_name,
+      plan_code,
+      plan_name,
+      amount,
+      payment_status = 'PAID',
+      notes = ''
+    } = body;
+
+    if (!company_name || !plan_code) {
+      return c.json({ success: false, message: 'Thiếu thông tin công ty hoặc mã gói' }, 400);
+    }
+
+    const orderId = `ord_${Date.now()}`;
+    const today = new Date().toISOString().slice(0, 10);
+
+    await c.env.DB.prepare(`
+      INSERT INTO license_orders (id, company_id, company_name, plan_code, plan_name, amount, payment_status, order_date, notes, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `).bind(
+      orderId,
+      company_id || null,
+      company_name.trim(),
+      plan_code.trim(),
+      plan_name ? plan_name.trim() : plan_code.trim(),
+      Number(amount) || 0,
+      payment_status,
+      today,
+      notes ? notes.trim() : ''
+    ).run();
+
+    // Nếu payment_status = 'PAID' và có company_id, cộng dồn doanh thu cho company_tenants
+    if (payment_status === 'PAID' && company_id) {
+      await c.env.DB.prepare(`
+        UPDATE company_tenants 
+        SET revenue = COALESCE(revenue, 0) + ? 
+        WHERE id = ?
+      `).bind(Number(amount) || 0, company_id).run();
+    }
+
+    return c.json({ success: true, message: 'Tạo đơn hàng bản quyền thành công!', data: { id: orderId } });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
 
 // Endpoint kiểm tra trạng thái tiến trình làm mới 6h sáng
 app.get('/api/reminders/status', async (c) => {

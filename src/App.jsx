@@ -13,6 +13,7 @@ import { SettingsManager } from './components/Settings/SettingsManager';
 import { AIAssistantWidget } from './components/AI/AIAssistantWidget';
 import { UpgradeModal } from './components/License/UpgradeModal';
 import { Login } from './components/Auth/Login';
+import { SuperAdminPortal } from './components/SuperAdmin/SuperAdminPortal';
 import { api } from './services/api';
 import { Loader2 } from 'lucide-react';
 
@@ -26,7 +27,16 @@ export default function App() {
     }
   });
 
-  const [currentTab, setCurrentTab] = useState('dashboard');
+  const [currentTab, setCurrentTab] = useState(() => {
+    try {
+      const saved = localStorage.getItem('currentUser');
+      if (saved) {
+        const u = JSON.parse(saved);
+        if (u.role === 'SUPER_ADMIN') return 'super-admin';
+      }
+    } catch {}
+    return 'dashboard';
+  });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -120,12 +130,18 @@ export default function App() {
       <Login
         onLoginSuccess={(user) => {
           setCurrentUser(user);
+          if (user?.role === 'SUPER_ADMIN') {
+            setCurrentTab('super-admin');
+          } else {
+            setCurrentTab('dashboard');
+          }
         }}
       />
     );
   }
 
   const overdueCount = tasks.filter((t) => t.urgency === 'OVERDUE' && t.status !== 'COMPLETED').length;
+  const effectiveRole = currentUser?.role === 'SUPER_ADMIN' ? 'ADMIN' : (currentUser?.role || 'STAFF');
 
   return (
     <div className="flex min-h-screen bg-surface-bg text-slate-800">
@@ -163,6 +179,10 @@ export default function App() {
             </div>
           ) : (
             <>
+              {currentTab === 'super-admin' && (
+                <SuperAdminPortal currentUser={currentUser} />
+              )}
+
               {currentTab === 'dashboard' && (
                 <Dashboard
                   summaryData={summaryData}
@@ -177,7 +197,7 @@ export default function App() {
                 <AssetManager
                   assets={assets}
                   users={users}
-                  userRole={currentUser?.role}
+                  userRole={effectiveRole}
                   onRefresh={loadAllData}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
@@ -188,7 +208,7 @@ export default function App() {
                 <FinanceManager
                   financeList={financeList}
                   monthlyData={monthlyData}
-                  userRole={currentUser?.role}
+                  userRole={effectiveRole}
                   onRefresh={loadAllData}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
@@ -232,7 +252,7 @@ export default function App() {
               {currentTab === 'users' && (
                 <UserManager
                   users={users}
-                  userRole={currentUser?.role}
+                  userRole={effectiveRole}
                   onRefresh={loadAllData}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
@@ -241,7 +261,7 @@ export default function App() {
 
               {currentTab === 'categories' && (
                 <CategoryManager
-                  userRole={currentUser?.role}
+                  userRole={effectiveRole}
                   users={users}
                   onNavigate={setCurrentTab}
                   licenseInfo={licenseInfo}
@@ -251,7 +271,7 @@ export default function App() {
 
               {currentTab === 'settings' && (
                 <SettingsManager
-                  userRole={currentUser?.role}
+                  userRole={effectiveRole}
                   onRefresh={loadAllData}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}

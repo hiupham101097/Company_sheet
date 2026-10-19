@@ -112,4 +112,17 @@ export const api = {
   testCloudflare: (data) => request('/cloudflare/test', { method: 'POST', body: JSON.stringify(data) }),
   saveCloudflare: (data) => request('/cloudflare/save', { method: 'POST', body: JSON.stringify(data) }),
   syncCloudflareSchema: () => request('/cloudflare/sync-schema', { method: 'POST' }),
+
+  // Super Admin: Quản trị Doanh nghiệp, Cấp quyền & Gói Cước
+  getSuperAdminOverview: () => request('/super-admin/overview'),
+  getSuperAdminCompanies: () => request('/super-admin/companies'),
+  createSuperAdminCompany: (data) => request('/super-admin/companies', { method: 'POST', body: JSON.stringify(data) }),
+  updateCompanyLicense: (id, data) => request(`/super-admin/companies/${id}/license`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSuperAdminCompany: (id) => request(`/super-admin/companies/${id}`, { method: 'DELETE' }),
+  getSuperAdminPlans: () => request('/super-admin/plans'),
+  saveSuperAdminPlan: (data) => request('/super-admin/plans', { method: 'POST', body: JSON.stringify(data) }),
+  deleteSuperAdminPlan: (id) => request(`/super-admin/plans/${id}`, { method: 'DELETE' }),
+  getSuperAdminOrders: () => request('/super-admin/revenue-orders'),
+  createSuperAdminOrder: (data) => request('/super-admin/orders', { method: 'POST', body: JSON.stringify(data) }),
 };
+
