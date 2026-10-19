@@ -236,11 +236,10 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
                       ? `Đã vào ca lúc ${selectedUserTodayRecord.check_in}. Một ngày chỉ check-in 1 lần!`
                       : 'Điểm danh vào ca'
                   }
-                  className={`justify-center px-4 py-2.5 rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all ${
-                    isCheckedIn
+                  className={`justify-center px-4 py-2.5 rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all ${isCheckedIn
                       ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 opacity-80 cursor-not-allowed font-semibold'
                       : 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95'
-                  } disabled:opacity-60`}
+                    } disabled:opacity-60`}
                 >
                   <CheckCircle2 size={15} />
                   <span>{isCheckedIn ? `Đã vào (${selectedUserTodayRecord.check_in})` : 'Vào Ca (Check-in)'}</span>
@@ -253,16 +252,15 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
                     !isCheckedIn
                       ? 'Cần vào ca trước khi tan ca'
                       : isCheckedOut
-                      ? `Đã tan ca lúc ${selectedUserTodayRecord.check_out}. Chờ đến ngày mai để bắt đầu ca mới!`
-                      : 'Điểm danh tan ca'
+                        ? `Đã tan ca lúc ${selectedUserTodayRecord.check_out}. Chờ đến ngày mai để bắt đầu ca mới!`
+                        : 'Điểm danh tan ca'
                   }
-                  className={`justify-center px-4 py-2.5 rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all ${
-                    isCheckedOut
+                  className={`justify-center px-4 py-2.5 rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all ${isCheckedOut
                       ? 'bg-slate-100 text-slate-500 border border-slate-200 opacity-60 cursor-not-allowed font-semibold'
                       : isCheckedIn
-                      ? 'bg-slate-700 hover:bg-slate-800 text-white active:scale-95'
-                      : 'bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed'
-                  }`}
+                        ? 'bg-slate-700 hover:bg-slate-800 text-white active:scale-95'
+                        : 'bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed'
+                    }`}
                 >
                   <Clock size={15} />
                   <span>{isCheckedOut ? `Đã ra (${selectedUserTodayRecord.check_out})` : 'Tan Ca (Check-out)'}</span>
@@ -342,7 +340,7 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
           <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '850px' }}>
             <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
               <tr>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày (dd/MM/yyyy)</th>
+                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày</th>
                 <th className="py-3.5 px-4 font-bold whitespace-nowrap">Nhân Sự</th>
                 <th className="py-3.5 px-4 font-bold whitespace-nowrap">Phòng Ban</th>
                 <th className="py-3.5 px-4 font-bold whitespace-nowrap">Giờ Vào</th>

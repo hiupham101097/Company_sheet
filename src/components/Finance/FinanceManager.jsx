@@ -24,10 +24,10 @@ import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
 import { formatDateVN, formatMoneyVN } from '../../utils/formatters';
 
-export function FinanceManager({ 
-  financeList = [], 
-  monthlyData, 
-  onRefresh, 
+export function FinanceManager({
+  financeList = [],
+  monthlyData,
+  onRefresh,
   userRole = 'ADMIN',
   licenseInfo,
   onOpenUpgrade
@@ -278,11 +278,10 @@ export function FinanceManager({
               <button
                 key={t.id}
                 onClick={() => setTypeFilter(t.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                  typeFilter === t.id
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${typeFilter === t.id
                     ? 'bg-pastel-500 text-white shadow-soft'
                     : 'text-slate-600 hover:bg-pastel-50'
-                }`}
+                  }`}
               >
                 {t.label}
               </button>
@@ -342,7 +341,7 @@ export function FinanceManager({
               <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
                 <tr>
                   <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Chứng Từ</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày (dd/MM/yyyy)</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày</th>
                   <th className="py-3.5 px-4 font-bold whitespace-nowrap">Loại</th>
                   <th className="py-3.5 px-4 font-bold whitespace-nowrap" style={{ minWidth: '200px' }}>Hạng Mục</th>
                   <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Tiền</th>

@@ -104,16 +104,16 @@ export function UpgradeModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
       <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
 
-        {/* Header gradient */}
-        <div className="relative bg-gradient-to-r from-amber-500 via-indigo-600 to-purple-600 p-6 text-white overflow-hidden">
+        {/* Header gradient banner */}
+        <div className="relative bg-gradient-to-r from-amber-500 via-indigo-600 to-purple-600 px-6 py-5 text-white overflow-hidden shrink-0">
           <div className="absolute -right-8 -top-8 w-44 h-44 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
           <div className="flex items-start justify-between relative z-10">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner border border-white/30 text-amber-300">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner border border-white/30 text-amber-300 shrink-0">
                 <Crown className="w-7 h-7 animate-pulse" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/20 text-white border border-white/20">
                     {isDemo ? 'Bản Dùng Thử (DEMO)' : 'Bản Quyền Đã Kích Hoạt'}
                   </span>
@@ -123,57 +123,69 @@ export function UpgradeModal({
                     </span>
                   )}
                 </div>
-                <h3 className="text-xl md:text-2xl font-bold mt-1 text-white">
+                <h3 className="text-lg md:text-xl font-bold mt-1 text-white leading-tight">
                   {isDemo ? 'Nâng Cấp Bản Quyền Doanh Nghiệp (Enterprise)' : 'Thông Tin Bản Quyền Doanh Nghiệp'}
                 </h3>
-                <p className="text-sm text-white/80 mt-0.5">
+                <p className="text-xs md:text-sm text-white/85 mt-0.5 leading-snug">
                   Mở khóa 100% tính năng, bỏ mọi giới hạn tài sản, nhân sự & xuất báo cáo
                 </p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/20 transition-colors"
+              className="p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/20 transition-colors shrink-0 ml-2"
+              title="Đóng cửa sổ"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {triggerReason && isDemo && (
-            <div className="mt-4 p-3 rounded-xl bg-amber-400/20 border border-amber-300/40 text-amber-100 text-xs md:text-sm flex items-center gap-2">
+            <div className="mt-3 p-2.5 rounded-xl bg-amber-400/20 border border-amber-300/40 text-amber-100 text-xs md:text-sm flex items-center gap-2 relative z-10">
               <Lock className="w-4 h-4 text-amber-300 shrink-0" />
               <span><strong>Thông báo giới hạn:</strong> {triggerReason}</span>
             </div>
           )}
+        </div>
 
-          {/* Sub Navigation */}
-          <div className="flex gap-2 mt-4 pt-2 border-t border-white/15">
+        {/* Sub Navigation Bar - Dedicated and clean */}
+        <div className="px-6 pt-3 pb-2.5 bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700/80 shrink-0">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 dark:bg-slate-900/70 rounded-2xl overflow-x-auto">
             <button
+              type="button"
               onClick={() => setActiveTab('activate')}
-              className={`px-4 py-1.5 rounded-xl text-xs md:text-sm font-semibold transition-all ${activeTab === 'activate'
-                  ? 'bg-white text-slate-900 shadow-md'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-                }`}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+                activeTab === 'activate'
+                  ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 hover:bg-white/50 dark:hover:bg-slate-800/50'
+              }`}
             >
-              🔑 Nhập Mã Bản Quyền
+              <span>🔑</span>
+              <span>Nhập Mã Bản Quyền</span>
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('pricing')}
-              className={`px-4 py-1.5 rounded-xl text-xs md:text-sm font-semibold transition-all ${activeTab === 'pricing'
-                  ? 'bg-white text-slate-900 shadow-md'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-                }`}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+                activeTab === 'pricing'
+                  ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 hover:bg-white/50 dark:hover:bg-slate-800/50'
+              }`}
             >
-              ⚡ So Sánh Tính Năng
+              <span>⚡</span>
+              <span>So Sánh Tính Năng</span>
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('contact')}
-              className={`px-4 py-1.5 rounded-xl text-xs md:text-sm font-semibold transition-all ${activeTab === 'contact'
-                  ? 'bg-white text-slate-900 shadow-md'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-                }`}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+                activeTab === 'contact'
+                  ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 hover:bg-white/50 dark:hover:bg-slate-800/50'
+              }`}
             >
-              💳 Mua Bản Quyền & Hotline
+              <span>💳</span>
+              <span>Mua Bản Quyền & Hotline</span>
             </button>
           </div>
         </div>
@@ -484,7 +496,7 @@ export function UpgradeModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 shrink-0">
           <div className="flex items-center gap-1.5">
             <Building2 className="w-4 h-4 text-indigo-500" />
             <span>OMNI ASSETS Enterprise Suite &copy; 2026</span>
