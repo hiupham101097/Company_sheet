@@ -24,12 +24,20 @@ async function request(endpoint, options = {}) {
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.message || 'Lỗi kết nối máy chủ');
+    const err = new Error(data.message || 'Lỗi kết nối máy chủ');
+    err.code = data.code;
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
 
 export const api = {
+  // Bản Quyền & Giấy Phép (License & Paywall)
+  getLicenseStatus: () => request('/license/status'),
+  activateLicense: (data) => request('/license/activate', { method: 'POST', body: JSON.stringify(data) }),
+  resetDemoLicense: () => request('/license/reset-demo', { method: 'POST' }),
+
   // Xác thực đăng nhập & Đăng ký doanh nghiệp
   login: (credentials) => request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   registerCompany: (data) => request('/auth/register-company', { method: 'POST', body: JSON.stringify(data) }),

@@ -267,6 +267,18 @@ app.get('/api/assets', async (c) => {
 
 app.post('/api/assets', async (c) => {
   try {
+    const license = await getLicenseStatus(c.env.DB);
+    if (license.isDemo) {
+      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM assets').first())?.count || 0;
+      if (count >= 5) {
+        return c.json({
+          success: false,
+          code: 'LICENSE_LIMIT_REACHED',
+          message: 'Bản Dùng Thử (Demo) giới hạn tối đa 5 tài sản. Vui lòng kích hoạt Bản Quyền Doanh Nghiệp (Enterprise) để thêm tài sản không giới hạn!'
+        }, 403);
+      }
+    }
+
     const body = await c.req.json();
     const id = `ast_${Date.now()}`;
     const code = body.code || `TS-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
@@ -408,6 +420,18 @@ app.get('/api/finance/monthly-summary', async (c) => {
 
 app.post('/api/finance', async (c) => {
   try {
+    const license = await getLicenseStatus(c.env.DB);
+    if (license.isDemo) {
+      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM finance').first())?.count || 0;
+      if (count >= 5) {
+        return c.json({
+          success: false,
+          code: 'LICENSE_LIMIT_REACHED',
+          message: 'Bản Dùng Thử (Demo) giới hạn tối đa 5 giao dịch thu chi. Vui lòng kích hoạt Bản Quyền Doanh Nghiệp để ghi nhận không giới hạn!'
+        }, 403);
+      }
+    }
+
     const body = await c.req.json();
     const id = `fin_${Date.now()}`;
     const invoice = body.invoice_number || `HD-${Date.now().toString().slice(-6)}`;
@@ -545,6 +569,18 @@ app.get('/api/contracts', async (c) => {
 
 app.post('/api/contracts', async (c) => {
   try {
+    const license = await getLicenseStatus(c.env.DB);
+    if (license.isDemo) {
+      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM contracts').first())?.count || 0;
+      if (count >= 3) {
+        return c.json({
+          success: false,
+          code: 'LICENSE_LIMIT_REACHED',
+          message: 'Bản Dùng Thử (Demo) giới hạn tối đa 3 hợp đồng. Vui lòng kích hoạt Bản Quyền Doanh Nghiệp để lưu trữ không giới hạn!'
+        }, 403);
+      }
+    }
+
     const body = await c.req.json();
     const id = `ctr_${Date.now()}`;
     const code = body.code || `HĐ-${new Date().getFullYear()}/${Math.floor(10 + Math.random() * 90)}`;
@@ -798,6 +834,18 @@ app.post('/api/users', async (c) => {
       return c.json({ success: false, message: 'Chỉ Quản trị viên (ADMIN) mới có quyền thêm nhân sự' }, 403);
     }
 
+    const license = await getLicenseStatus(c.env.DB);
+    if (license.isDemo) {
+      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM users').first())?.count || 0;
+      if (count >= 4) {
+        return c.json({
+          success: false,
+          code: 'LICENSE_LIMIT_REACHED',
+          message: 'Bản Dùng Thử (Demo) giới hạn tối đa 4 tài khoản nhân sự. Vui lòng kích hoạt Bản Quyền Doanh Nghiệp (Enterprise) để tiếp nhận nhân sự không giới hạn!'
+        }, 403);
+      }
+    }
+
     const body = await c.req.json();
     const id = `usr_${Date.now()}`;
     await c.env.DB.prepare(`
@@ -1000,7 +1048,12 @@ async function initSettingsTable(db) {
       ['currency', 'VND', 'GENERAL', 'Đơn vị tiền tệ chính', new Date().toISOString()],
       ['system_announcement', 'Chào mừng bạn đến với hệ thống quản trị vận hành OMNI ASSETS!', 'GENERAL', 'Thông báo chung trên bảng tin', new Date().toISOString()],
       ['allow_user_registration', 'false', 'GENERAL', 'Cho phép nhân viên tự tạo tài khoản', new Date().toISOString()],
-      ['gemini_api_key', '', 'GENERAL', 'Google Gemini AI API Key', new Date().toISOString()]
+      ['gemini_api_key', '', 'GENERAL', 'Google Gemini AI API Key', new Date().toISOString()],
+      // LICENSE & PAYWALL
+      ['license_tier', 'DEMO', 'LICENSE', 'Cấp độ bản quyền (DEMO hoặc ENTERPRISE)', new Date().toISOString()],
+      ['license_key', '', 'LICENSE', 'Khóa bản quyền đã kích hoạt', new Date().toISOString()],
+      ['license_status', 'ACTIVE', 'LICENSE', 'Trạng thái bản quyền', new Date().toISOString()],
+      ['license_activated_at', '', 'LICENSE', 'Thời gian kích hoạt bản quyền', new Date().toISOString()]
     ];
 
     for (const [key, val, cat, desc, upd] of defaults) {
@@ -1011,6 +1064,27 @@ async function initSettingsTable(db) {
     }
   } catch (e) {
     console.error('Error initSettingsTable:', e);
+  }
+}
+
+// Helper: Query license status from DB
+async function getLicenseStatus(db) {
+  try {
+    const res = await db.prepare('SELECT key, value FROM system_settings WHERE key IN ("license_tier", "license_key", "license_status", "license_activated_at", "company_name")').all();
+    const map = {};
+    (res.results || []).forEach((r) => { map[r.key] = r.value; });
+    const tier = map.license_tier || 'DEMO';
+    const isDemo = tier !== 'ENTERPRISE';
+    return {
+      tier: isDemo ? 'DEMO' : 'ENTERPRISE',
+      isDemo,
+      key: map.license_key || '',
+      status: map.license_status || 'ACTIVE',
+      activatedAt: map.license_activated_at || null,
+      organization: map.company_name || 'Doanh Nghiệp'
+    };
+  } catch {
+    return { tier: 'DEMO', isDemo: true, key: '', status: 'ACTIVE', activatedAt: null, organization: 'Doanh Nghiệp' };
   }
 }
 
@@ -1070,6 +1144,131 @@ app.put('/api/settings', async (c) => {
         raw: rows,
         settings: settingsMap
       }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// ========================
+// 10.5 LICENSE & PAYWALL
+// ========================
+app.get('/api/license/status', async (c) => {
+  try {
+    await initSettingsTable(c.env.DB);
+    const license = await getLicenseStatus(c.env.DB);
+    const [assetsCount, usersCount, contractsCount, financeCount] = await Promise.all([
+      c.env.DB.prepare('SELECT count(*) as count FROM assets').first().catch(() => ({ count: 0 })),
+      c.env.DB.prepare('SELECT count(*) as count FROM users').first().catch(() => ({ count: 0 })),
+      c.env.DB.prepare('SELECT count(*) as count FROM contracts').first().catch(() => ({ count: 0 })),
+      c.env.DB.prepare('SELECT count(*) as count FROM finance').first().catch(() => ({ count: 0 })),
+    ]);
+
+    return c.json({
+      success: true,
+      data: {
+        ...license,
+        limits: {
+          assets: { current: assetsCount?.count || 0, max: license.isDemo ? 5 : 'UNLIMITED' },
+          users: { current: usersCount?.count || 0, max: license.isDemo ? 4 : 'UNLIMITED' },
+          contracts: { current: contractsCount?.count || 0, max: license.isDemo ? 3 : 'UNLIMITED' },
+          finance: { current: financeCount?.count || 0, max: license.isDemo ? 5 : 'UNLIMITED' },
+          excelExport: !license.isDemo,
+          unwatermarkedPrint: !license.isDemo
+        }
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+app.post('/api/license/activate', async (c) => {
+  try {
+    const { license_key } = await c.req.json().catch(() => ({}));
+    const cleanKey = (license_key || '').trim().toUpperCase();
+
+    if (!cleanKey) {
+      return c.json({ success: false, message: 'Vui lòng nhập mã bản quyền (License Key)' }, 400);
+    }
+
+    // Supported key formats:
+    // 1. Predefined standard keys: OMNI-ENTERPRISE-2026, OMNI-VIP-8888, OMNI-PRO-9999, OMNI-LIFETIME-PRO
+    // 2. Pattern: OMNI-XXXX-XXXX-XXXX or prefix OMNI-ENT-
+    const validPredefined = [
+      'OMNI-ENTERPRISE-2026',
+      'OMNI-VIP-8888',
+      'OMNI-PRO-9999',
+      'OMNI-LIFETIME-PRO',
+      'OMNI-VIP-2026',
+      'ENTERPRISE-PRO-8888'
+    ];
+
+    const pattern = /^OMNI-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+    const entPrefix = cleanKey.startsWith('OMNI-ENT-');
+
+    if (!validPredefined.includes(cleanKey) && !pattern.test(cleanKey) && !entPrefix) {
+      return c.json({
+        success: false,
+        message: 'Mã bản quyền không hợp lệ. Vui lòng kiểm tra lại hoặc liên hệ Hotline/Zalo để được cấp mã kích hoạt.'
+      }, 400);
+    }
+
+    const now = new Date().toISOString();
+    await initSettingsTable(c.env.DB);
+
+    await c.env.DB.prepare(`
+      UPDATE system_settings
+      SET value = 'ENTERPRISE', updated_at = ?
+      WHERE key = 'license_tier'
+    `).bind(now).run();
+
+    await c.env.DB.prepare(`
+      UPDATE system_settings
+      SET value = ?, updated_at = ?
+      WHERE key = 'license_key'
+    `).bind(cleanKey, now).run();
+
+    await c.env.DB.prepare(`
+      UPDATE system_settings
+      SET value = ?, updated_at = ?
+      WHERE key = 'license_activated_at'
+    `).bind(now, now).run();
+
+    return c.json({
+      success: true,
+      message: '🎉 Kích hoạt Bản Quyền Doanh Nghiệp (Enterprise) thành công! Mọi chức năng đã được mở khóa toàn diện.',
+      data: {
+        tier: 'ENTERPRISE',
+        isDemo: false,
+        key: cleanKey,
+        activatedAt: now
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+app.post('/api/license/reset-demo', async (c) => {
+  try {
+    const now = new Date().toISOString();
+    await c.env.DB.prepare(`
+      UPDATE system_settings
+      SET value = 'DEMO', updated_at = ?
+      WHERE key = 'license_tier'
+    `).bind(now).run();
+
+    await c.env.DB.prepare(`
+      UPDATE system_settings
+      SET value = '', updated_at = ?
+      WHERE key = 'license_key'
+    `).bind(now).run();
+
+    return c.json({
+      success: true,
+      message: 'Đã chuyển về chế độ Dùng Thử (Demo) để kiểm thử các giới hạn tính năng.',
+      data: { tier: 'DEMO', isDemo: true }
     });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);

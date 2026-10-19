@@ -7,7 +7,10 @@ import {
   LogOut,
   AlertTriangle,
   Settings,
-  Menu
+  Menu,
+  Crown,
+  Zap,
+  ShieldCheck
 } from 'lucide-react';
 import { api } from '../../services/api';
 
@@ -17,7 +20,9 @@ export function Navbar({
   currentUser,
   onLogout,
   onToggleSidebar,
-  onNavigate
+  onNavigate,
+  licenseInfo,
+  onOpenUpgrade
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
@@ -90,6 +95,28 @@ export function Navbar({
             <span className="hidden sm:inline">Check-out</span>
           </button>
         </div>
+
+        {/* License Status Badge */}
+        {licenseInfo?.isDemo ? (
+          <button
+            onClick={() => onOpenUpgrade && onOpenUpgrade('Khám phá và nâng cấp Bản Quyền Enterprise để mở khóa toàn bộ hệ thống')}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95"
+            title="Đang dùng bản Demo - Bấm để nâng cấp Enterprise"
+          >
+            <Crown size={14} className="text-amber-200" />
+            <span className="hidden sm:inline">Bản Demo</span>
+            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-semibold">Nâng cấp</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => onOpenUpgrade && onOpenUpgrade()}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold shadow-xs transition-all"
+            title="Bản Quyền Enterprise Vĩnh Viễn"
+          >
+            <Crown size={14} className="text-amber-500" />
+            <span className="hidden sm:inline">Enterprise</span>
+          </button>
+        )}
 
         {/* Settings button */}
         {(currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER') && onNavigate && (

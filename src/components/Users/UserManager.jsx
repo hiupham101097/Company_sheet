@@ -4,7 +4,13 @@ import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
 import { api } from '../../services/api';
 
-export function UserManager({ users = [], onRefresh, userRole = 'ADMIN' }) {
+export function UserManager({ 
+  users = [], 
+  onRefresh, 
+  userRole = 'ADMIN',
+  licenseInfo,
+  onOpenUpgrade
+}) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [departments, setDepartments] = useState([]);
   const [formData, setFormData] = useState({
@@ -47,6 +53,16 @@ export function UserManager({ users = [], onRefresh, userRole = 'ADMIN' }) {
     STAFF: { label: 'Nhân viên', variant: 'info' }
   };
 
+  const handleOpenAddModal = () => {
+    if (licenseInfo?.isDemo && users.length >= 4) {
+      if (onOpenUpgrade) {
+        onOpenUpgrade('Phiên bản Dùng Thử (Demo) giới hạn tối đa 4 nhân viên. Vui lòng kích hoạt Bản Quyền Enterprise để mở rộng quy mô nhân sự không giới hạn!');
+      }
+      return;
+    }
+    setIsModalOpen(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -61,6 +77,10 @@ export function UserManager({ users = [], onRefresh, userRole = 'ADMIN' }) {
       });
       if (onRefresh) onRefresh();
     } catch (err) {
+      if (err.code === 'LICENSE_LIMIT_REACHED' && onOpenUpgrade) {
+        onOpenUpgrade(err.message);
+        return;
+      }
       alert(err.message || 'Lỗi thêm nhân sự');
     }
   };
@@ -73,13 +93,20 @@ export function UserManager({ users = [], onRefresh, userRole = 'ADMIN' }) {
           <h2 className="text-xl font-bold text-slate-800 tracking-tight">
             Quản Lý Nhân Sự & Người Sử Dụng
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500">
-            Danh sách cán bộ nhân viên, phân quyền truy cập hệ thống và quản lý tài sản bàn giao.
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs sm:text-sm text-slate-500">
+              Danh sách cán bộ nhân viên, phân quyền truy cập hệ thống ({users.length} thành viên).
+            </p>
+            {licenseInfo?.isDemo && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold border border-amber-200">
+                Demo: {users.length}/4 nhân sự
+              </span>
+            )}
+          </div>
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenAddModal}
           className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
         >
           <Plus size={16} />

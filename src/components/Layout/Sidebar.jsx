@@ -10,6 +10,9 @@ import {
   FolderTree,
   Settings,
   ChevronRight,
+  Crown,
+  Zap,
+  ShieldCheck,
   X
 } from 'lucide-react';
 
@@ -19,7 +22,9 @@ export function Sidebar({
   userRole = 'ADMIN',
   overdueCount = 0,
   isOpen = false,
-  onClose
+  onClose,
+  licenseInfo,
+  onOpenUpgrade
 }) {
   const allMenuItems = [
     { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
@@ -136,6 +141,52 @@ export function Sidebar({
               </button>
             );
           })}
+        </div>
+
+        {/* License Status Card in Sidebar */}
+        <div className="px-3 pt-2">
+          {licenseInfo?.isDemo ? (
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-bold text-amber-800">
+                  <Zap size={14} className="text-amber-500 fill-amber-500" />
+                  <span>Bản Dùng Thử</span>
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-200/80 text-amber-900 uppercase">
+                  Demo
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-700/90 leading-tight">
+                Giới hạn 5 tài sản & 4 nhân sự.
+              </p>
+              <button
+                type="button"
+                onClick={onOpenUpgrade}
+                className="w-full py-1.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white font-bold text-xs shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
+              >
+                <Crown size={13} className="text-amber-200" />
+                <span>Nâng Cấp Bản Quyền</span>
+              </button>
+            </div>
+          ) : (
+            <div 
+              onClick={onOpenUpgrade}
+              className="p-3 rounded-2xl bg-gradient-to-br from-indigo-50 to-emerald-50 border border-emerald-200 shadow-xs cursor-pointer hover:border-emerald-300 transition-all"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Crown size={15} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                    <span>Enterprise Full</span>
+                    <ShieldCheck size={12} className="text-emerald-500" />
+                  </p>
+                  <p className="text-[10px] text-emerald-600 font-semibold truncate">Mở khóa toàn diện (∞)</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Quick Settings & System Info at bottom */}

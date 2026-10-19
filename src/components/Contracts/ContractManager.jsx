@@ -15,7 +15,15 @@ import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
 
-export function ContractManager({ contracts = [], handovers = [], assets = [], users = [], onRefresh }) {
+export function ContractManager({ 
+  contracts = [], 
+  handovers = [], 
+  assets = [], 
+  users = [], 
+  onRefresh,
+  licenseInfo,
+  onOpenUpgrade 
+}) {
   const [activeSubTab, setActiveSubTab] = useState('CONTRACTS'); // 'CONTRACTS' hoặc 'HANDOVERS'
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
   const [isHandoverModalOpen, setIsHandoverModalOpen] = useState(false);
@@ -44,6 +52,12 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
 
   const handleExportContracts = () => {
+    if (licenseInfo?.isDemo) {
+      if (onOpenUpgrade) {
+        onOpenUpgrade('Tính năng Xuất Báo Cáo Hợp Đồng Excel chỉ có trên gói Enterprise!');
+      }
+      return;
+    }
     const exportData = contracts.map((c) => ({
       'Số hợp đồng': c.code,
       'Tên hợp đồng': c.title,
@@ -58,6 +72,12 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
   };
 
   const handleExportHandovers = () => {
+    if (licenseInfo?.isDemo) {
+      if (onOpenUpgrade) {
+        onOpenUpgrade('Tính năng Xuất Báo Cáo Biên Bản Bàn Giao Excel chỉ có trên gói Enterprise!');
+      }
+      return;
+    }
     const exportData = handovers.map((h) => ({
       'Số biên bản': h.code,
       'Loại': h.type === 'HANDOVER' ? 'Bàn giao sử dụng' : 'Thu hồi',
@@ -70,6 +90,16 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
       'Ghi chú': h.notes || ''
     }));
     exportToExcel(exportData, 'Danh_Sach_Bien_Ban_Ban_Giao', 'Biên Bản');
+  };
+
+  const handleOpenContractModal = () => {
+    if (licenseInfo?.isDemo && contracts.length >= 3) {
+      if (onOpenUpgrade) {
+        onOpenUpgrade('Phiên bản Dùng Thử (Demo) giới hạn tối đa 3 hợp đồng. Quý khách vui lòng kích hoạt Bản Quyền Enterprise để quản lý không giới hạn!');
+      }
+      return;
+    }
+    setIsContractModalOpen(true);
   };
 
   const handleCreateContract = async (e) => {
@@ -88,6 +118,10 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
       });
       if (onRefresh) onRefresh();
     } catch (err) {
+      if (err.code === 'LICENSE_LIMIT_REACHED' && onOpenUpgrade) {
+        onOpenUpgrade(err.message);
+        return;
+      }
       alert(err.message || 'Lỗi thêm hợp đồng');
     }
   };
@@ -119,9 +153,16 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
           <h2 className="text-xl font-bold text-slate-800 tracking-tight">
             Quản Lý Hợp Đồng & Biên Bản Bàn Giao
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500">
-            Lưu trữ hợp đồng đối tác, văn bản thỏa thuận và in ấn biên bản bàn giao trang thiết bị.
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs sm:text-sm text-slate-500">
+              Lưu trữ hợp đồng đối tác, văn bản thỏa thuận ({contracts.length} hợp đồng) và in ấn biên bản bàn giao.
+            </p>
+            {licenseInfo?.isDemo && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold border border-amber-200">
+                Demo: {contracts.length}/3 hợp đồng
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -131,11 +172,14 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
           >
             <FileSpreadsheet size={16} className="text-pastel-600" />
             <span>Xuất Excel</span>
+            {licenseInfo?.isDemo && (
+              <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-bold">Khóa</span>
+            )}
           </button>
 
           {activeSubTab === 'CONTRACTS' ? (
             <button
-              onClick={() => setIsContractModalOpen(true)}
+              onClick={handleOpenContractModal}
               className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
             >
               <Plus size={16} />
@@ -491,8 +535,18 @@ export function ContractManager({ contracts = [], handovers = [], assets = [], u
             {/* Khung biên bản chuẩn văn bản A4 */}
             <div
               id="printable-handover"
-              className="bg-white p-8 border border-slate-200 rounded-2xl shadow-xs text-slate-900 space-y-5 print:p-0 print:border-none print:shadow-none"
+              className="relative bg-white p-8 border border-slate-200 rounded-2xl shadow-xs text-slate-900 space-y-5 print:p-0 print:border-none print:shadow-none overflow-hidden"
             >
+              {/* Watermark nếu ở chế độ Demo */}
+              {licenseInfo?.isDemo && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center select-none overflow-hidden z-10 opacity-20">
+                  <div className="transform -rotate-45 text-3xl sm:text-4xl font-black text-rose-700 uppercase tracking-widest border-4 border-dashed border-rose-700 p-6 rounded-3xl text-center">
+                    BẢN DÙNG THỬ (DEMO)<br />
+                    <span className="text-xs sm:text-sm font-bold tracking-normal text-rose-600">OMNIASSETS - VUI LÒNG MUA BẢN QUYỀN ĐỂ BỎ WATERMARK</span>
+                  </div>
+                </div>
+              )}
+
               {/* Quốc hiệu tiêu ngữ */}
               <div className="text-center space-y-1">
                 <p className="font-bold text-xs uppercase tracking-widest text-slate-800">

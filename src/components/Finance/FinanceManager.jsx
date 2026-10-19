@@ -23,7 +23,14 @@ import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
 
-export function FinanceManager({ financeList = [], monthlyData, onRefresh, userRole = 'ADMIN' }) {
+export function FinanceManager({ 
+  financeList = [], 
+  monthlyData, 
+  onRefresh, 
+  userRole = 'ADMIN',
+  licenseInfo,
+  onOpenUpgrade
+}) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [categories, setCategories] = useState([]);
@@ -81,6 +88,12 @@ export function FinanceManager({ financeList = [], monthlyData, onRefresh, userR
   });
 
   const handleExportExcel = () => {
+    if (licenseInfo?.isDemo) {
+      if (onOpenUpgrade) {
+        onOpenUpgrade('Tính năng Xuất Báo Cáo Tài Chính Excel chỉ khả dụng cho Bản Quyền Enterprise. Quý khách vui lòng kích hoạt bản quyền để tải báo cáo!');
+      }
+      return;
+    }
     const exportData = filteredList.map((item) => ({
       'Số hóa đơn / Chứng từ': item.invoice_number,
       'Ngày phát sinh': item.date,
@@ -90,6 +103,16 @@ export function FinanceManager({ financeList = [], monthlyData, onRefresh, userR
       'Nội dung diễn giải': item.description
     }));
     exportToExcel(exportData, 'Bao_Cao_Thu_Chi_Doanh_Thu', 'Tài Chính');
+  };
+
+  const handleOpenAddModal = () => {
+    if (licenseInfo?.isDemo && financeList.length >= 5) {
+      if (onOpenUpgrade) {
+        onOpenUpgrade('Phiên bản Dùng Thử (Demo) giới hạn tối đa 5 phiếu thu/chi. Quý khách vui lòng kích hoạt Bản Quyền Enterprise để quản lý không giới hạn!');
+      }
+      return;
+    }
+    setIsModalOpen(true);
   };
 
   const handleSubmit = async (e) => {
@@ -107,6 +130,10 @@ export function FinanceManager({ financeList = [], monthlyData, onRefresh, userR
       });
       if (onRefresh) onRefresh();
     } catch (err) {
+      if (err.code === 'LICENSE_LIMIT_REACHED' && onOpenUpgrade) {
+        onOpenUpgrade(err.message);
+        return;
+      }
       alert(err.message || 'Lỗi thêm giao dịch');
     }
   };
@@ -130,9 +157,16 @@ export function FinanceManager({ financeList = [], monthlyData, onRefresh, userR
           <h2 className="text-xl font-bold text-slate-800 tracking-tight">
             Quản Lý Doanh Thu & Tài Chính Hàng Tháng
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500">
-            Theo dõi dòng tiền thu chi, biên lợi nhuận ròng và thống kê báo cáo kết quả kinh doanh.
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs sm:text-sm text-slate-500">
+              Theo dõi dòng tiền thu chi ({financeList.length} phiếu ghi), biên lợi nhuận ròng và thống kê kết quả kinh doanh.
+            </p>
+            {licenseInfo?.isDemo && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold border border-amber-200">
+                Demo: {financeList.length}/5 phiếu
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -142,9 +176,12 @@ export function FinanceManager({ financeList = [], monthlyData, onRefresh, userR
           >
             <FileSpreadsheet size={16} className="text-pastel-600" />
             <span>Xuất Excel Báo Cáo</span>
+            {licenseInfo?.isDemo && (
+              <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-bold">Khóa</span>
+            )}
           </button>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenAddModal}
             className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
           >
             <Plus size={16} />

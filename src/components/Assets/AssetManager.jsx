@@ -19,7 +19,14 @@ import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
 
-export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'ADMIN' }) {
+export function AssetManager({ 
+  assets = [], 
+  users = [], 
+  onRefresh, 
+  userRole = 'ADMIN',
+  licenseInfo,
+  onOpenUpgrade 
+}) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedAsset, setSelectedAsset] = useState(null);
@@ -77,6 +84,12 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
   };
 
   const handleExportExcel = () => {
+    if (licenseInfo?.isDemo) {
+      if (onOpenUpgrade) {
+        onOpenUpgrade('Tính năng Xuất Báo Cáo Excel chỉ có trên gói Bản Quyền Enterprise. Quý khách vui lòng kích hoạt bản quyền để xuất báo cáo!');
+      }
+      return;
+    }
     const exportData = filteredAssets.map((a) => ({
       'Mã tài sản': a.code,
       'Tên tài sản / Thiết bị': a.name,
@@ -90,6 +103,16 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
       'Ghi chú': a.notes || ''
     }));
     exportToExcel(exportData, 'Danh_Muc_Tai_San_Doanh_Nghiep', 'Tài Sản');
+  };
+
+  const handleOpenAddModal = () => {
+    if (licenseInfo?.isDemo && assets.length >= 5) {
+      if (onOpenUpgrade) {
+        onOpenUpgrade('Phiên bản Dùng Thử (Demo) chỉ cho phép quản lý tối đa 5 tài sản. Quý khách vui lòng kích hoạt Bản Quyền Enterprise để quản lý không giới hạn!');
+      }
+      return;
+    }
+    setIsAddModalOpen(true);
   };
 
   const handleSubmitAsset = async (e) => {
@@ -110,6 +133,10 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
       });
       if (onRefresh) onRefresh();
     } catch (err) {
+      if (err.code === 'LICENSE_LIMIT_REACHED' && onOpenUpgrade) {
+        onOpenUpgrade(err.message);
+        return;
+      }
       alert(err.message || 'Lỗi thêm tài sản');
     }
   };
@@ -133,9 +160,16 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
           <h2 className="text-xl font-bold text-slate-800 tracking-tight">
             Quản Lý Tài Sản & Thiết Bị
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500">
-            Tổng số: <span className="font-bold text-pastel-700">{assets.length}</span> thiết bị trong hệ thống cơ sở vật chất.
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs sm:text-sm text-slate-500">
+              Tổng số: <span className="font-bold text-pastel-700">{assets.length}</span> thiết bị trong hệ thống cơ sở vật chất.
+            </p>
+            {licenseInfo?.isDemo && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold border border-amber-200">
+                Demo: {assets.length}/5 tài sản
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -145,10 +179,13 @@ export function AssetManager({ assets = [], users = [], onRefresh, userRole = 'A
           >
             <FileSpreadsheet size={16} className="text-pastel-600" />
             <span>Xuất Excel</span>
+            {licenseInfo?.isDemo && (
+              <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-bold">Khóa</span>
+            )}
           </button>
           {userRole !== 'STAFF' && (
             <button
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={handleOpenAddModal}
               className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
             >
               <Plus size={16} />

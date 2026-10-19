@@ -12,11 +12,22 @@ import {
   Calendar,
   Coffee,
   Info,
-  RefreshCw
+  RefreshCw,
+  Crown,
+  Key,
+  Zap,
+  ShieldCheck,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { api } from '../../services/api';
 
-export function SettingsManager({ userRole = 'ADMIN', onRefresh }) {
+export function SettingsManager({ 
+  userRole = 'ADMIN', 
+  onRefresh, 
+  licenseInfo, 
+  onOpenUpgrade 
+}) {
   const [activeSubTab, setActiveSubTab] = useState('attendance');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -197,6 +208,23 @@ export function SettingsManager({ userRole = 'ADMIN', onRefresh }) {
         >
           <Info size={15} />
           <span>Tổng Quan Vận Hành</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('license')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
+            activeSubTab === 'license'
+              ? 'border-indigo-600 text-indigo-700 bg-white shadow-xs'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/50'
+          }`}
+        >
+          <Crown size={15} className={activeSubTab === 'license' ? 'text-amber-500' : 'text-slate-400'} />
+          <span>Bản Quyền & Giấy Phép</span>
+          {licenseInfo?.isDemo ? (
+            <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full font-bold">Demo</span>
+          ) : (
+            <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full font-bold">Pro</span>
+          )}
         </button>
       </div>
 
@@ -566,6 +594,164 @@ export function SettingsManager({ userRole = 'ADMIN', onRefresh }) {
                 <li><strong>Quản Lý (MANAGER):</strong> Có quyền xem và chỉnh sửa thông số vận hành ca làm việc.</li>
                 <li><strong>Nhân Viên (STAFF):</strong> Chỉ được xem thông tin giờ vào/ra và thực hiện Check-in / Check-out theo quy định.</li>
               </ul>
+            </div>
+          </div>
+        )}
+
+        {/* ================= TAB 4: LICENSE & PAYWALL ================= */}
+        {activeSubTab === 'license' && (
+          <div className="space-y-6">
+            {/* Status Hero Card */}
+            <div className={`p-6 rounded-3xl border shadow-soft ${
+              licenseInfo?.isDemo 
+                ? 'bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 border-amber-200' 
+                : 'bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-emerald-500/10 border-emerald-200'
+            }`}>
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-md ${
+                    licenseInfo?.isDemo ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'
+                  }`}>
+                    <Crown size={28} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                        licenseInfo?.isDemo 
+                          ? 'bg-amber-100 text-amber-800 border border-amber-300' 
+                          : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      }`}>
+                        {licenseInfo?.isDemo ? 'Bản Dùng Thử (DEMO)' : 'Bản Quyền Doanh Nghiệp (ENTERPRISE)'}
+                      </span>
+                      {!licenseInfo?.isDemo && (
+                        <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                          <ShieldCheck size={14} /> Vĩnh viễn
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800 mt-1">
+                      {licenseInfo?.isDemo 
+                        ? 'Hệ thống đang hoạt động ở chế độ Giới Hạn Tính Năng' 
+                        : 'Hệ thống đã kích hoạt toàn quyền Doanh Nghiệp không giới hạn'}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {licenseInfo?.isDemo 
+                        ? 'Nâng cấp bản quyền để bỏ giới hạn 5 tài sản, 4 nhân viên và gỡ bỏ watermark trên văn bản A4.' 
+                        : `Mã bản quyền: ${licenseInfo?.key || 'OMNI-ENTERPRISE-VERIFIED'}`}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onOpenUpgrade && onOpenUpgrade()}
+                  className={`px-5 py-3 rounded-xl font-bold text-xs shadow-soft flex items-center gap-2 transition-all active:scale-95 ${
+                    licenseInfo?.isDemo 
+                      ? 'bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white shadow-amber-500/20' 
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300'
+                  }`}
+                >
+                  <Key size={16} className={licenseInfo?.isDemo ? 'text-amber-200' : 'text-indigo-600'} />
+                  <span>{licenseInfo?.isDemo ? 'Nâng Cấp Bản Quyền Ngay' : 'Xem / Nhập Mã Bản Quyền Khác'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quota Limits Cards */}
+            <div>
+              <h4 className="text-sm font-bold text-slate-800 mb-3">Hạn Mức & Định Lượng Tài Nguyên</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  {
+                    label: 'Tài sản & Thiết bị',
+                    current: licenseInfo?.limits?.assets?.current ?? '...',
+                    max: licenseInfo?.limits?.assets?.max ?? (licenseInfo?.isDemo ? 5 : '∞'),
+                    desc: 'Máy tính, laptop, màn hình...'
+                  },
+                  {
+                    label: 'Nhân sự & Người dùng',
+                    current: licenseInfo?.limits?.users?.current ?? '...',
+                    max: licenseInfo?.limits?.users?.max ?? (licenseInfo?.isDemo ? 4 : '∞'),
+                    desc: 'Tài khoản nhân viên công ty'
+                  },
+                  {
+                    label: 'Hợp đồng & Biên bản',
+                    current: licenseInfo?.limits?.contracts?.current ?? '...',
+                    max: licenseInfo?.limits?.contracts?.max ?? (licenseInfo?.isDemo ? 3 : '∞'),
+                    desc: 'Hợp đồng & biên bản giao nhận'
+                  },
+                  {
+                    label: 'Giao dịch Thu / Chi',
+                    current: licenseInfo?.limits?.finance?.current ?? '...',
+                    max: licenseInfo?.limits?.finance?.max ?? (licenseInfo?.isDemo ? 5 : '∞'),
+                    desc: 'Phiếu thu, chi và hóa đơn'
+                  }
+                ].map((item, idx) => {
+                  const isMax = licenseInfo?.isDemo && Number(item.current) >= Number(item.max);
+                  return (
+                    <div 
+                      key={idx}
+                      className={`p-4 rounded-2xl bg-white border shadow-soft transition-all ${
+                        isMax ? 'border-rose-300 ring-1 ring-rose-200' : 'border-pastel-200/90'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-slate-600">{item.label}</span>
+                        {licenseInfo?.isDemo ? (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            isMax ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {isMax ? 'Đã chạm trần' : 'Demo'}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                            Vô hạn
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 flex items-baseline gap-1">
+                        <span className="text-2xl font-black text-slate-800">{item.current}</span>
+                        <span className="text-xs text-slate-400 font-semibold">/ {item.max}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">{item.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Rights Breakdown List */}
+            <div className="bg-white p-6 rounded-3xl border border-pastel-200/90 shadow-soft space-y-4">
+              <h4 className="text-sm font-bold text-slate-800">Quyền Lợi Giữa 2 Gói</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-2">
+                  <div className="flex items-center gap-2 text-amber-800 font-bold">
+                    <Lock size={15} />
+                    <span>Giới hạn trên Bản Dùng Thử (Demo):</span>
+                  </div>
+                  <ul className="space-y-1.5 text-amber-900/80 pl-5 list-disc text-[11px]">
+                    <li>Khóa sau khi đạt tối đa 5 tài sản công ty.</li>
+                    <li>Giới hạn 4 nhân sự trong danh sách nhân viên.</li>
+                    <li>Tối đa 3 hợp đồng thỏa thuận và biên bản bàn giao.</li>
+                    <li>Biên bản in khổ A4 có đóng dấu mờ (Watermark) bản quyền.</li>
+                    <li>Khóa tính năng xuất báo cáo ra file Excel.</li>
+                  </ul>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-800 font-bold">
+                    <Unlock size={15} />
+                    <span>Quyền lợi Bản Quyền Doanh Nghiệp (Enterprise):</span>
+                  </div>
+                  <ul className="space-y-1.5 text-emerald-900/80 pl-5 list-disc text-[11px]">
+                    <li>Mở khóa 100% tài sản không giới hạn số lượng.</li>
+                    <li>Toàn bộ nhân sự, phòng ban và phân quyền đầy đủ.</li>
+                    <li>Xuất biên bản A4 in ấn chuẩn văn bản nhà nước sạch sẽ.</li>
+                    <li>Xuất dữ liệu Excel / CSV toàn bộ hệ thống.</li>
+                    <li>Bảo hành và cập nhật phiên bản mới nhất vĩnh viễn.</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         )}

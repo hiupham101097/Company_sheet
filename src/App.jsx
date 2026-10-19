@@ -11,6 +11,7 @@ import { UserManager } from './components/Users/UserManager';
 import { CategoryManager } from './components/Categories/CategoryManager';
 import { SettingsManager } from './components/Settings/SettingsManager';
 import { AIAssistantWidget } from './components/AI/AIAssistantWidget';
+import { UpgradeModal } from './components/License/UpgradeModal';
 import { Login } from './components/Auth/Login';
 import { api } from './services/api';
 import { Loader2 } from 'lucide-react';
@@ -28,6 +29,16 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // License & Paywall state
+  const [licenseInfo, setLicenseInfo] = useState({ isDemo: true, tier: 'DEMO', limits: {} });
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [upgradeTriggerReason, setUpgradeTriggerReason] = useState('');
+
+  const handleOpenUpgrade = (reason = '') => {
+    setUpgradeTriggerReason(reason);
+    setIsUpgradeModalOpen(true);
+  };
 
   // Global State
   const [summaryData, setSummaryData] = useState(null);
@@ -56,7 +67,8 @@ export default function App() {
         handRes,
         attRes,
         attSumRes,
-        usrRes
+        usrRes,
+        licRes
       ] = await Promise.all([
         api.getDashboardSummary(),
         api.getMonthlySummary(),
@@ -68,6 +80,7 @@ export default function App() {
         api.getAttendance(),
         api.getAttendanceSummary(),
         api.getUsers(),
+        api.getLicenseStatus().catch(() => ({ success: false, data: { isDemo: true, tier: 'DEMO' } }))
       ]);
 
       setSummaryData(sumRes.data);
@@ -80,6 +93,9 @@ export default function App() {
       setAttendanceList(attRes.data || []);
       setAttendanceSummary(attSumRes.data);
       setUsers(usrRes.data || []);
+      if (licRes && licRes.data) {
+        setLicenseInfo(licRes.data);
+      }
     } catch (err) {
       console.error('Lỗi khi tải dữ liệu từ Cloudflare D1:', err);
     } finally {
@@ -121,6 +137,8 @@ export default function App() {
         overdueCount={overdueCount}
         isOpen={isMobileSidebarOpen}
         onClose={() => setIsMobileSidebarOpen(false)}
+        licenseInfo={licenseInfo}
+        onOpenUpgrade={handleOpenUpgrade}
       />
 
       {/* Main Content Area */}
@@ -132,6 +150,8 @@ export default function App() {
           onLogout={handleLogout}
           onToggleSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
           onNavigate={setCurrentTab}
+          licenseInfo={licenseInfo}
+          onOpenUpgrade={handleOpenUpgrade}
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
@@ -147,6 +167,8 @@ export default function App() {
                   summaryData={summaryData}
                   monthlyData={monthlyData}
                   onNavigate={setCurrentTab}
+                  licenseInfo={licenseInfo}
+                  onOpenUpgrade={handleOpenUpgrade}
                 />
               )}
 
@@ -156,6 +178,8 @@ export default function App() {
                   users={users}
                   userRole={currentUser?.role}
                   onRefresh={loadAllData}
+                  licenseInfo={licenseInfo}
+                  onOpenUpgrade={handleOpenUpgrade}
                 />
               )}
 
@@ -165,6 +189,8 @@ export default function App() {
                   monthlyData={monthlyData}
                   userRole={currentUser?.role}
                   onRefresh={loadAllData}
+                  licenseInfo={licenseInfo}
+                  onOpenUpgrade={handleOpenUpgrade}
                 />
               )}
 
@@ -174,6 +200,8 @@ export default function App() {
                   users={users}
                   currentUserId={currentUser?.id}
                   onRefresh={loadAllData}
+                  licenseInfo={licenseInfo}
+                  onOpenUpgrade={handleOpenUpgrade}
                 />
               )}
 
@@ -184,6 +212,8 @@ export default function App() {
                   assets={assets}
                   users={users}
                   onRefresh={loadAllData}
+                  licenseInfo={licenseInfo}
+                  onOpenUpgrade={handleOpenUpgrade}
                 />
               )}
 
@@ -193,6 +223,8 @@ export default function App() {
                   users={users}
                   summary={attendanceSummary}
                   onRefresh={loadAllData}
+                  licenseInfo={licenseInfo}
+                  onOpenUpgrade={handleOpenUpgrade}
                 />
               )}
 
@@ -201,12 +233,16 @@ export default function App() {
                   users={users}
                   userRole={currentUser?.role}
                   onRefresh={loadAllData}
+                  licenseInfo={licenseInfo}
+                  onOpenUpgrade={handleOpenUpgrade}
                 />
               )}
 
               {currentTab === 'categories' && (
                 <CategoryManager
                   userRole={currentUser?.role}
+                  licenseInfo={licenseInfo}
+                  onOpenUpgrade={handleOpenUpgrade}
                 />
               )}
 
@@ -214,6 +250,8 @@ export default function App() {
                 <SettingsManager
                   userRole={currentUser?.role}
                   onRefresh={loadAllData}
+                  licenseInfo={licenseInfo}
+                  onOpenUpgrade={handleOpenUpgrade}
                 />
               )}
             </>
@@ -227,6 +265,18 @@ export default function App() {
         userRole={currentUser?.role || 'STAFF'}
         currentUser={currentUser}
         onNavigate={setCurrentTab}
+      />
+
+      {/* Upgrade / License Modal */}
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        licenseInfo={licenseInfo}
+        triggerReason={upgradeTriggerReason}
+        onLicenseUpdated={(newInfo) => {
+          setLicenseInfo(newInfo);
+          loadAllData();
+        }}
       />
     </div>
   );
