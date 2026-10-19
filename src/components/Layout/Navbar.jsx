@@ -46,8 +46,8 @@ export function Navbar({
 
   return (
     <header className="h-16 bg-white/95 backdrop-blur-md border-b border-pastel-200/80 sticky top-0 z-20 px-4 sm:px-6 flex items-center justify-between shadow-xs">
-      {/* Left: Mobile Menu Toggle & Search */}
-      <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+      {/* Left: Mobile Menu Toggle & Brand */}
+      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 pr-2">
         <button
           onClick={onToggleSidebar}
           className="p-2 rounded-xl text-slate-600 hover:text-pastel-700 hover:bg-pastel-50 transition-colors lg:hidden shrink-0"
@@ -56,13 +56,14 @@ export function Navbar({
           <Menu size={20} />
         </button>
 
-        {/* Mobile Brand Logo */}
+        {/* Mobile Brand Logo & Name */}
         <div className="flex items-center gap-1.5 lg:hidden shrink-0">
           <img src="/logo.png" alt="OMNI ASSETS" className="w-7 h-7 object-contain rounded-lg" />
+          <span className="text-xs font-black tracking-tight text-slate-800 hidden xs:inline sm:inline">OMNI</span>
         </div>
 
-        {/* Responsive Search Input */}
-        <div className="relative w-full max-w-xs sm:max-w-sm md:max-w-md">
+        {/* Search Input - Hidden on mobile, visible on tablet/desktop */}
+        <div className="hidden sm:block relative w-full max-w-xs md:max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
           <input
             type="text"
@@ -73,26 +74,26 @@ export function Navbar({
       </div>
 
       {/* Right Action buttons */}
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
         {/* Quick Check-in/Check-out Buttons */}
-        <div className="flex items-center gap-1 sm:gap-1.5 bg-pastel-50 p-1 rounded-xl border border-pastel-200/70">
+        <div className="flex items-center gap-1 bg-pastel-50 p-1 rounded-xl border border-pastel-200/70">
           <button
             onClick={() => handleQuickCheck('CHECK_IN')}
             disabled={isChecking}
             title="Điểm danh vào ca"
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-pastel-700 hover:text-pastel-800 shadow-xs hover:bg-pastel-100/60 transition-all disabled:opacity-50"
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white text-pastel-700 hover:text-pastel-800 shadow-xs hover:bg-pastel-100/60 transition-all disabled:opacity-50"
           >
             <CheckCircle2 size={13} className="text-pastel-500" />
-            <span className="hidden sm:inline">Check-in</span>
+            <span className="hidden sm:inline">Vào ca</span>
           </button>
           <button
             onClick={() => handleQuickCheck('CHECK_OUT')}
             disabled={isChecking}
             title="Điểm danh tan ca"
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-800 hover:bg-white/80 transition-all disabled:opacity-50"
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-800 hover:bg-white/80 transition-all disabled:opacity-50"
           >
             <Clock size={13} className="text-slate-400" />
-            <span className="hidden sm:inline">Check-out</span>
+            <span className="hidden sm:inline">Tan ca</span>
           </button>
         </div>
 
@@ -100,29 +101,28 @@ export function Navbar({
         {licenseInfo?.isDemo ? (
           <button
             onClick={() => onOpenUpgrade && onOpenUpgrade('Khám phá và nâng cấp Bản Quyền Enterprise để mở khóa toàn bộ hệ thống')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95"
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95"
             title="Đang dùng bản Demo - Bấm để nâng cấp Enterprise"
           >
-            <Crown size={14} className="text-amber-200" />
-            <span className="hidden sm:inline">Bản Demo</span>
-            <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-semibold">Nâng cấp</span>
+            <Crown size={13} className="text-amber-200 shrink-0" />
+            <span className="text-[11px]">Demo</span>
           </button>
         ) : (
           <button
             onClick={() => onOpenUpgrade && onOpenUpgrade()}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold shadow-xs transition-all"
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold shadow-xs transition-all"
             title="Bản Quyền Enterprise Vĩnh Viễn"
           >
-            <Crown size={14} className="text-amber-500" />
-            <span className="hidden sm:inline">Enterprise</span>
+            <Crown size={13} className="text-amber-500 shrink-0" />
+            <span className="hidden sm:inline text-[11px]">Enterprise</span>
           </button>
         )}
 
-        {/* Settings button */}
+        {/* Settings button (Hidden on small mobile, accessible from sidebar) */}
         {(currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER') && onNavigate && (
           <button
             onClick={() => onNavigate('settings')}
-            className="p-2 rounded-xl text-slate-500 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
+            className="hidden md:flex p-2 rounded-xl text-slate-500 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
             title="Cài đặt hệ thống & chấm công"
           >
             <Settings size={18} />

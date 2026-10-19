@@ -191,8 +191,54 @@ export function CategoryManager({ userRole = 'ADMIN' }) {
 
       {/* Categories Table Card */}
       <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
-        <div className="table-responsive">
-          <table className="w-full text-left text-xs text-slate-600">
+        {/* Mobile View: Cards */}
+        <div className="block md:hidden divide-y divide-slate-100 p-3 sm:p-4 space-y-3">
+          {filteredCategories.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 text-xs">
+              Không tìm thấy danh mục nào phù hợp.
+            </div>
+          ) : (
+            filteredCategories.map((cat) => (
+              <div key={cat.id} className="p-3.5 rounded-2xl bg-pastel-50/40 border border-pastel-100 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="font-mono text-[11px] font-bold text-pastel-700 bg-pastel-100 px-2 py-0.5 rounded-md inline-block mb-1">
+                      {cat.code || cat.id}
+                    </span>
+                    <h4 className="font-bold text-slate-800 text-sm">{cat.name}</h4>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => handleOpenEdit(cat)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-pastel-700 hover:bg-white border border-slate-200 bg-white"
+                      title="Sửa danh mục"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    {userRole === 'ADMIN' && (
+                      <button
+                        onClick={() => handleDelete(cat.id, cat.name)}
+                        className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 bg-white"
+                        title="Xóa danh mục"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {cat.description && (
+                  <p className="text-xs text-slate-500 bg-white p-2.5 rounded-xl border border-pastel-200/50">
+                    {cat.description}
+                  </p>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop View: Full Table */}
+        <div className="hidden md:block w-full overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '700px' }}>
             <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
               <tr>
                 <th className="py-3.5 px-4 font-bold whitespace-nowrap">Mã Danh Mục</th>

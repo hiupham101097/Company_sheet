@@ -165,12 +165,12 @@ export function ContractManager({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
           <button
             onClick={activeSubTab === 'CONTRACTS' ? handleExportContracts : handleExportHandovers}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all w-full sm:w-auto"
           >
-            <FileSpreadsheet size={16} className="text-pastel-600" />
+            <FileSpreadsheet size={16} className="text-pastel-600 shrink-0" />
             <span>Xuất Excel</span>
             {licenseInfo?.isDemo && (
               <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-bold">Khóa</span>
@@ -180,17 +180,17 @@ export function ContractManager({
           {activeSubTab === 'CONTRACTS' ? (
             <button
               onClick={handleOpenContractModal}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all w-full sm:w-auto"
             >
-              <Plus size={16} />
+              <Plus size={16} className="shrink-0" />
               <span>Thêm Hợp Đồng</span>
             </button>
           ) : (
             <button
               onClick={() => setIsHandoverModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all w-full sm:w-auto"
             >
-              <Plus size={16} />
+              <Plus size={16} className="shrink-0" />
               <span>Lập Biên Bản Mới</span>
             </button>
           )}
@@ -198,13 +198,13 @@ export function ContractManager({
       </div>
 
       {/* Sub-tab Navigation */}
-      <div className="flex items-center gap-2 border-b border-pastel-200/80 pb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border-b border-pastel-200/80 pb-3">
         <button
           onClick={() => setActiveSubTab('CONTRACTS')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
             activeSubTab === 'CONTRACTS'
               ? 'bg-pastel-500 text-white shadow-soft'
-              : 'text-slate-600 hover:bg-pastel-50 hover:text-pastel-700'
+              : 'text-slate-600 bg-white border border-slate-200/80 sm:border-transparent sm:bg-transparent hover:bg-pastel-50 hover:text-pastel-700'
           }`}
         >
           <FileText size={15} />
@@ -213,124 +213,232 @@ export function ContractManager({
 
         <button
           onClick={() => setActiveSubTab('HANDOVERS')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
             activeSubTab === 'HANDOVERS'
               ? 'bg-pastel-500 text-white shadow-soft'
-              : 'text-slate-600 hover:bg-pastel-50 hover:text-pastel-700'
+              : 'text-slate-600 bg-white border border-slate-200/80 sm:border-transparent sm:bg-transparent hover:bg-pastel-50 hover:text-pastel-700'
           }`}
         >
           <FileCheck size={15} />
-          <span>Biên Bản Bàn Giao Thiết Bị ({handovers.length})</span>
+          <span>Biên Bản Bàn Giao ({handovers.length})</span>
         </button>
       </div>
 
-      {/* Tab 1: Contracts Table */}
+      {/* Tab 1: Contracts */}
       {activeSubTab === 'CONTRACTS' && (
-        <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
-          <div className="table-responsive">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
-                <tr>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Hợp Đồng</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Tên Hợp Đồng</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Đối Tác</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Giá Trị</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Thời Hạn</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Trạng Thái</th>
-                  <th className="py-3.5 px-4 font-bold">Ghi Chú</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
-                {contracts.length === 0 ? (
+        <div className="space-y-3">
+          {/* Mobile View: Clean Responsive Cards */}
+          <div className="block md:hidden space-y-3">
+            {contracts.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-pastel-200/80 shadow-xs">
+                Chưa có hợp đồng nào được lưu trữ.
+              </div>
+            ) : (
+              contracts.map((ctr) => (
+                <div key={ctr.id} className="bg-white p-4 rounded-2xl border border-pastel-200/90 shadow-xs space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-[11px] font-bold text-pastel-700 bg-pastel-50 px-2.5 py-0.5 rounded-md border border-pastel-200/70">
+                      {ctr.code}
+                    </span>
+                    <Badge variant={ctr.status === 'ACTIVE' ? 'success' : 'default'}>
+                      {ctr.status === 'ACTIVE' ? 'Hiệu lực' : ctr.status}
+                    </Badge>
+                  </div>
+
+                  <h4 className="text-sm font-bold text-slate-800 leading-snug">
+                    {ctr.title}
+                  </h4>
+
+                  <div className="space-y-1 text-xs text-slate-600 pt-1 border-t border-slate-100">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 text-[11px]">Đối tác:</span>
+                      <span className="font-semibold text-slate-800 text-right">{ctr.partner_name}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 text-[11px]">Giá trị:</span>
+                      <span className="font-black text-pastel-700 text-sm">{formatVND(ctr.value)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 text-[11px]">Thời hạn:</span>
+                      <span className="font-mono text-[11px] text-slate-600">{ctr.start_date} → {ctr.end_date}</span>
+                    </div>
+                    {ctr.notes && (
+                      <p className="text-[11px] text-slate-400 italic pt-1 border-t border-dashed border-slate-100">
+                        {ctr.notes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop View: Full Table with forced horizontal scroll */}
+          <div className="hidden md:block bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '850px' }}>
+                <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
-                      Chưa có hợp đồng nào được lưu trữ.
-                    </td>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Hợp Đồng</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap" style={{ minWidth: '220px' }}>Tên Hợp Đồng</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap">Đối Tác</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap">Giá Trị</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap">Thời Hạn</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap">Trạng Thái</th>
+                    <th className="py-3.5 px-4 font-bold">Ghi Chú</th>
                   </tr>
-                ) : (
-                  contracts.map((ctr) => (
-                    <tr key={ctr.id} className="hover:bg-pastel-50/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">{ctr.code}</td>
-                      <td className="py-3.5 px-4 font-bold text-slate-800">{ctr.title}</td>
-                      <td className="py-3.5 px-4 text-slate-700 font-medium whitespace-nowrap">{ctr.partner_name}</td>
-                      <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">{formatVND(ctr.value)}</td>
-                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">
-                        {ctr.start_date} → {ctr.end_date}
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {contracts.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-slate-400">
+                        Chưa có hợp đồng nào được lưu trữ.
                       </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <Badge variant={ctr.status === 'ACTIVE' ? 'success' : 'default'}>
-                          {ctr.status === 'ACTIVE' ? 'Hiệu lực' : ctr.status}
-                        </Badge>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">{ctr.notes || '-'}</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    contracts.map((ctr) => (
+                      <tr key={ctr.id} className="hover:bg-pastel-50/40 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">{ctr.code}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-800" style={{ minWidth: '220px' }}>{ctr.title}</td>
+                        <td className="py-3.5 px-4 text-slate-700 font-medium whitespace-nowrap">{ctr.partner_name}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">{formatVND(ctr.value)}</td>
+                        <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                          {ctr.start_date} → {ctr.end_date}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <Badge variant={ctr.status === 'ACTIVE' ? 'success' : 'default'}>
+                            {ctr.status === 'ACTIVE' ? 'Hiệu lực' : ctr.status}
+                          </Badge>
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">{ctr.notes || '-'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Tab 2: Handovers Table */}
+      {/* Tab 2: Handovers */}
       {activeSubTab === 'HANDOVERS' && (
-        <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
-          <div className="table-responsive">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
-                <tr>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Biên Bản</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Loại Biên Bản</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Thiết Bị Bàn Giao</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Nhân Sự Tiếp Nhận</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày Bàn Giao</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Tình Trạng</th>
-                  <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">In Ấn</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
-                {handovers.length === 0 ? (
+        <div className="space-y-3">
+          {/* Mobile View: Handovers Cards */}
+          <div className="block md:hidden space-y-3">
+            {handovers.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-pastel-200/80 shadow-xs">
+                Chưa có biên bản bàn giao nào.
+              </div>
+            ) : (
+              handovers.map((item) => (
+                <div key={item.id} className="bg-white p-4 rounded-2xl border border-pastel-200/90 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-[11px] font-bold text-pastel-700 bg-pastel-50 px-2.5 py-0.5 rounded-md border border-pastel-200/70">
+                      {item.code}
+                    </span>
+                    <Badge variant={item.type === 'HANDOVER' ? 'primary' : 'warning'}>
+                      {item.type === 'HANDOVER' ? 'Bàn giao sử dụng' : 'Thu hồi tài sản'}
+                    </Badge>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800">{item.asset_name}</h4>
+                    {item.asset_code && (
+                      <p className="text-[10px] font-mono text-slate-400 mt-0.5">Mã thiết bị: {item.asset_code}</p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100 text-slate-600">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Nhân sự nhận:</span>
+                      <span className="font-bold text-slate-800 block truncate">{item.user_name}</span>
+                      <span className="text-[10px] text-slate-400 block truncate">{item.user_department}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Ngày bàn giao:</span>
+                      <span className="font-mono text-slate-700 block font-medium">{item.handover_date}</span>
+                    </div>
+                  </div>
+
+                  {item.condition && (
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-[11px] text-slate-600">
+                      <span className="font-semibold text-slate-700">Tình trạng: </span>
+                      {item.condition}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setPreviewHandover(item)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-pastel-50 hover:bg-pastel-100 text-pastel-700 font-bold transition-all text-xs flex items-center justify-center gap-2 border border-pastel-200/60"
+                  >
+                    <Printer size={15} />
+                    <span>Xem & In Biên Bản A4</span>
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop View: Handovers Table */}
+          <div className="hidden md:block bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '880px' }}>
+                <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
-                      Chưa có biên bản bàn giao nào.
-                    </td>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Biên Bản</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap">Loại Biên Bản</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap">Thiết Bị Bàn Giao</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap">Nhân Sự Tiếp Nhận</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày Bàn Giao</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap">Tình Trạng</th>
+                    <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">In Ấn</th>
                   </tr>
-                ) : (
-                  handovers.map((item) => (
-                    <tr key={item.id} className="hover:bg-pastel-50/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">{item.code}</td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <Badge variant={item.type === 'HANDOVER' ? 'primary' : 'warning'}>
-                          {item.type === 'HANDOVER' ? 'Bàn giao sử dụng' : 'Thu hồi tài sản'}
-                        </Badge>
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">
-                        {item.asset_name}
-                        {item.asset_code && (
-                          <span className="block text-[10px] text-slate-400 font-mono font-normal">
-                            Mã: {item.asset_code}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-700 font-medium whitespace-nowrap">
-                        {item.user_name} <span className="text-slate-400 font-normal">({item.user_department})</span>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">{item.handover_date}</td>
-                      <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate">{item.condition}</td>
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => setPreviewHandover(item)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pastel-50 text-pastel-700 hover:bg-pastel-100 font-bold transition-all text-xs"
-                        >
-                          <Printer size={13} />
-                          <span>Xem & In Biên Bản</span>
-                        </button>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {handovers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-slate-400">
+                        Chưa có biên bản bàn giao nào.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    handovers.map((item) => (
+                      <tr key={item.id} className="hover:bg-pastel-50/40 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">{item.code}</td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <Badge variant={item.type === 'HANDOVER' ? 'primary' : 'warning'}>
+                            {item.type === 'HANDOVER' ? 'Bàn giao sử dụng' : 'Thu hồi tài sản'}
+                          </Badge>
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-slate-800 whitespace-nowrap">
+                          {item.asset_name}
+                          {item.asset_code && (
+                            <span className="block text-[10px] text-slate-400 font-mono font-normal">
+                              Mã: {item.asset_code}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-700 font-medium whitespace-nowrap">
+                          {item.user_name} <span className="text-slate-400 font-normal">({item.user_department})</span>
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">{item.handover_date}</td>
+                        <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate">{item.condition}</td>
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          <button
+                            onClick={() => setPreviewHandover(item)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pastel-50 text-pastel-700 hover:bg-pastel-100 font-bold transition-all text-xs"
+                          >
+                            <Printer size={13} />
+                            <span>Xem & In Biên Bản</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

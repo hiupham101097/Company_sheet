@@ -169,23 +169,23 @@ export function FinanceManager({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
           <button
             onClick={handleExportExcel}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all w-full sm:w-auto"
           >
-            <FileSpreadsheet size={16} className="text-pastel-600" />
-            <span>Xuất Excel Báo Cáo</span>
+            <FileSpreadsheet size={16} className="text-pastel-600 shrink-0" />
+            <span>Xuất Excel</span>
             {licenseInfo?.isDemo && (
               <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-bold">Khóa</span>
             )}
           </button>
           <button
             onClick={handleOpenAddModal}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all w-full sm:w-auto"
           >
-            <Plus size={16} />
-            <span>Thêm Thu / Chi Mới</span>
+            <Plus size={16} className="shrink-0" />
+            <span>Thêm Thu / Chi</span>
           </button>
         </div>
       </div>
@@ -265,11 +265,11 @@ export function FinanceManager({
         </div>
       </div>
 
-      {/* Transaction List Card */}
-      <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
-        <div className="p-4 sm:p-5 border-b border-pastel-100 flex items-center justify-between bg-pastel-50/40">
+      {/* Transaction List: Mobile Cards + Desktop Table */}
+      <div className="space-y-3">
+        <div className="bg-white p-4 rounded-2xl border border-pastel-200/80 shadow-xs flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-800">Sổ Nhật Ký Thu Chi</h3>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
             {[
               { id: 'ALL', label: 'Tất cả' },
               { id: 'REVENUE', label: 'Khoản Thu' },
@@ -278,7 +278,7 @@ export function FinanceManager({
               <button
                 key={t.id}
                 onClick={() => setTypeFilter(t.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                   typeFilter === t.id
                     ? 'bg-pastel-500 text-white shadow-soft'
                     : 'text-slate-600 hover:bg-pastel-50'
@@ -290,57 +290,105 @@ export function FinanceManager({
           </div>
         </div>
 
-        <div className="table-responsive">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
-              <tr>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Chứng Từ</th>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày</th>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Loại</th>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Hạng Mục</th>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Tiền</th>
-                <th className="py-3.5 px-4 font-bold">Diễn Giải</th>
-                <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">Thao Tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {filteredList.length === 0 ? (
+        {/* Mobile View: Clean Cards */}
+        <div className="block md:hidden space-y-3">
+          {filteredList.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-pastel-200/80 shadow-xs">
+              Chưa có giao dịch nào được ghi nhận.
+            </div>
+          ) : (
+            filteredList.map((item) => (
+              <div key={item.id} className="bg-white p-4 rounded-2xl border border-pastel-200/90 shadow-xs space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-[11px] font-bold text-pastel-700 bg-pastel-50 px-2.5 py-0.5 rounded-md border border-pastel-200/70">
+                    {item.invoice_number}
+                  </span>
+                  <Badge variant={item.type === 'REVENUE' ? 'success' : 'danger'}>
+                    {item.type === 'REVENUE' ? '+ Thu' : '- Chi'}
+                  </Badge>
+                </div>
+
+                <div className="flex items-baseline justify-between gap-2">
+                  <h4 className="text-sm font-bold text-slate-800">{item.category}</h4>
+                  <span className={`text-base font-black ${item.type === 'REVENUE' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {item.type === 'REVENUE' ? '+' : '-'} {formatVND(item.amount)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
+                  <span className="font-mono text-[11px]">{item.date}</span>
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                    title="Xóa"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                {item.description && (
+                  <p className="text-[11px] text-slate-400 italic pt-1 border-t border-dashed border-slate-100">
+                    {item.description}
+                  </p>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop View: Full Table with forced horizontal scroll */}
+        <div className="hidden md:block bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '850px' }}>
+              <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
-                    Chưa có giao dịch nào được ghi nhận.
-                  </td>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Chứng Từ</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Loại</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap" style={{ minWidth: '200px' }}>Hạng Mục</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Tiền</th>
+                  <th className="py-3.5 px-4 font-bold">Diễn Giải</th>
+                  <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">Thao Tác</th>
                 </tr>
-              ) : (
-                filteredList.map((item) => (
-                  <tr key={item.id} className="hover:bg-pastel-50/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">
-                      {item.invoice_number}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-500 font-mono text-xs whitespace-nowrap">{item.date}</td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <Badge variant={item.type === 'REVENUE' ? 'success' : 'danger'}>
-                        {item.type === 'REVENUE' ? '+ Thu' : '- Chi'}
-                      </Badge>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-800 font-semibold">{item.category}</td>
-                    <td className={`py-3.5 px-4 font-bold whitespace-nowrap ${item.type === 'REVENUE' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      <span className="inline-block whitespace-nowrap">{item.type === 'REVENUE' ? '+' : '-'} {formatVND(item.amount)}</span>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">{item.description}</td>
-                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                        title="Xóa giao dịch"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {filteredList.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                      Chưa có giao dịch nào được ghi nhận.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  filteredList.map((item) => (
+                    <tr key={item.id} className="hover:bg-pastel-50/40 transition-colors">
+                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">
+                        {item.invoice_number}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-500 font-mono text-xs whitespace-nowrap">{item.date}</td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <Badge variant={item.type === 'REVENUE' ? 'success' : 'danger'}>
+                          {item.type === 'REVENUE' ? '+ Thu' : '- Chi'}
+                        </Badge>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-800 font-semibold" style={{ minWidth: '200px' }}>{item.category}</td>
+                      <td className={`py-3.5 px-4 font-bold whitespace-nowrap ${item.type === 'REVENUE' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        <span className="inline-block whitespace-nowrap">{item.type === 'REVENUE' ? '+' : '-'} {formatVND(item.amount)}</span>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">{item.description}</td>
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Xóa giao dịch"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

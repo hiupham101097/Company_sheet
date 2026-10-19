@@ -78,18 +78,29 @@
 }
 
 /* Table scroll wrapper & anti-wrap styling */
-.table-responsive {
+.table-responsive,
+.overflow-x-auto {
   width: 100%;
-  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-.table-responsive table {
-  min-width: 860px;
+.table-responsive table,
+.overflow-x-auto > table {
+  min-width: 800px;
 }
 
-.table-responsive th {
-  white-space: nowrap !important;
+.table-responsive th,
+.table-responsive td,
+.overflow-x-auto > table th,
+.overflow-x-auto > table td {
+  white-space: nowrap;
+}
+
+.table-wrap-cell {
+  white-space: normal !important;
+  word-break: normal !important;
+  word-wrap: normal !important;
+  min-width: 220px;
 }
 
 .cell-nowrap {

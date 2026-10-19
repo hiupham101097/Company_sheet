@@ -174,11 +174,11 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
           </div>
 
           {/* Right: Actions */}
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full sm:w-auto">
             <select
               value={selectedUser}
               onChange={(e) => setSelectedUser(e.target.value)}
-              className="px-3.5 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-pastel-400 text-slate-800"
+              className="w-full sm:w-auto px-3.5 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-pastel-400 text-slate-800"
             >
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
@@ -192,14 +192,14 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
               placeholder="Ghi chú (lý do đi muộn, tăng ca)..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-pastel-400 w-full sm:w-60 text-slate-800"
+              className="w-full sm:w-60 px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-pastel-400 text-slate-800"
             />
 
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
               <button
                 onClick={() => handleAction('CHECK_IN')}
                 disabled={loading}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all disabled:opacity-50"
+                className="justify-center px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all disabled:opacity-50"
               >
                 <CheckCircle2 size={15} />
                 <span>Vào Ca (Check-in)</span>
@@ -208,7 +208,7 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
               <button
                 onClick={() => handleAction('CHECK_OUT')}
                 disabled={loading}
-                className="px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all disabled:opacity-50"
+                className="justify-center px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-soft flex items-center gap-1.5 transition-all disabled:opacity-50"
               >
                 <Clock size={15} />
                 <span>Tan Ca (Check-out)</span>
@@ -227,8 +227,58 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
           </span>
         </div>
 
-        <div className="table-responsive">
-          <table className="w-full text-left text-xs text-slate-600">
+        {/* Mobile View: Cards */}
+        <div className="block md:hidden divide-y divide-slate-100 p-3 sm:p-4 space-y-3">
+          {attendanceList.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 text-xs">
+              Chưa có lượt điểm danh nào được ghi nhận hôm nay.
+            </div>
+          ) : (
+            attendanceList.map((att) => {
+              const st = statusMap[att.status] || { label: att.status, variant: 'default' };
+              return (
+                <div key={att.id} className="p-3.5 rounded-2xl bg-pastel-50/40 border border-pastel-100 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm">{att.user_name}</h4>
+                      <p className="text-xs text-pastel-700 font-medium">{att.user_department}</p>
+                    </div>
+                    <Badge variant={st.variant} className="gap-1.5 shrink-0">
+                      <span className={`w-1.5 h-1.5 rounded-full ${st.dot || 'bg-slate-400'}`} />
+                      <span>{st.label}</span>
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 py-2 px-3 bg-white rounded-xl border border-pastel-200/60 text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-semibold">Giờ Vào</span>
+                      <span className="font-mono font-bold text-pastel-700">{att.check_in || '--:--'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-semibold">Giờ Ra</span>
+                      <span className="font-mono font-bold text-slate-600">{att.check_out || '--:--'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-semibold">Tổng Giờ</span>
+                      <span className="font-bold text-slate-700">
+                        {att.total_hours > 0 ? `${att.total_hours}h` : '-'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                    <span className="font-mono font-medium">{att.date}</span>
+                    {att.notes && <span className="text-slate-500 italic truncate max-w-[180px]">{att.notes}</span>}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop View: Full Table */}
+        <div className="hidden md:block w-full overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '850px' }}>
             <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
               <tr>
                 <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày</th>

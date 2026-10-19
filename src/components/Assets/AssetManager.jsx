@@ -172,12 +172,12 @@ export function AssetManager({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
           <button
             onClick={handleExportExcel}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all w-full sm:w-auto"
           >
-            <FileSpreadsheet size={16} className="text-pastel-600" />
+            <FileSpreadsheet size={16} className="text-pastel-600 shrink-0" />
             <span>Xuất Excel</span>
             {licenseInfo?.isDemo && (
               <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-bold">Khóa</span>
@@ -186,10 +186,10 @@ export function AssetManager({
           {userRole !== 'STAFF' && (
             <button
               onClick={handleOpenAddModal}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all w-full sm:w-auto"
             >
-              <Plus size={16} />
-              <span>Thêm Tài Sản Mới</span>
+              <Plus size={16} className="shrink-0" />
+              <span>Thêm Tài Sản</span>
             </button>
           )}
         </div>
@@ -218,7 +218,7 @@ export function AssetManager({
         </div>
 
         {/* Status Filter Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
           {['ALL', 'IN_USE', 'AVAILABLE', 'MAINTENANCE', 'BROKEN'].map((st) => {
             const isSelected = statusFilter === st;
             const count = getStatusCount(st);
@@ -248,93 +248,174 @@ export function AssetManager({
         </div>
       </div>
 
-      {/* Assets Table Card */}
-      <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
-        <div className="table-responsive">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
-              <tr>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Mã Tài Sản</th>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Tên Thiết Bị</th>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Danh Mục</th>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Trạng Thái</th>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Giá Trị</th>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Người Nắm Giữ</th>
-                <th className="py-3.5 px-4 font-bold whitespace-nowrap">Vị Trí</th>
-                <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">Thao Tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {filteredAssets.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-14 text-center text-slate-400">
-                    <Laptop size={32} className="mx-auto text-slate-300 mb-2" />
-                    Không tìm thấy tài sản nào phù hợp.
-                  </td>
-                </tr>
-              ) : (
-                filteredAssets.map((asset) => {
-                  const st = statusMap[asset.status] || { label: asset.status, variant: 'default' };
-                  return (
-                    <tr key={asset.id} className="hover:bg-pastel-50/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">
+      {/* Assets List: Mobile Cards + Desktop Table */}
+      <div className="space-y-3">
+        {/* Mobile View: Clean Responsive Cards (No Squishing!) */}
+        <div className="block md:hidden space-y-3">
+          {filteredAssets.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-pastel-200/80 shadow-xs">
+              <Laptop size={32} className="mx-auto text-slate-300 mb-2" />
+              Không tìm thấy tài sản nào phù hợp.
+            </div>
+          ) : (
+            filteredAssets.map((asset) => {
+              const st = statusMap[asset.status] || { label: asset.status, variant: 'default' };
+              return (
+                <div key={asset.id} className="bg-white p-4 rounded-2xl border border-pastel-200/90 shadow-xs space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-mono font-bold text-pastel-700 bg-pastel-50 px-2 py-0.5 rounded-md border border-pastel-200/60 inline-block mb-1">
                         {asset.code}
-                      </td>
-                      <td className="py-3.5 px-4 font-semibold text-slate-800">
+                      </span>
+                      <h4 className="text-sm font-bold text-slate-800 leading-snug">
                         {asset.name}
-                        {asset.serial_number && (
-                          <span className="block text-[10px] text-slate-400 font-mono font-normal">
-                            SN: {asset.serial_number}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap">{asset.category}</td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <Badge variant={st.variant} className="gap-1.5">
-                          <span className={`w-1.5 h-1.5 rounded-full ${st.dotColor || 'bg-slate-400'}`} />
-                          <span>{st.label}</span>
-                        </Badge>
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-700 whitespace-nowrap">
-                        {formatVND(asset.price)}
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        {asset.assigned_user_name !== 'Chưa bàn giao' ? (
-                          <span className="text-slate-800 font-medium">{asset.assigned_user_name}</span>
-                        ) : (
-                          <span className="text-slate-400 italic">Chưa bàn giao</span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">{asset.location || 'Kho'}</td>
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => {
-                              setSelectedAsset(asset);
-                              setIsDetailModalOpen(true);
-                            }}
-                            title="Xem chi tiết & Thẻ QR"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
-                          >
-                            <Eye size={15} />
-                          </button>
-                          {userRole === 'ADMIN' && (
-                            <button
-                              onClick={() => handleDelete(asset.id, asset.name)}
-                              title="Xóa tài sản"
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                            >
-                              <Trash2 size={15} />
-                            </button>
+                      </h4>
+                      {asset.serial_number && (
+                        <p className="text-[10px] font-mono text-slate-400 mt-0.5">SN: {asset.serial_number}</p>
+                      )}
+                    </div>
+                    <Badge variant={st.variant} className="gap-1.5 shrink-0 text-[11px]">
+                      <span className={`w-1.5 h-1.5 rounded-full ${st.dotColor || 'bg-slate-400'}`} />
+                      <span>{st.label}</span>
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100 text-slate-600">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Danh mục:</span>
+                      <span className="font-semibold text-slate-700 truncate block">{asset.category}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Giá trị:</span>
+                      <span className="font-bold text-slate-800 block">{formatVND(asset.price)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Người nắm giữ:</span>
+                      <span className="font-medium text-slate-700 truncate block">
+                        {asset.assigned_user_name || 'Chưa bàn giao'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Vị trí:</span>
+                      <span className="text-slate-600 truncate block">{asset.location || 'Kho'}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      onClick={() => {
+                        setSelectedAsset(asset);
+                        setIsDetailModalOpen(true);
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-pastel-50 hover:bg-pastel-100 text-pastel-700 text-xs font-semibold flex items-center gap-1.5 border border-pastel-200/60"
+                    >
+                      <Eye size={14} />
+                      <span>Xem Thẻ & QR</span>
+                    </button>
+                    {userRole === 'ADMIN' && (
+                      <button
+                        onClick={() => handleDelete(asset.id, asset.name)}
+                        className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-50 border border-rose-100 transition-colors"
+                        title="Xóa tài sản"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop View: Full Table with forced horizontal scroll */}
+        <div className="hidden md:block bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '880px' }}>
+              <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
+                <tr>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Mã Tài Sản</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap" style={{ minWidth: '220px' }}>Tên Thiết Bị</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Danh Mục</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Trạng Thái</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Giá Trị</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Người Nắm Giữ</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Vị Trí</th>
+                  <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {filteredAssets.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-14 text-center text-slate-400">
+                      <Laptop size={32} className="mx-auto text-slate-300 mb-2" />
+                      Không tìm thấy tài sản nào phù hợp.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAssets.map((asset) => {
+                    const st = statusMap[asset.status] || { label: asset.status, variant: 'default' };
+                    return (
+                      <tr key={asset.id} className="hover:bg-pastel-50/40 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">
+                          {asset.code}
+                        </td>
+                        <td className="py-3.5 px-4 font-semibold text-slate-800" style={{ minWidth: '220px' }}>
+                          {asset.name}
+                          {asset.serial_number && (
+                            <span className="block text-[10px] text-slate-400 font-mono font-normal">
+                              SN: {asset.serial_number}
+                            </span>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap">{asset.category}</td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <Badge variant={st.variant} className="gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${st.dotColor || 'bg-slate-400'}`} />
+                            <span>{st.label}</span>
+                          </Badge>
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-slate-700 whitespace-nowrap">
+                          {formatVND(asset.price)}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {asset.assigned_user_name !== 'Chưa bàn giao' ? (
+                            <span className="text-slate-800 font-medium">{asset.assigned_user_name}</span>
+                          ) : (
+                            <span className="text-slate-400 italic">Chưa bàn giao</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">{asset.location || 'Kho'}</td>
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => {
+                                setSelectedAsset(asset);
+                                setIsDetailModalOpen(true);
+                              }}
+                              title="Xem chi tiết & Thẻ QR"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
+                            >
+                              <Eye size={15} />
+                            </button>
+                            {userRole === 'ADMIN' && (
+                              <button
+                                onClick={() => handleDelete(asset.id, asset.name)}
+                                title="Xóa tài sản"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
