@@ -964,6 +964,122 @@ app.put('/api/settings', async (c) => {
   }
 });
 
+// ========================
+// 11. AI MASCOT ASSISTANT
+// ========================
+app.post('/api/ai/chat', async (c) => {
+  try {
+    const { message, activeTab, userRole, userName } = await c.req.json().catch(() => ({}));
+    const q = (message || '').toLowerCase().trim();
+
+    // Query live context from DB
+    const [assetsCount, tasksRes, settingsRes] = await Promise.all([
+      c.env.DB.prepare('SELECT count(*) as count, sum(CASE WHEN status="MAINTENANCE" THEN 1 ELSE 0 END) as maint_count FROM assets').first().catch(() => null),
+      c.env.DB.prepare('SELECT title, due_date, status, priority FROM tasks WHERE status != "COMPLETED" ORDER BY due_date ASC LIMIT 5').all().catch(() => ({ results: [] })),
+      c.env.DB.prepare('SELECT key, value FROM system_settings').all().catch(() => ({ results: [] }))
+    ]);
+
+    const settingsMap = {};
+    (settingsRes?.results || []).forEach((r) => { settingsMap[r.key] = r.value; });
+    const workStart = settingsMap.work_start_time || '08:30';
+    const workEnd = settingsMap.work_end_time || '17:30';
+    const graceMin = settingsMap.late_grace_minutes || '15';
+    const workDays = settingsMap.work_days || 'Thứ 2 - Thứ 6';
+
+    let answer = '';
+    let suggestions = [];
+    let navigateTab = null;
+
+    if (q.includes('chấm công') || q.includes('điểm danh') || q.includes('check-in') || q.includes('check in') || q.includes('muộn') || q.includes('giờ làm')) {
+      answer = `⏰ **Quy định Chấm công & Giờ làm việc:**\n\n` +
+        `• **Giờ vào ca chuẩn:** \`${workStart}\` (Ân hạn đi muộn: **+${graceMin} phút**)\n` +
+        `• **Giờ tan ca:** \`${workEnd}\`\n` +
+        `• **Lịch làm việc:** ${workDays}\n\n` +
+        `💡 **Cách chấm công:**\n` +
+        `1. Nhấn nút **Check-in** trên thanh trên cùng (Navbar) khi bắt đầu ca.\n` +
+        `2. Nếu vào ca sau \`${workStart}\` (quá ${graceMin} phút ân hạn), hệ thống sẽ tự động ghi nhận **Đi muộn**.\n` +
+        `3. Khi hết giờ làm việc, nhấn **Check-out** để hệ thống tổng hợp số giờ làm thực tế.`;
+      suggestions = ['Xem bảng chấm công', 'Cài đặt lại giờ ca làm việc', 'Quy định làm thêm giờ (OT)'];
+      navigateTab = 'attendance';
+    } else if (q.includes('tài sản') || q.includes('thiết bị') || q.includes('máy tính') || q.includes('laptop')) {
+      const total = assetsCount?.count || 0;
+      const maint = assetsCount?.maint_count || 0;
+      answer = `📦 **Quản lý Tài sản & Thiết bị:**\n\n` +
+        `Hệ thống đang quản lý **${total} tài sản** (${maint > 0 ? `trong đó có **${maint} thiết bị** đang bảo trì` : 'tất cả hoạt động tốt'}).\n\n` +
+        `💡 **Các thao tác chính:**\n` +
+        `• **Thêm tài sản mới:** Vào mục **Tài sản & Thiết bị** > Nhấn nút *"Thêm Tài Sản Mới"* > Nhập tên, mã serial, giá trị và gán người sử dụng.\n` +
+        `• **Bàn giao thiết bị:** Khi cấp phát máy móc cho nhân sự, hãy lập **Biên bản bàn giao** để lưu vết và xuất file in A4 có chữ ký 2 bên.`;
+      suggestions = ['Đi đến Quản lý tài sản', 'Hướng dẫn tạo biên bản bàn giao', 'Lập kế hoạch bảo trì'];
+      navigateTab = 'assets';
+    } else if (q.includes('biên bản') || q.includes('bàn giao') || q.includes('hợp đồng') || q.includes('in a4')) {
+      answer = `📄 **Quy trình Lập & In Biên Bản Bàn Giao:**\n\n` +
+        `1. Vào menu **Hợp đồng & Biên bản** > Chọn tab **"Biên Bản Bàn Giao"**.\n` +
+        `2. Nhấn nút **"Lập Biên Bản Mới"** > Chọn bên giao, bên nhận và thiết bị bàn giao kèm tình trạng phụ kiện.\n` +
+        `3. Sau khi lưu, nhấn biểu tượng **Máy in (Print)** trên thẻ biên bản. Hệ thống sẽ mở giao diện in ấn chuẩn khổ giấy **A4**, đã căn chỉnh lề, quốc hiệu, điều khoản pháp lý và 2 ô chữ ký rõ ràng.`;
+      suggestions = ['Mở Hợp đồng & Biên bản', 'Xem danh sách biên bản', 'Quy định thu hồi tài sản'];
+      navigateTab = 'contracts';
+    } else if (q.includes('doanh thu') || q.includes('chi phí') || q.includes('tài chính') || q.includes('tiền')) {
+      answer = `💰 **Quản lý Tài chính & Doanh thu:**\n\n` +
+        `• Phân hệ **Doanh thu & Chi phí** cho phép theo dõi dòng tiền thời gian thực, tự động tính **Lợi nhuận ròng = Doanh thu - Chi phí**.\n` +
+        `• Hỗ trợ biểu đồ trực quan biến động tài chính theo từng tháng.\n` +
+        `• Có thể phân loại thu/chi theo các danh mục như Bán hàng, Dịch vụ, Lương thưởng, Mặt bằng, Thiết bị...`;
+      suggestions = ['Xem Báo cáo tài chính', 'Thêm khoản thu mới', 'Thêm chi phí phát sinh'];
+      navigateTab = 'finance';
+    } else if (q.includes('công việc') || q.includes('task') || q.includes('nhắc hạn') || q.includes('quá hạn') || q.includes('deadline')) {
+      const tasks = tasksRes?.results || [];
+      const overdueList = tasks.filter((t) => t.due_date < new Date().toISOString().split('T')[0]);
+      answer = `📋 **Quản lý Tiến độ Công việc:**\n\n` +
+        (overdueList.length > 0 
+          ? `⚠️ Hiện có **${overdueList.length} công việc quá hạn** cần xử lý gấp:\n` + overdueList.map((t) => `• *${t.title}* (Hạn: ${t.due_date})`).join('\n') + `\n\n`
+          : `✅ Hệ thống không có công việc nào bị quá hạn!\n\n`) +
+        `💡 Bạn có thể tạo công việc mới, gán người phụ trách và chọn mức độ ưu tiên (Khẩn cấp, Cao, Bình thường) để nhận cảnh báo tự động trên thanh thông báo.`;
+      suggestions = ['Xem danh sách công việc', 'Tạo công việc mới', 'Lọc việc cần làm gấp'];
+      navigateTab = 'tasks';
+    } else if (q.includes('phân quyền') || q.includes('vai trò') || q.includes('role') || q.includes('admin') || q.includes('nhân sự')) {
+      answer = `👥 **Hệ thống phân quyền 3 cấp độ:**\n\n` +
+        `1. **Quản Trị Viên (ADMIN):** Toàn quyền truy cập, tiếp nhận nhân sự, phân vai trò, tạo danh mục và chỉnh sửa cài đặt hệ thống.\n` +
+        `2. **Quản Lý (MANAGER):** Quản lý tài sản, theo dõi tài chính doanh thu, phân chia công việc và thiết lập ca làm việc.\n` +
+        `3. **Nhân Viên (STAFF):** Thực hiện chấm công hằng ngày, xem danh sách tài sản được bàn giao và cập nhật tiến độ công việc được giao.`;
+      suggestions = ['Mở Quản lý nhân sự', 'Thêm nhân viên mới', 'Cài đặt hệ thống'];
+      navigateTab = 'users';
+    } else if (q.includes('cài đặt') || q.includes('setting') || q.includes('đổi giờ') || q.includes('tên công ty')) {
+      answer = `⚙️ **Cài Đặt Hệ Thống:**\n\n` +
+        `Bạn có thể truy cập mục **Cài đặt hệ thống** (ở chân thanh Sidebar hoặc icon bánh răng trên Navbar) để:\n` +
+        `• Thay đổi giờ vào ca, giờ tan ca, số phút ân hạn đi muộn.\n` +
+        `• Tùy chỉnh tên công ty, số hotline, email và địa chỉ in trên Biên bản bàn giao.\n` +
+        `• Đăng thông báo chung trên bảng tin toàn hệ thống.`;
+      suggestions = ['Mở Cài đặt hệ thống', 'Quy định giờ chấm công', 'Đổi thông tin công ty'];
+      navigateTab = 'settings';
+    } else {
+      answer = `👋 Xin chào ${userName || 'bạn'}! Tôi là **OMNI-Bot**, trợ lý AI đồng hành quản trị doanh nghiệp của bạn.\n\n` +
+        `Tôi có thể hỗ trợ bạn:\n` +
+        `• 📦 **Quản lý Tài sản**: Thêm mới, cấp phát, bảo trì và lập biên bản in A4.\n` +
+        `• ⏰ **Chấm công**: Giải đáp quy định giờ vào/ra, ân hạn đi muộn, tính làm thêm giờ.\n` +
+        `• 💰 **Tài chính & Doanh thu**: Phân tích dòng tiền, doanh thu và chi phí.\n` +
+        `• 📋 **Công việc & Hợp đồng**: Theo dõi nhắc hạn và cảnh báo quá hạn.\n` +
+        `• ⚙️ **Cài đặt hệ thống**: Tùy chỉnh quy định và thông tin doanh nghiệp.\n\n` +
+        `Bạn muốn tìm hiểu hoặc cần trợ giúp về phần nào?`;
+      suggestions = [
+        'Quy định giờ chấm công',
+        'Cách xuất biên bản bàn giao A4',
+        'Kiểm tra công việc sắp đến hạn',
+        'Hướng dẫn quản lý tài sản'
+      ];
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        reply: answer,
+        suggestions,
+        navigateTab
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
 // Status Cloudflare
 app.get('/api/cloudflare/status', (c) => {
   return c.json({

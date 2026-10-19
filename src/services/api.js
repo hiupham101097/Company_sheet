@@ -83,6 +83,9 @@ export const api = {
   getSettings: () => request('/settings'),
   updateSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),
 
+  // Trợ lý AI Linh vật
+  aiChat: (data) => request('/ai/chat', { method: 'POST', body: JSON.stringify(data) }),
+
   // Cấu hình kết nối hệ thống
   getCloudflareStatus: () => request('/cloudflare/status'),
   testCloudflare: (data) => request('/cloudflare/test', { method: 'POST', body: JSON.stringify(data) }),

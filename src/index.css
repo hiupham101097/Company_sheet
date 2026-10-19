@@ -84,6 +84,33 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Mascot Floating & Glowing Keyframes */
+@keyframes floatMascot {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1.5deg);
+  }
+}
+
+.animate-float-mascot {
+  animation: floatMascot 3.2s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(78, 159, 142, 0.35), 0 6px 16px rgba(0, 0, 0, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(78, 159, 142, 0.65), 0 10px 24px rgba(78, 159, 142, 0.25);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2.5s infinite;
+}
+
 /* Professional Print Stylesheet for Official A4 Protocols */
 @media print {
   /* Hide all dashboard chrome, sidebar, navbar, buttons */

@@ -10,6 +10,7 @@ import { AttendanceManager } from './components/Attendance/AttendanceManager';
 import { UserManager } from './components/Users/UserManager';
 import { CategoryManager } from './components/Categories/CategoryManager';
 import { SettingsManager } from './components/Settings/SettingsManager';
+import { AIAssistantWidget } from './components/AI/AIAssistantWidget';
 import { Login } from './components/Auth/Login';
 import { api } from './services/api';
 import { Loader2 } from 'lucide-react';
@@ -219,6 +220,14 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* Floating AI Mascot Assistant */}
+      <AIAssistantWidget
+        activeTab={currentTab}
+        userRole={currentUser?.role || 'STAFF'}
+        currentUser={currentUser}
+        onNavigate={setCurrentTab}
+      />
     </div>
   );
 }
