@@ -16,6 +16,7 @@ import {
   User,
   X
 } from 'lucide-react';
+import { getBrandDisplayName } from '../../utils/brandHelper';
 
 export function Sidebar({
   currentTab,
@@ -26,7 +27,9 @@ export function Sidebar({
   onClose,
   licenseInfo,
   onOpenUpgrade,
-  onOpenProfile
+  onOpenProfile,
+  brandName,
+  companyName
 }) {
   const allMenuItems = [
     {
@@ -85,27 +88,46 @@ export function Sidebar({
         }`}
       >
         {/* Brand Header */}
-        <div className="h-16 flex items-center justify-between px-6 border-b border-pastel-100 bg-gradient-to-r from-pastel-50/70 to-white">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-white border border-pastel-200/90 p-1 flex items-center justify-center shadow-soft shrink-0">
-              <img src="/logo.png" alt="OMNI ASSETS" className="w-full h-full object-contain" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-sm font-bold tracking-tight text-slate-800 leading-tight">OMNI ASSETS</h1>
-              <p className="text-[10px] text-pastel-600 font-bold uppercase tracking-wider truncate">
-                {userRole === 'SUPER_ADMIN' ? 'Quản Trị Nền Tảng (Tổng)' : userRole === 'ADMIN' ? 'Quản Trị Viên' : userRole === 'MANAGER' ? 'Quản Lý Cấp Cao' : 'Nhân Viên'}
-              </p>
-            </div>
-          </div>
+        {(() => {
+          const resolvedBrand = brandName || getBrandDisplayName({ licenseInfo, companyName });
+          const isDemo = licenseInfo?.isDemo !== false && licenseInfo?.tier !== 'ENTERPRISE';
 
-          {/* Mobile Close Button */}
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 lg:hidden"
-          >
-            <X size={18} />
-          </button>
-        </div>
+          return (
+            <div className="h-16 flex items-center justify-between px-6 border-b border-pastel-100 bg-gradient-to-r from-pastel-50/70 to-white">
+              <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                <div className="w-10 h-10 rounded-xl bg-white border border-pastel-200/90 p-1 flex items-center justify-center shadow-soft shrink-0">
+                  <img src="/logo.png" alt={resolvedBrand} className="w-full h-full object-contain" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <h1
+                      title={resolvedBrand}
+                      className="text-sm font-bold tracking-tight text-slate-800 leading-tight truncate"
+                    >
+                      {resolvedBrand}
+                    </h1>
+                    {isDemo && (
+                      <span className="px-1.5 py-0.2 text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-700 rounded-md border border-amber-200 shrink-0">
+                        DEMO
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-pastel-600 font-bold uppercase tracking-wider truncate">
+                    {userRole === 'SUPER_ADMIN' ? 'Quản Trị Nền Tảng (Tổng)' : userRole === 'ADMIN' ? 'Quản Trị Viên' : userRole === 'MANAGER' ? 'Quản Lý Cấp Cao' : 'Nhân Viên'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Mobile Close Button */}
+              <button
+                onClick={onClose}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 lg:hidden shrink-0"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          );
+        })()}
 
         {/* Navigation Links */}
         <div className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">

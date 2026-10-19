@@ -158,6 +158,12 @@ app.post('/api/auth/login', async (c) => {
       return c.json({ success: false, message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Quản trị viên hệ thống.' }, 403);
     }
 
+    const compSetting = await c.env.DB
+      .prepare('SELECT value FROM system_settings WHERE key = "company_name"')
+      .first()
+      .catch(() => null);
+    user.company_name = compSetting?.value || 'OMNI ASSETS';
+
     return c.json({
       success: true,
       message: 'Đăng nhập thành công',
@@ -266,7 +272,8 @@ app.post('/api/auth/register-company', async (c) => {
       department: departmentName,
       phone: admin_phone || '',
       avatar,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      company_name: company_name.trim()
     };
 
     return c.json({
@@ -477,6 +484,13 @@ app.get('/api/reports/dashboard-summary', async (c) => {
       }))
     ];
 
+    // Enterprise Company Name
+    const compSetting = await c.env.DB
+      .prepare('SELECT value FROM system_settings WHERE key = "company_name"')
+      .first()
+      .catch(() => null);
+    const currentCompanyName = compSetting?.value || 'OMNI ASSETS';
+
     return c.json({
       success: true,
       data: {
@@ -495,7 +509,9 @@ app.get('/api/reports/dashboard-summary', async (c) => {
           totalUsersCount: usersCount
         },
         urgentReminders,
-        isCloudflare: true
+        isCloudflare: true,
+        company_name: currentCompanyName,
+        companyName: currentCompanyName
       }
     });
   } catch (err) {
@@ -1930,10 +1946,12 @@ async function getLicenseStatus(db) {
       key: map.license_key || '',
       status: map.license_status || 'ACTIVE',
       activatedAt: map.license_activated_at || null,
-      organization: map.company_name || 'Doanh Nghiệp'
+      organization: map.company_name || 'Doanh Nghiệp',
+      company_name: map.company_name || '',
+      companyName: map.company_name || ''
     };
   } catch {
-    return { tier: 'DEMO', isDemo: true, key: '', status: 'ACTIVE', activatedAt: null, organization: 'Doanh Nghiệp' };
+    return { tier: 'DEMO', isDemo: true, key: '', status: 'ACTIVE', activatedAt: null, organization: 'Doanh Nghiệp', company_name: '', companyName: '' };
   }
 }
 

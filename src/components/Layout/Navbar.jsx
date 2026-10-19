@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { formatDateVN } from '../../utils/formatters';
+import { getBrandDisplayName, getShortBrandName } from '../../utils/brandHelper';
 
 export function Navbar({
   urgentReminders = [],
@@ -26,7 +27,9 @@ export function Navbar({
   onNavigate,
   licenseInfo,
   onOpenUpgrade,
-  onOpenProfile
+  onOpenProfile,
+  brandName,
+  companyName
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
@@ -104,10 +107,22 @@ export function Navbar({
         </button>
 
         {/* Mobile Brand Logo & Name */}
-        <div className="flex items-center gap-1.5 lg:hidden shrink-0">
-          <img src="/logo.png" alt="OMNI ASSETS" className="w-7 h-7 object-contain rounded-lg" />
-          <span className="text-xs font-black tracking-tight text-slate-800 hidden xs:inline sm:inline">OMNI</span>
-        </div>
+        {(() => {
+          const resolvedBrand = brandName || getBrandDisplayName({ licenseInfo, companyName, currentUser });
+          const shortName = getShortBrandName(resolvedBrand);
+
+          return (
+            <div className="flex items-center gap-1.5 lg:hidden shrink-0 max-w-[140px]">
+              <img src="/logo.png" alt={resolvedBrand} className="w-7 h-7 object-contain rounded-lg shrink-0" />
+              <span
+                title={resolvedBrand}
+                className="text-xs font-black tracking-tight text-slate-800 hidden xs:inline sm:inline truncate"
+              >
+                {shortName}
+              </span>
+            </div>
+          );
+        })()}
 
         {/* Search Input - Hidden on mobile, visible on tablet/desktop */}
         <div className="hidden sm:block relative w-full max-w-xs md:max-w-md">

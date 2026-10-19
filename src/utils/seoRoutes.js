@@ -105,13 +105,19 @@ export function getTabFromPath(pathname = window.location.pathname, userRole = '
 /**
  * Cập nhật động SEO Meta Tags, Canonical URL và Slug trình duyệt
  */
-export function syncTabToUrlAndSeo(tab, pushHistory = true) {
+export function syncTabToUrlAndSeo(tab, pushHistory = true, brandName = '') {
   const meta = TAB_SEO_META[tab] || TAB_SEO_META.dashboard;
   const targetSlug = TAB_TO_SLUG[tab] || '/tong-quan';
   const fullUrl = `${BASE_URL}${targetSlug}`;
 
+  // Tùy biến tiêu đề trang theo thương hiệu doanh nghiệp
+  let finalTitle = meta.title;
+  if (brandName && brandName !== 'OMNI ASSETS') {
+    finalTitle = meta.title.replace('OMNI ASSETS', brandName);
+  }
+
   // 1. Cập nhật Title
-  document.title = meta.title;
+  document.title = finalTitle;
 
   // 2. Cập nhật Meta Description
   let descMeta = document.querySelector('meta[name="description"]');
@@ -121,7 +127,7 @@ export function syncTabToUrlAndSeo(tab, pushHistory = true) {
 
   // 3. Cập nhật Open Graph (Facebook / Zalo preview)
   let ogTitle = document.querySelector('meta[property="og:title"]');
-  if (ogTitle) ogTitle.setAttribute('content', meta.title);
+  if (ogTitle) ogTitle.setAttribute('content', finalTitle);
 
   let ogDesc = document.querySelector('meta[property="og:description"]');
   if (ogDesc) ogDesc.setAttribute('content', meta.description);
@@ -137,13 +143,13 @@ export function syncTabToUrlAndSeo(tab, pushHistory = true) {
 
   // 5. Cập nhật Twitter Cards
   let twTitle = document.querySelector('meta[name="twitter:title"]');
-  if (twTitle) twTitle.setAttribute('content', meta.title);
+  if (twTitle) twTitle.setAttribute('content', finalTitle);
 
   let twDesc = document.querySelector('meta[name="twitter:description"]');
   if (twDesc) twDesc.setAttribute('content', meta.description);
 
   // 6. Đồng bộ URL slug trên thanh địa chỉ không cần reload
   if (pushHistory && window.location.pathname !== targetSlug) {
-    window.history.pushState({ tab }, meta.title, targetSlug);
+    window.history.pushState({ tab }, finalTitle, targetSlug);
   }
 }

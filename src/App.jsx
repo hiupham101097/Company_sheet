@@ -16,6 +16,7 @@ import { Login } from './components/Auth/Login';
 import { SuperAdminPortal } from './components/SuperAdmin/SuperAdminPortal';
 import { ProfileModal } from './components/Profile/ProfileModal';
 import { getTabFromPath, syncTabToUrlAndSeo } from './utils/seoRoutes';
+import { getBrandDisplayName } from './utils/brandHelper';
 import { api } from './services/api';
 import { Loader2 } from 'lucide-react';
 
@@ -54,6 +55,7 @@ export default function App() {
 
   // Global State
   const [summaryData, setSummaryData] = useState(null);
+  const [companyName, setCompanyName] = useState('');
   const [monthlyData, setMonthlyData] = useState(null);
   const [assets, setAssets] = useState([]);
   const [financeList, setFinanceList] = useState([]);
@@ -96,6 +98,16 @@ export default function App() {
       ]);
 
       setSummaryData(sumRes.data);
+      const resolvedCompany =
+        sumRes?.data?.company_name ||
+        sumRes?.data?.companyName ||
+        licRes?.data?.company_name ||
+        licRes?.data?.companyName ||
+        currentUser?.company_name ||
+        '';
+      if (resolvedCompany) {
+        setCompanyName(resolvedCompany);
+      }
       setMonthlyData(monRes.data);
       setAssets(assetRes.data || []);
       setFinanceList(finRes.data || []);
@@ -121,26 +133,33 @@ export default function App() {
     }
   }, [currentUser]);
 
+  // Xác định tên thương hiệu hiển thị (OMNIASSETS nếu demo, hoặc tên doanh nghiệp riêng)
+  const brandName = getBrandDisplayName({
+    licenseInfo,
+    companyName: companyName || summaryData?.company_name || currentUser?.company_name,
+    currentUser
+  });
+
   // Đồng bộ hóa URL Slug, Document Title và Canonical SEO khi chuyển tab
   useEffect(() => {
-    syncTabToUrlAndSeo(currentTab, true);
-  }, [currentTab]);
+    syncTabToUrlAndSeo(currentTab, true, brandName);
+  }, [currentTab, brandName]);
 
   // Lắng nghe phím Back / Forward trên trình duyệt
   useEffect(() => {
     const handlePopState = (e) => {
       const targetTab = e.state?.tab || getTabFromPath(window.location.pathname, currentUser?.role);
       setCurrentTab(targetTab);
-      syncTabToUrlAndSeo(targetTab, false);
+      syncTabToUrlAndSeo(targetTab, false, brandName);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [currentUser]);
+  }, [currentUser, brandName]);
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
     setCurrentUser(null);
-    syncTabToUrlAndSeo('dashboard', true);
+    syncTabToUrlAndSeo('dashboard', true, 'OMNIASSETS');
   };
 
   // Nếu chưa đăng nhập -> Hiển thị Màn hình Đăng Nhập
@@ -151,7 +170,7 @@ export default function App() {
           setCurrentUser(user);
           const initialTab = getTabFromPath(window.location.pathname, user?.role);
           setCurrentTab(initialTab);
-          syncTabToUrlAndSeo(initialTab, true);
+          syncTabToUrlAndSeo(initialTab, true, user?.company_name || 'OMNIASSETS');
         }}
       />
     );
@@ -173,6 +192,8 @@ export default function App() {
         licenseInfo={licenseInfo}
         onOpenUpgrade={handleOpenUpgrade}
         onOpenProfile={() => setIsProfileModalOpen(true)}
+        brandName={brandName}
+        companyName={companyName}
       />
 
       {/* Main Content Area */}
@@ -188,6 +209,8 @@ export default function App() {
           licenseInfo={licenseInfo}
           onOpenUpgrade={handleOpenUpgrade}
           onOpenProfile={() => setIsProfileModalOpen(true)}
+          brandName={brandName}
+          companyName={companyName}
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
