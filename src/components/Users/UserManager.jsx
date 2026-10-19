@@ -43,8 +43,8 @@ export function UserManager({ users = [], onRefresh, userRole = 'ADMIN' }) {
 
   const roleMap = {
     ADMIN: { label: 'Quản trị viên', variant: 'danger' },
-    MANAGER: { label: 'Quản lý phòng ban', variant: 'warning' },
-    STAFF: { label: 'Nhân viên chuyên môn', variant: 'info' }
+    MANAGER: { label: 'Quản lý', variant: 'warning' },
+    STAFF: { label: 'Nhân viên', variant: 'info' }
   };
 
   const handleSubmit = async (e) => {
@@ -88,13 +88,13 @@ export function UserManager({ users = [], onRefresh, userRole = 'ADMIN' }) {
       </div>
 
       {/* Staff Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {users.map((user) => {
           const roleInfo = roleMap[user.role] || { label: user.role, variant: 'default' };
           return (
             <div
               key={user.id}
-              className="bg-white p-5 rounded-3xl border border-pastel-200/90 shadow-soft card-hover flex flex-col justify-between"
+              className="bg-white p-5 rounded-2xl border border-pastel-200 shadow-soft card-hover flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-center gap-3">
@@ -123,9 +123,11 @@ export function UserManager({ users = [], onRefresh, userRole = 'ADMIN' }) {
                 </div>
               </div>
 
-              <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between">
-                <Badge variant={roleInfo.variant}>{roleInfo.label}</Badge>
-                <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
+              <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                <Badge variant={roleInfo.variant} className="whitespace-nowrap shrink-0">
+                  {roleInfo.label}
+                </Badge>
+                <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1.5 whitespace-nowrap shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   <span>Hoạt động</span>
                 </span>

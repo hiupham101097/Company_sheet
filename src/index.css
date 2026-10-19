@@ -112,6 +112,20 @@
   font-weight: 700;
 }
 
+/* Hide scrollbar utility */
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.scrollbar-none,
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 /* Mascot Floating & Glowing Keyframes */
 @keyframes floatMascot {
   0%, 100% {

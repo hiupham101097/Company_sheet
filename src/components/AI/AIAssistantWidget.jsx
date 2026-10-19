@@ -226,37 +226,44 @@ export function AIAssistantWidget({
 
       {/* ================= 2. POPUP CHAT BOX WITH MASCOT BESIDE (Ô POPUP CHAT) ================= */}
       {isOpen && (
-        <div className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-50 w-[380px] sm:w-[420px] max-w-[calc(100vw-2rem)] h-[580px] max-h-[85vh] bg-white rounded-3xl shadow-soft-lg border border-pastel-200 flex flex-col overflow-hidden animate-scale-in font-sans">
+        <div className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-50 flex items-end animate-scale-in">
           
-          {/* Mascot perched beside/atop the chat popup (Hiển thị linh vật bên cạnh) */}
-          <div className="absolute -top-14 -left-12 w-28 h-28 hidden sm:block pointer-events-none drop-shadow-2xl z-20 animate-float-mascot">
-            <img
-              src="/mascot.png"
-              alt="OMNI-Bot Companion"
-              className="w-full h-full object-contain"
-            />
+          {/* Mascot companion perched BESIDE the chat popup on the left (outside overflow-hidden) */}
+          <div className="hidden lg:flex flex-col items-center mr-3 mb-2 pointer-events-none drop-shadow-2xl z-10 animate-float-mascot shrink-0">
+            <div className="w-20 h-24 xl:w-24 xl:h-28">
+              <img
+                src="/mascot.png"
+                alt="OMNI-Bot Companion"
+                className="w-full h-full object-contain filter drop-shadow-lg"
+              />
+            </div>
+            <span className="px-2 py-0.5 rounded-full bg-pastel-600/95 text-white text-[9px] font-bold shadow-soft whitespace-nowrap mt-1">
+              Trợ lý OMNI-Bot
+            </span>
           </div>
 
-          {/* Header */}
-          <div className="h-16 px-4 sm:px-5 border-b border-pastel-100 bg-gradient-to-r from-pastel-50 via-white to-pastel-50 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3">
-              {/* Mobile avatar */}
-              <div className="w-10 h-10 rounded-2xl bg-white border border-pastel-200/90 p-0.5 shadow-soft flex items-center justify-center shrink-0 overflow-hidden">
-                <img src="/mascot.png" alt="OMNI-Bot" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <h3 className="text-sm font-bold text-slate-800 leading-tight">OMNI-Bot</h3>
-                  <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[10px] font-bold">
-                    Trợ lý AI
-                  </span>
+          {/* Main Chat Popup Container */}
+          <div className="w-[380px] sm:w-[420px] max-w-[calc(100vw-2rem)] h-[580px] max-h-[85vh] bg-white rounded-2xl shadow-soft-lg border border-pastel-200 flex flex-col overflow-hidden font-sans">
+            {/* Header */}
+            <div className="h-16 px-4 sm:px-5 border-b border-pastel-100 bg-gradient-to-r from-pastel-50 via-white to-pastel-50 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                {/* Header Mascot Avatar */}
+                <div className="w-10 h-10 rounded-xl bg-white border border-pastel-200 p-1 shadow-soft flex items-center justify-center shrink-0">
+                  <img src="/mascot.png" alt="OMNI-Bot" className="w-full h-full object-contain" />
                 </div>
-                <p className="text-[11px] text-pastel-700 font-semibold flex items-center gap-1 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>Trực tuyến • Sẵn sàng hỗ trợ</span>
-                </p>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-sm font-bold text-slate-800 leading-tight">OMNI-Bot</h3>
+                    <span className="px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+                      Trợ lý AI
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-pastel-700 font-semibold flex items-center gap-1 mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Trực tuyến • Sẵn sàng hỗ trợ</span>
+                  </p>
+                </div>
               </div>
-            </div>
 
             {/* Header action buttons */}
             <div className="flex items-center gap-1">
@@ -357,7 +364,10 @@ export function AIAssistantWidget({
           </div>
 
           {/* Quick Common Questions Bar */}
-          <div className="px-3 py-2 bg-white border-t border-slate-100 overflow-x-auto flex items-center gap-1.5 scrollbar-none">
+          <div
+            className="px-3 py-2 bg-white border-t border-slate-100 overflow-x-auto flex items-center gap-1.5 scrollbar-none"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
             <button
               onClick={() => handleSendMessage('Quy định giờ chấm công thế nào?')}
               className="text-[10px] font-semibold text-slate-600 hover:text-pastel-700 bg-slate-50 hover:bg-pastel-50 px-2 py-1 rounded-lg border border-slate-200 whitespace-nowrap shrink-0 transition-colors flex items-center gap-1"
@@ -416,7 +426,8 @@ export function AIAssistantWidget({
             </form>
           </div>
         </div>
-      )}
-    </>
-  );
+      </div>
+    )}
+  </>
+);
 }
