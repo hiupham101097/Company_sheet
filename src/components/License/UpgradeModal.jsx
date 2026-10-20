@@ -419,7 +419,7 @@ export function UpgradeModal({
                       <img
                         src="/payment-qr.png"
                         alt="Mã QR Chuyển Khoản ACB PHAM MINH HIEU"
-                        className="w-36 h-auto rounded-xl object-contain hover:scale-105 transition-transform duration-200 cursor-pointer"
+                        className="w-36 h-36 aspect-square rounded-xl object-contain hover:scale-105 transition-transform duration-200 cursor-pointer"
                         title="Nhấn để phóng to mã QR"
                         onClick={() => window.open('/payment-qr.png', '_blank')}
                       />
