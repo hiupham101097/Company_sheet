@@ -1516,10 +1516,11 @@ Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown \
 
     // Nếu server xử lý thành công thì lưu ngay vào DB
     if (learnedData) {
+      const { companyId } = await getTenantContext(c);
       const id = `tpl_${Date.now()}`;
       await c.env.DB.prepare(`
-        INSERT INTO ai_contract_templates (id, title, type, category_name, summary, structure_schema, sample_content)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO ai_contract_templates (id, title, type, category_name, summary, structure_schema, sample_content, company_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         id,
         learnedData.title || titleHint || 'Mẫu Hợp Đồng Đã Học',
@@ -1527,7 +1528,8 @@ Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown \
         learnedData.category_name || categoryHint || 'Hợp Đồng Doanh Nghiệp',
         learnedData.summary || '',
         JSON.stringify(learnedData.structure_schema || {}),
-        learnedData.sample_content || rawContent
+        learnedData.sample_content || rawContent,
+        companyId
       ).run();
 
       return c.json({
@@ -1562,6 +1564,7 @@ Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown \
 // AI Xây dựng / Soạn thảo hợp đồng mới dựa trên mẫu đã học và yêu cầu khách hàng
 app.post('/api/contracts/ai/generate', async (c) => {
   try {
+    const { companyId } = await getTenantContext(c);
     const body = await c.req.json();
     const {
       templateId,
@@ -1574,13 +1577,13 @@ app.post('/api/contracts/ai/generate', async (c) => {
       custom_requirements = ''
     } = body;
 
-    // Lấy thông tin mẫu đã học từ DB
+    // Lấy thông tin mẫu đã học từ DB thuộc tenant này hoặc mẫu chuẩn hệ thống
     let template = null;
     if (templateId) {
-      template = await c.env.DB.prepare('SELECT * FROM ai_contract_templates WHERE id = ?').bind(templateId).first();
+      template = await c.env.DB.prepare('SELECT * FROM ai_contract_templates WHERE id = ? AND (company_id = ? OR company_id IS NULL)').bind(templateId, companyId).first();
     }
     if (!template) {
-      template = await c.env.DB.prepare('SELECT * FROM ai_contract_templates ORDER BY created_at DESC LIMIT 1').first();
+      template = await c.env.DB.prepare('SELECT * FROM ai_contract_templates WHERE (company_id = ? OR company_id IS NULL) ORDER BY created_at DESC LIMIT 1').bind(companyId).first();
     }
 
     let geminiApiKey = c.env?.GEMINI_API_KEY || '';
@@ -1757,13 +1760,15 @@ app.post('/api/attendance/check', async (c) => {
       ? timeStr.split(':').map(Number)
       : [new Date().getHours(), new Date().getMinutes()];
 
-    // Lấy cấu hình chấm công động từ bảng system_settings
+    // Lấy cấu hình chấm công động theo từng tenant từ bảng company_settings hoặc system_settings
     let workStart = '08:30';
     let graceMin = 15;
     try {
-      const sStart = await c.env.DB.prepare("SELECT value FROM system_settings WHERE key = 'work_start_time'").first();
+      const sStart = await c.env.DB.prepare("SELECT value FROM company_settings WHERE company_id = ? AND key = 'work_start_time'").bind(companyId).first() ||
+                     await c.env.DB.prepare("SELECT value FROM system_settings WHERE key = 'work_start_time'").first();
       if (sStart?.value) workStart = sStart.value;
-      const sGrace = await c.env.DB.prepare("SELECT value FROM system_settings WHERE key = 'late_grace_minutes'").first();
+      const sGrace = await c.env.DB.prepare("SELECT value FROM company_settings WHERE company_id = ? AND key = 'late_grace_minutes'").bind(companyId).first() ||
+                     await c.env.DB.prepare("SELECT value FROM system_settings WHERE key = 'late_grace_minutes'").first();
       if (sGrace?.value) graceMin = Number(sGrace.value) || 0;
     } catch (_) {}
 
@@ -2282,6 +2287,8 @@ app.get('/api/settings', async (c) => {
   try {
     await initSettingsTable(c.env.DB);
     const { companyId } = await getTenantContext(c);
+
+    // 1. Lấy cấu hình mặc định hệ thống
     const res = await c.env.DB.prepare('SELECT * FROM system_settings ORDER BY category, key').all();
     const rows = res.results || [];
     const settingsMap = {};
@@ -2289,10 +2296,17 @@ app.get('/api/settings', async (c) => {
       settingsMap[r.key] = r.value;
     });
 
-    if (companyId && companyId !== 'comp_1' && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+    // 2. Lấy cấu hình riêng theo từng tenant (company_settings)
+    if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      const tenantSettings = await c.env.DB.prepare('SELECT key, value FROM company_settings WHERE company_id = ?').bind(companyId).all().catch(() => ({ results: [] }));
+      (tenantSettings.results || []).forEach((r) => {
+        settingsMap[r.key] = r.value;
+      });
+
+      // 3. Đồng bộ bổ sung từ company_tenants nếu có
       const compTenant = await c.env.DB.prepare('SELECT * FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null);
       if (compTenant) {
-        settingsMap['company_name'] = compTenant.company_name;
+        if (compTenant.company_name) settingsMap['company_name'] = compTenant.company_name;
         if (compTenant.tax_id) settingsMap['tax_id'] = compTenant.tax_id;
         if (compTenant.admin_email) settingsMap['company_email'] = compTenant.admin_email;
         if (compTenant.admin_phone) settingsMap['company_phone'] = compTenant.admin_phone;
@@ -2319,26 +2333,27 @@ app.put('/api/settings', async (c) => {
     }
 
     await initSettingsTable(c.env.DB);
-    const { companyId } = await getTenantContext(c);
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
     const body = await c.req.json().catch(() => ({}));
     const settingsToUpdate = body.settings || body;
     const now = new Date().toISOString();
 
-    for (const [key, value] of Object.entries(settingsToUpdate)) {
-      await c.env.DB.prepare(`
-        UPDATE system_settings
-        SET value = ?, updated_at = ?
-        WHERE key = ?
-      `).bind(String(value), now, key).run();
-    }
+    // 1. Lưu cấu hình độc lập theo từng tenant vào company_settings
+    if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      for (const [key, value] of Object.entries(settingsToUpdate)) {
+        await c.env.DB.prepare(`
+          INSERT INTO company_settings (company_id, key, value, updated_at)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(company_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+        `).bind(companyId, key, String(value), now).run().catch(() => {});
+      }
 
-    // Nếu là tenant riêng, đồng bộ tên và thông tin sang company_tenants
-    if (companyId && companyId !== 'comp_1' && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      // 2. Đồng bộ tên và thông tin sang company_tenants
       const compName = settingsToUpdate['company_name'];
       const taxId = settingsToUpdate['tax_id'];
       const phone = settingsToUpdate['company_phone'];
       const email = settingsToUpdate['company_email'];
-      if (compName) {
+      if (compName || taxId || phone || email) {
         await c.env.DB.prepare(`
           UPDATE company_tenants
           SET company_name = COALESCE(?, company_name),
@@ -2348,18 +2363,44 @@ app.put('/api/settings', async (c) => {
           WHERE id = ?
         `).bind(compName || null, taxId || null, phone || null, email || null, companyId).run().catch(() => {});
       }
+
+      // 3. Nếu là comp_1 (demo), cập nhật thêm system_settings để giữ mẫu
+      if (companyId === 'comp_1') {
+        for (const [key, value] of Object.entries(settingsToUpdate)) {
+          await c.env.DB.prepare(`
+            UPDATE system_settings
+            SET value = ?, updated_at = ?
+            WHERE key = ?
+          `).bind(String(value), now, key).run().catch(() => {});
+        }
+      }
+    } else if (isSuperAdmin) {
+      for (const [key, value] of Object.entries(settingsToUpdate)) {
+        await c.env.DB.prepare(`
+          UPDATE system_settings
+          SET value = ?, updated_at = ?
+          WHERE key = ?
+        `).bind(String(value), now, key).run().catch(() => {});
+      }
     }
 
+    // Lấy lại cấu hình đã cập nhật
     const res = await c.env.DB.prepare('SELECT * FROM system_settings ORDER BY category, key').all();
     const rows = res.results || [];
     const settingsMap = {};
     rows.forEach((r) => {
       settingsMap[r.key] = r.value;
     });
+    if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      const tenantSettings = await c.env.DB.prepare('SELECT key, value FROM company_settings WHERE company_id = ?').bind(companyId).all().catch(() => ({ results: [] }));
+      (tenantSettings.results || []).forEach((r) => {
+        settingsMap[r.key] = r.value;
+      });
+    }
 
     return c.json({
       success: true,
-      message: 'Cập nhật cài đặt hệ thống thành công',
+      message: 'Cập nhật cài đặt doanh nghiệp thành công',
       data: {
         raw: rows,
         settings: settingsMap
@@ -2491,8 +2532,28 @@ app.post('/api/license/activate', async (c) => {
     }
 
     const now = new Date().toISOString();
-    await initSettingsTable(c.env.DB);
+    const { companyId } = await getTenantContext(c);
 
+    // Kích hoạt bản quyền cho từng tenant độc lập
+    if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      await c.env.DB.prepare(`
+        UPDATE company_tenants
+        SET plan_code = 'LIFETIME', license_status = 'ACTIVE'
+        WHERE id = ?
+      `).bind(companyId).run();
+
+      await c.env.DB.prepare(`
+        INSERT INTO company_settings (company_id, key, value, updated_at)
+        VALUES (?, 'license_tier', 'ENTERPRISE', ?),
+               (?, 'license_key', ?, ?),
+               (?, 'license_status', 'ACTIVE', ?),
+               (?, 'license_activated_at', ?, ?)
+        ON CONFLICT(company_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+      `).bind(companyId, now, companyId, cleanKey, now, companyId, now, companyId, now, now).run().catch(() => {});
+    }
+
+    // Cập nhật cấu hình hệ thống
+    await initSettingsTable(c.env.DB);
     await c.env.DB.prepare(`
       UPDATE system_settings
       SET value = 'ENTERPRISE', updated_at = ?
@@ -2529,6 +2590,23 @@ app.post('/api/license/activate', async (c) => {
 app.post('/api/license/reset-demo', async (c) => {
   try {
     const now = new Date().toISOString();
+    const { companyId } = await getTenantContext(c);
+
+    if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      await c.env.DB.prepare(`
+        UPDATE company_tenants
+        SET plan_code = 'DEMO', license_status = 'EXPIRED'
+        WHERE id = ?
+      `).bind(companyId).run();
+
+      await c.env.DB.prepare(`
+        INSERT INTO company_settings (company_id, key, value, updated_at)
+        VALUES (?, 'license_tier', 'DEMO', ?),
+               (?, 'license_key', '', ?)
+        ON CONFLICT(company_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+      `).bind(companyId, now, companyId, now).run().catch(() => {});
+    }
+
     await c.env.DB.prepare(`
       UPDATE system_settings
       SET value = 'DEMO', updated_at = ?
@@ -2556,18 +2634,24 @@ app.post('/api/license/reset-demo', async (c) => {
 // ========================
 app.post('/api/ai/chat', async (c) => {
   try {
+    const { companyId } = await getTenantContext(c);
     const { message, activeTab, userRole, userName } = await c.req.json().catch(() => ({}));
     const q = (message || '').toLowerCase().trim();
 
-    // Query live context from DB
-    const [assetsCount, tasksRes, settingsRes] = await Promise.all([
-      c.env.DB.prepare('SELECT count(*) as count, sum(CASE WHEN status="MAINTENANCE" THEN 1 ELSE 0 END) as maint_count FROM assets').first().catch(() => null),
-      c.env.DB.prepare('SELECT title, due_date, status, priority FROM tasks WHERE status != "COMPLETED" ORDER BY due_date ASC LIMIT 5').all().catch(() => ({ results: [] })),
+    // Query live context strictly for this tenant
+    const [assetsCount, tasksRes, tenantComp, tenantSettingsRes, sysSettingsRes] = await Promise.all([
+      c.env.DB.prepare('SELECT count(*) as count, sum(CASE WHEN status="MAINTENANCE" THEN 1 ELSE 0 END) as maint_count FROM assets WHERE company_id = ?').bind(companyId).first().catch(() => null),
+      c.env.DB.prepare('SELECT title, due_date, status, priority FROM tasks WHERE company_id = ? AND status != "COMPLETED" ORDER BY due_date ASC LIMIT 5').bind(companyId).all().catch(() => ({ results: [] })),
+      c.env.DB.prepare('SELECT company_name FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null),
+      c.env.DB.prepare('SELECT key, value FROM company_settings WHERE company_id = ?').bind(companyId).all().catch(() => ({ results: [] })),
       c.env.DB.prepare('SELECT key, value FROM system_settings').all().catch(() => ({ results: [] }))
     ]);
 
     const settingsMap = {};
-    (settingsRes?.results || []).forEach((r) => { settingsMap[r.key] = r.value; });
+    (sysSettingsRes?.results || []).forEach((r) => { settingsMap[r.key] = r.value; });
+    (tenantSettingsRes?.results || []).forEach((r) => { settingsMap[r.key] = r.value; });
+
+    const compName = tenantComp?.company_name || settingsMap.company_name || (companyId === 'comp_1' ? 'OMNI ASSETS & LOGISTICS' : 'Doanh Nghiệp');
     const workStart = settingsMap.work_start_time || '08:30';
     const workEnd = settingsMap.work_end_time || '17:30';
     const graceMin = settingsMap.late_grace_minutes || '15';
@@ -2581,20 +2665,20 @@ app.post('/api/ai/chat', async (c) => {
     const currentDateStr = nowVN.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' });
     const currentTimeStr = nowVN.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' });
 
-    // System Prompt for Gemini with live corporate context
-    const systemPrompt = `Bạn là OMNI-Bot, trợ lý AI thông minh, linh hoạt, thân thiện và am hiểu sâu sắc của hệ thống quản lý doanh nghiệp OMNI ASSETS.
+    // System Prompt for Gemini with live corporate context of this tenant
+    const systemPrompt = `Bạn là Trợ lý AI thông minh, linh hoạt, thân thiện và am hiểu sâu sắc của hệ thống quản lý doanh nghiệp ${compName}.
 Nhiệm vụ của bạn là tư vấn, giải đáp mọi thắc mắc và hướng dẫn người dùng xử lý công việc hiệu quả trên trang web này.
 
-Bối cảnh thời gian & hệ thống thực tế:
+Bối cảnh thời gian & hệ thống thực tế của doanh nghiệp ${compName}:
 - Thời gian hiện tại: ${currentTimeStr}, ${currentDateStr} (Giờ Việt Nam GMT+7).
-- Tên công ty: ${settingsMap.company_name || 'OMNI ASSETS & LOGISTICS'}
+- Tên doanh nghiệp: ${compName}
 - Người đang trò chuyện: ${userName || 'Nhân sự'} (Vai trò hệ thống: ${userRole || 'STAFF'})
 - Tab người dùng đang đứng: '${activeTab || 'dashboard'}'
 - Quy định giờ làm việc: Vào ca lúc ${workStart}, Tan ca lúc ${workEnd}, Ân hạn đi muộn ${graceMin} phút, Lịch làm việc ${workDays}.
-- Tài sản: Đang quản lý ${assetsCount?.count || 0} tài sản (${assetsCount?.maint_count || 0} thiết bị đang bảo trì).
-- Công việc: Có ${tasksRes?.results?.length || 0} công việc đang theo dõi trong hệ thống.
+- Tài sản của công ty: Đang quản lý ${assetsCount?.count || 0} tài sản (${assetsCount?.maint_count || 0} thiết bị đang bảo trì).
+- Công việc của công ty: Có ${tasksRes?.results?.length || 0} công việc đang theo dõi trong hệ thống.
 - Các phân hệ trên trang web:
-  1. 'dashboard' (Tổng quan): Bảng điều khiển tài sản, thu chi, cảnh báo nhắc hạn.
+  1. 'dashboard' (Tổng quan): Bảng điều khiển tài sản, thu chi, cảnh báo nhắc hạn của doanh nghiệp.
   2. 'assets' (Tài sản & Thiết bị): Quản lý máy móc, cấp phát, bảo trì, serial thiết bị.
   3. 'finance' (Doanh thu & Chi phí): Dòng tiền thu chi, lợi nhuận ròng.
   4. 'tasks' (Công việc & Phân công): Giao việc theo phòng ban, hạn chót, nhắc hạn tự động 06:00 sáng.
@@ -2605,7 +2689,7 @@ Bối cảnh thời gian & hệ thống thực tế:
   9. 'settings' (Cài đặt hệ thống): Giờ làm việc, ân hạn đi muộn, hotline, thông tin doanh nghiệp.
 
 Phong cách phản hồi của AI:
-- Bạn là trí tuệ nhân tạo thực sự, tư duy sắc sảo, tự nhiên, hiểu ngữ cảnh và trả lời trực tiếp vào trọng tâm câu hỏi.
+- Bạn là trí tuệ nhân tạo thực sự của ${compName}, tư duy sắc sảo, tự nhiên, hiểu ngữ cảnh và trả lời trực tiếp vào trọng tâm câu hỏi.
 - TUYỆT ĐỐI KHÔNG dùng văn mẫu cố định, không lặp lại nguyên si tài liệu hướng dẫn nếu người dùng chỉ hỏi ngắn gọn hoặc hỏi chuyện đời thường, kiến thức, tính toán.
 - Trả lời bằng tiếng Việt văn minh, trình bày mạch lạc, sử dụng gạch đầu dòng (•) và in đậm (**từ khóa**) giúp người dùng dễ theo dõi.
 - Nếu người dùng cần hướng dẫn thao tác trên web, hãy chỉ rõ tên menu/nút bấm cụ thể.

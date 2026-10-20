@@ -41,3 +41,14 @@ UPDATE users SET company_id = 'comp_bthander' WHERE email = 'hieupham101097@gmai
 
 -- Ensure super_admin_master has role SUPER_ADMIN and company_id SYSTEM
 UPDATE users SET company_id = 'SYSTEM' WHERE id = 'super_admin_master';
+
+-- Company-specific settings table for complete isolation
+CREATE TABLE IF NOT EXISTS company_settings (
+  company_id TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value TEXT,
+  category TEXT,
+  description TEXT,
+  updated_at TEXT,
+  PRIMARY KEY (company_id, key)
+);
