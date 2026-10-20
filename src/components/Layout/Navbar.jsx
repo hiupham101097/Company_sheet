@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Bell,
   Search,
@@ -11,7 +11,15 @@ import {
   Crown,
   Zap,
   ShieldCheck,
-  RotateCw
+  RotateCw,
+  X,
+  ChevronRight,
+  Key,
+  User,
+  Copy,
+  Check,
+  FileText,
+  CheckSquare
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { formatDateVN } from '../../utils/formatters';
@@ -32,8 +40,35 @@ export function Navbar({
   companyName
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [selectedReminder, setSelectedReminder] = useState(null);
+  const [copiedKey, setCopiedKey] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [isRefreshingReminders, setIsRefreshingReminders] = useState(false);
+
+  const settingsRef = useRef(null);
+  const notificationRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target)) {
+        setShowSettingsMenu(false);
+      }
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleCopyKey = (keyText) => {
+    if (navigator?.clipboard?.writeText && keyText) {
+      navigator.clipboard.writeText(keyText);
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 2000);
+    }
+  };
 
   const handleRefreshReminders = async () => {
     try {
@@ -211,23 +246,160 @@ export function Navbar({
           </button>
         )}
 
-        {/* Settings button (Hidden on small mobile, accessible from sidebar) */}
-        {(currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER') && onNavigate && (
+        {/* Settings button & Quick Settings Dropdown */}
+        <div className="relative" ref={settingsRef}>
           <button
-            onClick={() => onNavigate('settings')}
-            className="hidden md:flex p-2 rounded-xl text-slate-500 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
-            title="Cài đặt hệ thống & chấm công"
+            type="button"
+            onClick={() => {
+              setShowSettingsMenu(!showSettingsMenu);
+              setShowNotifications(false);
+            }}
+            className={`p-2 rounded-xl transition-colors cursor-pointer ${
+              showSettingsMenu
+                ? 'bg-pastel-100 text-pastel-700 ring-2 ring-pastel-300'
+                : 'text-slate-500 hover:text-pastel-700 hover:bg-pastel-50'
+            }`}
+            title="Cài đặt hệ thống & tuỳ chọn nhanh"
           >
-            <Settings size={18} />
+            <Settings size={18} className={showSettingsMenu ? 'rotate-45 transition-transform duration-200' : 'transition-transform duration-200'} />
           </button>
-        )}
+
+          {/* Quick Settings Dropdown Menu */}
+          {showSettingsMenu && (
+            <div className="absolute right-0 mt-2 w-72 max-w-[92vw] bg-white rounded-2xl shadow-soft-lg border border-pastel-200 py-2 z-50 animate-scale-in">
+              <div className="px-4 py-2.5 border-b border-slate-100 bg-pastel-50/50">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Settings size={13} className="text-pastel-600" />
+                  Cài Đặt & Tuỳ Chọn Nhanh
+                </span>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Truy cập nhanh các mục quản trị hệ thống
+                </p>
+              </div>
+
+              <div className="p-1.5 space-y-1">
+                {(currentUser?.role === 'ADMIN' || currentUser?.role === 'MANAGER') && onNavigate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNavigate('settings');
+                      setShowSettingsMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-pastel-50 transition flex items-center gap-3 cursor-pointer group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-pastel-100 text-pastel-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Settings size={16} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-slate-800 group-hover:text-pastel-700 transition">
+                        Cài Đặt Hệ Thống & Chấm Công
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        Giờ ca, ân hạn, tên công ty & web
+                      </div>
+                    </div>
+                    <ChevronRight size={14} className="text-slate-300 group-hover:text-pastel-600 shrink-0" />
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenProfile) onOpenProfile();
+                    setShowSettingsMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-pastel-50 transition flex items-center gap-3 cursor-pointer group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <User size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition">
+                      Hồ Sơ Cá Nhân & Đổi Mật Khẩu
+                    </div>
+                    <div className="text-[10px] text-slate-400 truncate">
+                      {currentUser?.name} • {currentUser?.department || 'Thành viên'}
+                    </div>
+                  </div>
+                  <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-600 shrink-0" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenUpgrade) onOpenUpgrade();
+                    setShowSettingsMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-pastel-50 transition flex items-center gap-3 cursor-pointer group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <Crown size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-800 group-hover:text-amber-600 transition">
+                      Bản Quyền & Gói Cước
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      {licenseInfo?.isDemo ? 'Bản Dùng thử (Demo) • Nâng cấp' : 'Enterprise Vĩnh Viễn Đã Kích Hoạt'}
+                    </div>
+                  </div>
+                  <ChevronRight size={14} className="text-slate-300 group-hover:text-amber-600 shrink-0" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleRefreshReminders();
+                    setShowSettingsMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-pastel-50 transition flex items-center gap-3 cursor-pointer group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <RotateCw size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-800 group-hover:text-sky-600 transition">
+                      Làm Mới Dữ Liệu
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Đồng bộ lại toàn bộ số liệu hệ thống
+                    </div>
+                  </div>
+                  <ChevronRight size={14} className="text-slate-300 group-hover:text-sky-600 shrink-0" />
+                </button>
+
+                <div className="pt-1 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onLogout) onLogout();
+                      setShowSettingsMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-600 transition flex items-center gap-3 cursor-pointer"
+                  >
+                    <LogOut size={15} />
+                    <span className="text-xs font-bold">Đăng Xuất Tài Khoản</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Notification Bell */}
-        <div className="relative">
+        <div className="relative" ref={notificationRef}>
           <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 rounded-xl text-slate-500 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
-            title="Thông báo"
+            type="button"
+            onClick={() => {
+              setShowNotifications(!showNotifications);
+              setShowSettingsMenu(false);
+            }}
+            className={`relative p-2 rounded-xl transition-colors cursor-pointer ${
+              showNotifications
+                ? 'bg-pastel-100 text-pastel-700 ring-2 ring-pastel-300'
+                : 'text-slate-500 hover:text-pastel-700 hover:bg-pastel-50'
+            }`}
+            title="Thông báo & Nhắc hạn"
           >
             <Bell size={18} />
             {urgentReminders.length > 0 && (
@@ -237,7 +409,7 @@ export function Navbar({
 
           {/* Notifications Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl shadow-soft-lg border border-pastel-200 py-2 z-50 animate-scale-in">
+            <div className="absolute right-0 mt-2 w-84 max-w-[92vw] bg-white rounded-2xl shadow-soft-lg border border-pastel-200 py-2 z-50 animate-scale-in">
               <div className="px-4 py-2.5 border-b border-slate-100 bg-pastel-50/50">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
@@ -250,8 +422,8 @@ export function Navbar({
                     <button
                       onClick={handleRefreshReminders}
                       disabled={isRefreshingReminders}
-                      className="p-1 rounded-lg hover:bg-pastel-100 text-pastel-600 transition-colors"
-                      title="Làm mới nhắc hạn ngay (Hệ thống tự động chạy lúc 06:00 AM mỗi ngày)"
+                      className="p-1 rounded-lg hover:bg-pastel-100 text-pastel-600 transition-colors cursor-pointer"
+                      title="Làm mới nhắc hạn ngay"
                     >
                       <RotateCw size={13} className={isRefreshingReminders ? 'animate-spin' : ''} />
                     </button>
@@ -259,7 +431,7 @@ export function Navbar({
                 </div>
                 <p className="text-[10px] text-pastel-700 font-medium mt-1 flex items-center gap-1">
                   <Clock size={11} className="text-pastel-500 shrink-0" />
-                  <span>Tự động làm mới: 06:00 sáng mỗi ngày</span>
+                  <span>Nhấp vào thông báo bất kỳ để xem chi tiết & xử lý</span>
                 </p>
               </div>
 
@@ -270,9 +442,14 @@ export function Navbar({
                   </div>
                 ) : (
                   urgentReminders.map((item) => (
-                    <div
+                    <button
+                      type="button"
                       key={item.id}
-                      className="p-3 hover:bg-pastel-50/50 transition-colors flex items-start gap-2.5"
+                      onClick={() => {
+                        setSelectedReminder(item);
+                        setShowNotifications(false);
+                      }}
+                      className="w-full text-left p-3 hover:bg-pastel-50/70 transition-colors flex items-start gap-2.5 cursor-pointer group"
                     >
                       <div
                         className={`mt-0.5 p-1 rounded-md shrink-0 ${
@@ -286,20 +463,174 @@ export function Navbar({
                         <AlertTriangle size={13} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-slate-700 font-medium leading-relaxed">
+                        <p className="text-xs text-slate-700 font-semibold leading-relaxed group-hover:text-pastel-700 transition">
                           {item.title}
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5 font-mono">
-                          Hạn: {formatDateVN(item.date)}
-                        </p>
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Hạn: {formatDateVN(item.date)}
+                          </span>
+                          <span className="text-[10px] font-bold text-pastel-600 group-hover:underline flex items-center gap-0.5">
+                            Xem chi tiết ➔
+                          </span>
+                        </div>
                       </div>
-                    </div>
+                      <ChevronRight size={14} className="text-slate-300 group-hover:text-pastel-600 shrink-0 mt-1" />
+                    </button>
                   ))
                 )}
               </div>
             </div>
           )}
         </div>
+
+        {/* Modal Chi Tiết Thông Báo Khi Người Dùng Nhấp Vào */}
+        {selectedReminder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
+            <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-scale-in">
+              {/* Header Modal */}
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-pastel-50/40">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                      selectedReminder.level === 'danger'
+                        ? 'bg-rose-100 text-rose-600'
+                        : selectedReminder.level === 'warning'
+                        ? 'bg-amber-100 text-amber-600'
+                        : 'bg-sky-100 text-sky-600'
+                    }`}
+                  >
+                    <AlertTriangle size={18} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-800">
+                      Chi Tiết Thông Báo & Nhắc Hạn
+                    </h4>
+                    <span className="text-[10px] font-semibold text-slate-400">
+                      Hệ thống tự động theo dõi thời gian thực
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedReminder(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Body Modal */}
+              <div className="p-5 space-y-4">
+                <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    Nội dung thông báo:
+                  </div>
+                  <p className="text-sm font-bold text-slate-800 leading-relaxed">
+                    {selectedReminder.title}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                    <span className="text-slate-400 text-[10px]">Ngày ghi nhận / Hạn:</span>
+                    <div className="font-bold text-slate-700 mt-0.5">
+                      {formatDateVN(selectedReminder.date)}
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                    <span className="text-slate-400 text-[10px]">Mức độ ưu tiên:</span>
+                    <div className="font-bold mt-0.5">
+                      {selectedReminder.level === 'danger' ? (
+                        <span className="text-rose-600 font-extrabold">🔴 Quá hạn / Khẩn</span>
+                      ) : selectedReminder.level === 'warning' ? (
+                        <span className="text-amber-600 font-extrabold">🟡 Cảnh báo / Sắp tới</span>
+                      ) : (
+                        <span className="text-sky-600 font-extrabold">🔵 Thông tin chung</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nếu là thông báo cấp mã key bản quyền */}
+                {selectedReminder.key && (
+                  <div className="p-3.5 bg-gradient-to-r from-amber-50 to-indigo-50 border border-amber-200 rounded-2xl space-y-2">
+                    <div className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">
+                      Mã Bản Quyền Của Bạn:
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={selectedReminder.key}
+                        className="flex-1 px-3 py-2 bg-white rounded-xl font-mono text-xs font-black text-indigo-700 border border-indigo-200 select-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleCopyKey(selectedReminder.key)}
+                        className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shrink-0"
+                      >
+                        {copiedKey ? <Check size={14} /> : <Copy size={14} />}
+                        <span>{copiedKey ? 'Đã chép' : 'Sao chép'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions Footer */}
+              <div className="p-5 pt-0 flex items-center gap-2.5">
+                {selectedReminder.key ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedReminder(null);
+                      if (onOpenUpgrade) onOpenUpgrade();
+                    }}
+                    className="flex-1 py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Key size={14} />
+                    <span>Kích Hoạt Bản Quyền Ngay</span>
+                  </button>
+                ) : selectedReminder.id?.startsWith('ctr_') ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedReminder(null);
+                      if (onNavigate) onNavigate('contracts');
+                    }}
+                    className="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <FileText size={14} />
+                    <span>Đi Đến Hợp Đồng ➔</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedReminder(null);
+                      if (onNavigate) onNavigate('tasks');
+                    }}
+                    className="flex-1 py-2.5 px-4 bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <CheckSquare size={14} />
+                    <span>Đi Đến Công Việc ➔</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedReminder(null)}
+                  className="py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs transition cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* User Profile Info & Logout */}
         <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-200/80">
