@@ -21,31 +21,56 @@ import {
   TrendingUp,
   Receipt,
   Users,
-  Award
+  Award,
+  KeyRound,
+  Copy,
+  Check,
+  BarChart3,
+  UserCheck,
+  UserX,
+  ExternalLink,
+  ShieldCheck
 } from 'lucide-react';
 import { Modal } from '../Common/Modal';
 import { Badge } from '../Common/Badge';
 import { api } from '../../services/api';
 
-export function SuperAdminPortal({ currentUser }) {
-  const [activeTab, setActiveTab] = useState('companies'); // 'companies' | 'plans' | 'revenue' | 'overview'
+export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavigateTab }) {
+  const [internalTab, setInternalTab] = useState('overview');
+  const activeTab = propActiveTab || internalTab;
+  const setActiveTab = (tab) => {
+    setInternalTab(tab);
+    if (onNavigateTab) onNavigateTab(tab);
+  };
+
   const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [plans, setPlans] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [keys, setKeys] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPlan, setFilterPlan] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
+
+  // Keys Filter & Search
+  const [searchKey, setSearchKey] = useState('');
+  const [filterKeyStatus, setFilterKeyStatus] = useState('ALL');
+  const [copiedKeyId, setCopiedKeyId] = useState(null);
 
   // Modal States
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
+  const [isCompanyUsersModalOpen, setIsCompanyUsersModalOpen] = useState(false);
 
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [selectedCompanyForUsers, setSelectedCompanyForUsers] = useState(null);
+  const [companyUsersList, setCompanyUsersList] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Forms
   const [companyForm, setCompanyForm] = useState({
@@ -91,21 +116,34 @@ export function SuperAdminPortal({ currentUser }) {
     notes: 'Thanh toán chuyển khoản ngân hàng'
   });
 
+  const [keyForm, setKeyForm] = useState({
+    license_key: '',
+    plan_code: 'ANNUAL_1Y',
+    plan_name: 'Gói Tiêu Chuẩn 1 Năm',
+    company_id: '',
+    company_name: '',
+    duration_months: 12,
+    price: 4800000,
+    notes: ''
+  });
+
   // Tải dữ liệu toàn bộ
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [overRes, compRes, planRes, ordRes] = await Promise.all([
+      const [overRes, compRes, planRes, ordRes, keyRes] = await Promise.all([
         api.getSuperAdminOverview(),
         api.getSuperAdminCompanies(),
         api.getSuperAdminPlans(),
-        api.getSuperAdminOrders()
+        api.getSuperAdminOrders(),
+        api.getSuperAdminKeys()
       ]);
 
       setOverview(overRes?.data || null);
       setCompanies(compRes?.data || []);
       setPlans(planRes?.data || []);
       setOrders(ordRes?.data || []);
+      setKeys(keyRes?.data || []);
     } catch (err) {
       console.error('Lỗi tải dữ liệu Quản trị Tổng:', err);
     } finally {
@@ -327,6 +365,108 @@ export function SuperAdminPortal({ currentUser }) {
     }
   };
 
+  // Trình tạo Key ngẫu nhiên
+  const generateRandomKey = (planCode = 'ANNUAL_1Y') => {
+    const prefix = planCode === 'LIFETIME' ? 'OMNI-LIFE' : planCode === 'TRIAL_2M' ? 'OMNI-TR2M' : 'OMNI-ENT';
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const randSegment = (len) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    return `${prefix}-${randSegment(4)}-${randSegment(4)}-${randSegment(4)}`;
+  };
+
+  // Mở modal tạo Key mới
+  const handleOpenCreateKey = (targetCompany = null) => {
+    const defaultKey = generateRandomKey('ANNUAL_1Y');
+    setKeyForm({
+      license_key: defaultKey,
+      plan_code: 'ANNUAL_1Y',
+      plan_name: 'Gói Tiêu Chuẩn 1 Năm',
+      company_id: targetCompany?.id || '',
+      company_name: targetCompany?.company_name || '',
+      duration_months: 12,
+      price: 4800000,
+      notes: targetCompany ? `Cấp riêng cho ${targetCompany.company_name}` : ''
+    });
+    setIsKeyModalOpen(true);
+  };
+
+  // Lưu tạo Key
+  const handleSaveKey = async (e) => {
+    e.preventDefault();
+    if (!keyForm.license_key.trim()) {
+      alert('Vui lòng tạo hoặc nhập mã Key!');
+      return;
+    }
+    try {
+      setLoading(true);
+      await api.createSuperAdminKey(keyForm);
+      setIsKeyModalOpen(false);
+      fetchData();
+      alert(`Đã tạo mã Key thành công:\n${keyForm.license_key}\n\nBạn có thể sao chép để gửi cho khách hàng kích hoạt!`);
+    } catch (err) {
+      alert(err.message || 'Lỗi khi tạo mã Key');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Sao chép Key 1-click
+  const handleCopyKey = (keyString, keyId) => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(keyString);
+      setCopiedKeyId(keyId);
+      setTimeout(() => setCopiedKeyId(null), 2500);
+    } else {
+      prompt('Sao chép mã Key bản quyền này:', keyString);
+    }
+  };
+
+  // Thu hồi / khôi phục Key
+  const handleToggleRevokeKey = async (k) => {
+    const isRevoked = k.status === 'REVOKED';
+    const nextStatus = isRevoked ? 'ACTIVE' : 'REVOKED';
+    if (!window.confirm(`Bạn có chắc chắn muốn ${isRevoked ? 'khôi phục' : 'thu hồi'} mã Key "${k.license_key}"?`)) return;
+
+    try {
+      setLoading(true);
+      await api.updateSuperAdminKey(k.id, { status: nextStatus });
+      fetchData();
+    } catch (err) {
+      alert(err.message || 'Lỗi cập nhật Key');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Xóa Key
+  const handleDeleteKey = async (k) => {
+    if (!window.confirm(`Xác nhận xóa mã Key "${k.license_key}" khỏi hệ thống?`)) return;
+    try {
+      setLoading(true);
+      await api.deleteSuperAdminKey(k.id);
+      fetchData();
+    } catch (err) {
+      alert(err.message || 'Lỗi khi xóa Key');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Xem danh sách người dùng (users) của một doanh nghiệp
+  const handleViewCompanyUsers = async (comp) => {
+    setSelectedCompanyForUsers(comp);
+    setIsCompanyUsersModalOpen(true);
+    try {
+      setLoadingUsers(true);
+      const res = await api.getCompanyUsers(comp.id);
+      setCompanyUsersList(res?.data || []);
+    } catch (err) {
+      console.error('Lỗi tải danh sách người dùng:', err);
+      setCompanyUsersList([]);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
   // Lọc danh sách công ty
   const filteredCompanies = companies.filter((c) => {
     const matchSearch =
@@ -341,14 +481,31 @@ export function SuperAdminPortal({ currentUser }) {
     return matchSearch && matchPlan && matchStatus;
   });
 
-  const stats = overview?.stats || {
+  // Lọc danh sách keys
+  const filteredKeys = keys.filter((k) => {
+    const matchSearch =
+      k.license_key?.toLowerCase().includes(searchKey.toLowerCase()) ||
+      k.company_name?.toLowerCase().includes(searchKey.toLowerCase()) ||
+      k.plan_name?.toLowerCase().includes(searchKey.toLowerCase()) ||
+      k.notes?.toLowerCase().includes(searchKey.toLowerCase());
+
+    const matchStatus = filterKeyStatus === 'ALL' || k.status === filterKeyStatus;
+    return matchSearch && matchStatus;
+  });
+
+  const calculatedTotalUsers = companies.reduce((acc, c) => acc + (Number(c.user_count) || 0), 0);
+  const stats = {
     totalCompanies: companies.length,
     activeCompanies: companies.filter((c) => c.license_status === 'ACTIVE').length,
     trialCompanies: companies.filter((c) => c.plan_code === 'TRIAL_2M').length,
     expiredCompanies: companies.filter((c) => c.license_status === 'EXPIRED').length,
     lockedCompanies: companies.filter((c) => c.license_status === 'LOCKED').length,
     totalRevenue: companies.reduce((acc, c) => acc + (Number(c.revenue) || 0), 0),
-    totalOrders: orders.length
+    totalOrders: orders.length,
+    totalUsers: overview?.stats?.totalUsers || calculatedTotalUsers,
+    totalKeys: keys.length,
+    activeKeys: keys.filter((k) => k.status === 'ACTIVE').length,
+    usedKeys: keys.filter((k) => k.status === 'USED').length
   };
 
   return (
@@ -363,10 +520,10 @@ export function SuperAdminPortal({ currentUser }) {
               Cổng Quản Trị Nền Tảng Tối Cao (Master Account)
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Quản Trị Doanh Nghiệp & Doanh Thu Gói
+              Quản Trị Doanh Nghiệp, Cấp Quyền & Tạo Keys
             </h1>
             <p className="text-purple-200/80 text-xs sm:text-sm max-w-2xl leading-relaxed">
-              Tài khoản riêng biệt dành cho bạn: Cấp quyền hoạt động, kiểm soát các tổ chức/doanh nghiệp, xây dựng các gói cước (1 năm, vĩnh viễn, dùng thử 2 tháng) và giám sát dòng tiền đăng ký.
+              Dành riêng cho Quản trị viên Nền tảng: Duyệt & phân quyền tổ chức, tạo mã Keys bản quyền đóng gói gửi khách hàng, giám sát người dùng (users) và doanh thu gói cước toàn hệ thống.
             </p>
           </div>
 
@@ -374,14 +531,21 @@ export function SuperAdminPortal({ currentUser }) {
             <button
               onClick={fetchData}
               disabled={loading}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-semibold transition backdrop-blur-md"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-semibold transition backdrop-blur-md cursor-pointer"
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
               Làm mới
             </button>
             <button
+              onClick={() => handleOpenCreateKey()}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-amber-300 text-xs font-bold transition backdrop-blur-md cursor-pointer"
+            >
+              <KeyRound size={15} />
+              Tạo Key Bản Quyền
+            </button>
+            <button
               onClick={() => setIsCompanyModalOpen(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-xs font-bold shadow-lg shadow-purple-500/25 transition transform active:scale-95"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white text-xs font-bold shadow-lg shadow-purple-500/25 transition transform active:scale-95 cursor-pointer"
             >
               <Plus size={16} />
               Thêm Doanh Nghiệp
@@ -389,24 +553,36 @@ export function SuperAdminPortal({ currentUser }) {
           </div>
         </div>
 
-        {/* Global Key Metrics */}
+        {/* Global Key Metrics - Includes Users and Keys */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-8 pt-6 border-t border-purple-500/20">
           <div className="bg-white/5 backdrop-blur-sm p-3.5 rounded-2xl border border-white/10">
             <div className="text-[11px] text-purple-200/70 font-medium">Tổng Doanh Nghiệp</div>
             <div className="text-xl font-bold mt-1 text-white">{stats.totalCompanies}</div>
-            <div className="text-[10px] text-purple-300/60 mt-0.5">Khách hàng hệ thống</div>
+            <div className="text-[10px] text-purple-300/60 mt-0.5">{stats.activeCompanies} đang hoạt động</div>
           </div>
 
-          <div className="bg-emerald-500/10 backdrop-blur-sm p-3.5 rounded-2xl border border-emerald-500/20">
-            <div className="text-[11px] text-emerald-300 font-medium">Đang Hoạt Động</div>
-            <div className="text-xl font-bold mt-1 text-emerald-400">{stats.activeCompanies}</div>
-            <div className="text-[10px] text-emerald-200/70 mt-0.5">Được cấp quyền</div>
+          <div className="bg-sky-500/10 backdrop-blur-sm p-3.5 rounded-2xl border border-sky-500/20">
+            <div className="text-[11px] text-sky-200 font-medium flex items-center justify-between">
+              <span>Tổng Số Users</span>
+              <Users size={13} className="text-sky-300" />
+            </div>
+            <div className="text-xl font-bold mt-1 text-sky-300">{stats.totalUsers}</div>
+            <div className="text-[10px] text-sky-200/70 mt-0.5">Người dùng toàn hệ thống</div>
           </div>
 
           <div className="bg-amber-500/10 backdrop-blur-sm p-3.5 rounded-2xl border border-amber-500/20">
-            <div className="text-[11px] text-amber-300 font-medium">Dùng Thử (2 Tháng)</div>
-            <div className="text-xl font-bold mt-1 text-amber-400">{stats.trialCompanies}</div>
-            <div className="text-[10px] text-amber-200/70 mt-0.5">Tiềm năng chuyển đổi</div>
+            <div className="text-[11px] text-amber-200 font-medium flex items-center justify-between">
+              <span>Keys Bản Quyền</span>
+              <KeyRound size={13} className="text-amber-300" />
+            </div>
+            <div className="text-xl font-bold mt-1 text-amber-300">{stats.totalKeys}</div>
+            <div className="text-[10px] text-amber-200/70 mt-0.5">{stats.usedKeys} key đã kích hoạt</div>
+          </div>
+
+          <div className="bg-emerald-500/10 backdrop-blur-sm p-3.5 rounded-2xl border border-emerald-500/20">
+            <div className="text-[11px] text-emerald-300 font-medium">Cấp Quyền Đang Chạy</div>
+            <div className="text-xl font-bold mt-1 text-emerald-400">{stats.activeCompanies}</div>
+            <div className="text-[10px] text-emerald-200/70 mt-0.5">{stats.trialCompanies} dùng thử 2T</div>
           </div>
 
           <div className="bg-rose-500/10 backdrop-blur-sm p-3.5 rounded-2xl border border-rose-500/20">
@@ -417,38 +593,62 @@ export function SuperAdminPortal({ currentUser }) {
             <div className="text-[10px] text-rose-200/70 mt-0.5">Cần nhắc gia hạn</div>
           </div>
 
-          <div className="bg-purple-500/10 backdrop-blur-sm p-3.5 rounded-2xl border border-purple-500/20 col-span-2 sm:col-span-2">
+          <div className="bg-purple-500/10 backdrop-blur-sm p-3.5 rounded-2xl border border-purple-500/20">
             <div className="text-[11px] text-purple-200 font-medium flex items-center justify-between">
-              <span>Doanh Thu Gói Thu Được</span>
+              <span>Doanh Thu Gói</span>
               <TrendingUp size={13} className="text-emerald-400" />
             </div>
-            <div className="text-xl font-extrabold mt-1 text-amber-300">
+            <div className="text-lg font-extrabold mt-1 text-amber-300 truncate">
               {formatCurrency(stats.totalRevenue)}
             </div>
             <div className="text-[10px] text-purple-300/70 mt-0.5">
-              Từ {stats.totalOrders || 0} đơn hàng kích hoạt
+              Từ {stats.totalOrders || 0} đơn hàng
             </div>
           </div>
         </div>
       </div>
 
-      {/* Navigation Sub-Tabs */}
-      <div className="flex items-center gap-2 border-b border-pastel-200 pb-2">
+      {/* Navigation Sub-Tabs: 5 Tabs Dedicated to Platform Admin */}
+      <div className="flex items-center gap-2 border-b border-pastel-200 pb-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+            activeTab === 'overview'
+              ? 'bg-purple-600 text-white shadow-soft'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <BarChart3 size={15} />
+          Thống Kê Nền Tảng & User
+        </button>
+
         <button
           onClick={() => setActiveTab('companies')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition ${
+          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
             activeTab === 'companies'
               ? 'bg-purple-600 text-white shadow-soft'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Building2 size={15} />
-          Quản Lý Doanh Nghiệp ({companies.length})
+          Duyệt Doanh Nghiệp ({companies.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('keys')}
+          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+            activeTab === 'keys'
+              ? 'bg-purple-600 text-white shadow-soft'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <KeyRound size={15} />
+          Tạo Keys Bản Quyền ({keys.length})
         </button>
 
         <button
           onClick={() => setActiveTab('plans')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition ${
+          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
             activeTab === 'plans'
               ? 'bg-purple-600 text-white shadow-soft'
               : 'text-slate-600 hover:bg-slate-100'
@@ -460,16 +660,212 @@ export function SuperAdminPortal({ currentUser }) {
 
         <button
           onClick={() => setActiveTab('revenue')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition ${
+          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
             activeTab === 'revenue'
               ? 'bg-purple-600 text-white shadow-soft'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Receipt size={15} />
-          Doanh Thu & Hóa Đơn Gói ({orders.length})
+          Doanh Thu & Hóa Đơn ({orders.length})
         </button>
       </div>
+
+      {/* ==================================================== */}
+      {/* TAB 0: TỔNG QUAN NỀN TẢNG & THỐNG KÊ NGƯỜI DÙNG      */}
+      {/* ==================================================== */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          {/* Top Quick Analysis Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-pastel-200/80 shadow-soft">
+              <div className="flex items-center justify-between pb-3 border-b border-pastel-100">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Users size={15} className="text-sky-500" />
+                  Quy Mô Người Dùng Hệ Thống
+                </span>
+                <span className="text-[11px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full">
+                  {stats.totalUsers} users
+                </span>
+              </div>
+              <div className="mt-3 space-y-2 text-xs">
+                <div className="flex justify-between text-slate-600">
+                  <span>Trung bình mỗi doanh nghiệp:</span>
+                  <span className="font-bold text-slate-800">
+                    {stats.totalCompanies > 0 ? (stats.totalUsers / stats.totalCompanies).toFixed(1) : 0} users/cty
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Doanh nghiệp có người dùng:</span>
+                  <span className="font-bold text-emerald-600">
+                    {companies.filter((c) => (c.user_count || 0) > 0).length} / {stats.totalCompanies}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Tài khoản Quản trị Platform:</span>
+                  <span className="font-bold text-purple-700">1 (Master Account)</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-pastel-200/80 shadow-soft">
+              <div className="flex items-center justify-between pb-3 border-b border-pastel-100">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <KeyRound size={15} className="text-amber-500" />
+                  Tình Trạng Keys Bản Quyền
+                </span>
+                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                  {stats.totalKeys} keys
+                </span>
+              </div>
+              <div className="mt-3 space-y-2 text-xs">
+                <div className="flex justify-between text-slate-600">
+                  <span>Key sẵn sàng gửi khách:</span>
+                  <span className="font-bold text-emerald-600">{stats.activeKeys} keys</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Key đã kích hoạt sử dụng:</span>
+                  <span className="font-bold text-sky-600">{stats.usedKeys} keys</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Key đã thu hồi:</span>
+                  <span className="font-bold text-rose-500">{keys.filter((k) => k.status === 'REVOKED').length} keys</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-pastel-200/80 shadow-soft">
+              <div className="flex items-center justify-between pb-3 border-b border-pastel-100">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Package size={15} className="text-purple-500" />
+                  Cơ Cấu Gói Cước Doanh Nghiệp
+                </span>
+                <span className="text-[11px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
+                  {plans.length} gói
+                </span>
+              </div>
+              <div className="mt-3 space-y-2 text-xs">
+                <div className="flex justify-between text-slate-600">
+                  <span>Gói Vĩnh Viễn (Lifetime):</span>
+                  <span className="font-bold text-amber-600">
+                    {companies.filter((c) => c.plan_code === 'LIFETIME' || c.plan_code === 'LIFETIME_PRO').length} cty
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Gói Tiêu Chuẩn 1 Năm:</span>
+                  <span className="font-bold text-indigo-600">
+                    {companies.filter((c) => c.plan_code === 'ANNUAL_1Y').length} cty
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Gói Dùng Thử 2 Tháng:</span>
+                  <span className="font-bold text-slate-600">{stats.trialCompanies} cty</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* User Distribution by Company Table */}
+          <div className="bg-white rounded-2xl border border-pastel-200/80 shadow-soft overflow-hidden">
+            <div className="p-4 border-b border-pastel-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Users size={16} className="text-purple-600" />
+                  Thống Kê Số Lượng Người Dùng (Users) Theo Doanh Nghiệp
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Theo dõi số lượng nhân sự, phân quyền và trạng thái hoạt động của từng tổ chức trên nền tảng.
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveTab('companies')}
+                className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 cursor-pointer"
+              >
+                <span>Xem quản lý ({companies.length})</span>
+                <ArrowUpRight size={14} />
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-pastel-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">#</th>
+                    <th className="py-3 px-4">Tên Doanh Nghiệp</th>
+                    <th className="py-3 px-4">Người Đại Diện & Email</th>
+                    <th className="py-3 px-4">Gói Bản Quyền</th>
+                    <th className="py-3 px-4">Số Lượng Users</th>
+                    <th className="py-3 px-4">Trạng Thái</th>
+                    <th className="py-3 px-4 text-right">Chi Tiết Users</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-pastel-100 text-xs">
+                  {companies.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                        Chưa có dữ liệu doanh nghiệp.
+                      </td>
+                    </tr>
+                  ) : (
+                    companies
+                      .slice()
+                      .sort((a, b) => (Number(b.user_count) || 0) - (Number(a.user_count) || 0))
+                      .map((comp, idx) => (
+                        <tr key={comp.id} className="hover:bg-purple-50/30 transition">
+                          <td className="py-3 px-4 text-slate-400 font-bold">{idx + 1}</td>
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-slate-800">{comp.company_name}</div>
+                            <div className="text-[10px] text-slate-400">MST: {comp.tax_id || 'Chưa cập nhật'}</div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-medium text-slate-700">{comp.admin_name || '—'}</div>
+                            <div className="text-[10px] text-slate-400">{comp.admin_email || '—'}</div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-semibold text-[11px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200">
+                              {comp.plan_code || 'TRIAL_2M'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 border border-sky-200 text-xs font-black">
+                              <Users size={12} className="text-sky-600" />
+                              {comp.user_count || 0} users
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            {comp.license_status === 'ACTIVE' ? (
+                              <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                Hoạt động
+                              </span>
+                            ) : comp.license_status === 'LOCKED' ? (
+                              <span className="text-[11px] text-rose-600 font-semibold flex items-center gap-1">
+                                <Lock size={11} /> Tạm khóa
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-amber-600 font-semibold flex items-center gap-1">
+                                <AlertTriangle size={11} /> Hết hạn
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              onClick={() => handleViewCompanyUsers(comp)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-xs transition border border-sky-200 cursor-pointer"
+                            >
+                              <Users size={12} />
+                              Xem Users
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ==================================================== */}
       {/* TAB 1: QUẢN LÝ DOANH NGHIỆP & CẤP QUYỀN SỬ DỤNG      */}
@@ -523,6 +919,7 @@ export function SuperAdminPortal({ currentUser }) {
                     <th className="py-3.5 px-4">Doanh Nghiệp / MST</th>
                     <th className="py-3.5 px-4">Đại Diện / Liên Hệ</th>
                     <th className="py-3.5 px-4">Gói Cước Đăng Ký</th>
+                    <th className="py-3.5 px-4">Số Users</th>
                     <th className="py-3.5 px-4">Thời Hạn & Ngày Hết</th>
                     <th className="py-3.5 px-4">Doanh Thu Thu Được</th>
                     <th className="py-3.5 px-4">Trạng Thái Bản Quyền</th>
@@ -532,7 +929,7 @@ export function SuperAdminPortal({ currentUser }) {
                 <tbody className="divide-y divide-pastel-100 text-xs">
                   {filteredCompanies.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-400">
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
                         <Building2 size={36} className="mx-auto mb-2 text-slate-300 opacity-60" />
                         Chưa tìm thấy doanh nghiệp nào phù hợp tiêu chí lọc.
                       </td>
@@ -561,7 +958,7 @@ export function SuperAdminPortal({ currentUser }) {
                           </td>
 
                           <td className="py-3.5 px-4">
-                            {c.plan_code === 'LIFETIME' ? (
+                            {c.plan_code === 'LIFETIME' || c.plan_code === 'LIFETIME_PRO' ? (
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 font-bold text-[11px]">
                                 <Award size={12} className="text-amber-500" />
                                 Vĩnh Viễn (Lifetime)
@@ -575,6 +972,19 @@ export function SuperAdminPortal({ currentUser }) {
                                 Dùng thử 2 tháng
                               </span>
                             )}
+                          </td>
+
+                          {/* Users Column */}
+                          <td className="py-3.5 px-4">
+                            <button
+                              onClick={() => handleViewCompanyUsers(c)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 text-xs font-bold transition cursor-pointer"
+                              title="Bấm để xem chi tiết danh sách người dùng của doanh nghiệp này"
+                            >
+                              <Users size={12} className="text-sky-600" />
+                              <span>{c.user_count || 0} users</span>
+                              <ExternalLink size={10} className="text-sky-400" />
+                            </button>
                           </td>
 
                           <td className="py-3.5 px-4">
@@ -612,8 +1022,24 @@ export function SuperAdminPortal({ currentUser }) {
                           <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <button
+                                onClick={() => handleViewCompanyUsers(c)}
+                                className="p-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 transition cursor-pointer"
+                                title="Xem danh sách người dùng / users"
+                              >
+                                <Users size={14} />
+                              </button>
+
+                              <button
+                                onClick={() => handleOpenCreateKey(c)}
+                                className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition cursor-pointer"
+                                title="Tạo mã Key bản quyền cấp cho doanh nghiệp này"
+                              >
+                                <KeyRound size={14} />
+                              </button>
+
+                              <button
                                 onClick={() => handleOpenLicense(c)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs transition border border-purple-200"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs transition border border-purple-200 cursor-pointer"
                                 title="Cấp quyền sử dụng / Gia hạn / Đổi gói"
                               >
                                 <Sparkles size={13} />
@@ -622,7 +1048,7 @@ export function SuperAdminPortal({ currentUser }) {
 
                               <button
                                 onClick={() => handleToggleLockCompany(c)}
-                                className={`p-1.5 rounded-lg border transition ${
+                                className={`p-1.5 rounded-lg border transition cursor-pointer ${
                                   isLocked
                                     ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
                                     : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
@@ -634,10 +1060,207 @@ export function SuperAdminPortal({ currentUser }) {
 
                               <button
                                 onClick={() => handleDeleteCompany(c)}
-                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition"
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition cursor-pointer"
                                 title="Xóa doanh nghiệp"
                               >
                                 <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* TAB 2: TẠO KEYS BẢN QUYỀN ĐÓNG GÓI & PHÂN PHỐI       */}
+      {/* ==================================================== */}
+      {activeTab === 'keys' && (
+        <div className="space-y-4">
+          {/* Header & Filter Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-pastel-200/80 shadow-soft">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                placeholder="Tìm mã Key, tên doanh nghiệp, gói cước, ghi chú..."
+                value={searchKey}
+                onChange={(e) => setSearchKey(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 rounded-xl text-xs bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:bg-white"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <select
+                value={filterKeyStatus}
+                onChange={(e) => setFilterKeyStatus(e.target.value)}
+                className="px-3 py-2 rounded-xl text-xs bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-purple-400 text-slate-700 font-medium"
+              >
+                <option value="ALL">Mọi Trạng Thái Key</option>
+                <option value="ACTIVE">Sẵn sàng (Chưa kích hoạt)</option>
+                <option value="USED">Đã kích hoạt sử dụng</option>
+                <option value="REVOKED">Đã thu hồi (REVOKED)</option>
+              </select>
+
+              <button
+                onClick={() => handleOpenCreateKey()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-soft transition cursor-pointer"
+              >
+                <Plus size={15} />
+                Tạo Mã Key Mới
+              </button>
+            </div>
+          </div>
+
+          {/* Keys Table */}
+          <div className="bg-white rounded-2xl border border-pastel-200/80 shadow-soft overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-pastel-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="py-3.5 px-4">Mã Key Bản Quyền</th>
+                    <th className="py-3.5 px-4">Gói Cước & Thời Hạn</th>
+                    <th className="py-3.5 px-4">Doanh Nghiệp Sử Dụng</th>
+                    <th className="py-3.5 px-4">Giá Gói (VND)</th>
+                    <th className="py-3.5 px-4">Trạng Thái Key</th>
+                    <th className="py-3.5 px-4">Ngày Tạo / Kích Hoạt</th>
+                    <th className="py-3.5 px-4 text-right">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-pastel-100 text-xs">
+                  {filteredKeys.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-slate-400">
+                        <KeyRound size={36} className="mx-auto mb-2 text-slate-300 opacity-60" />
+                        Chưa tìm thấy mã Key nào phù hợp tiêu chí lọc.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredKeys.map((k) => {
+                      const isUsed = k.status === 'USED';
+                      const isRevoked = k.status === 'REVOKED';
+                      const isActive = k.status === 'ACTIVE';
+                      const isCopied = copiedKeyId === k.id;
+
+                      return (
+                        <tr key={k.id} className="hover:bg-purple-50/30 transition">
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-purple-800 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200 text-xs select-all">
+                                {k.license_key}
+                              </span>
+                              <button
+                                onClick={() => handleCopyKey(k.license_key, k.id)}
+                                className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                                  isCopied
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                                }`}
+                                title="Sao chép mã Key để gửi cho khách hàng"
+                              >
+                                {isCopied ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                              </button>
+                            </div>
+                            {k.notes && (
+                              <div className="text-[10px] text-slate-400 mt-1 italic">
+                                Ghi chú: {k.notes}
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <div className="font-bold text-slate-800">{k.plan_name || k.plan_code}</div>
+                            <div className="text-[11px] text-slate-500">
+                              {k.duration_months >= 999 ? 'Vĩnh viễn (Lifetime)' : `${k.duration_months || 12} tháng`}
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            {k.company_name ? (
+                              <div>
+                                <span className="font-bold text-slate-800">{k.company_name}</span>
+                                {k.activated_by_email && (
+                                  <div className="text-[10px] text-slate-400">
+                                    Bởi: {k.activated_by_email}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">
+                                Sẵn sàng (Bất kỳ doanh nghiệp nào)
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4 font-bold text-slate-800">
+                            {formatCurrency(k.price)}
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            {isActive ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                Sẵn Sàng Kích Hoạt
+                              </span>
+                            ) : isUsed ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 text-[11px] font-bold">
+                                <CheckCircle2 size={12} className="text-sky-600" />
+                                Đã Kích Hoạt
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold">
+                                <AlertTriangle size={12} className="text-rose-600" />
+                                Đã Thu Hồi
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <div className="text-[11px] text-slate-600 font-medium">
+                              Tạo: {formatDate(k.created_at?.slice(0, 10))}
+                            </div>
+                            {k.activated_at && (
+                              <div className="text-[10px] text-sky-600">
+                                Kích hoạt: {formatDate(k.activated_at?.slice(0, 10))}
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleCopyKey(k.license_key, k.id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold border border-purple-200 cursor-pointer transition"
+                                title="Sao chép Key"
+                              >
+                                <Copy size={12} />
+                                {isCopied ? 'Đã chép' : 'Chép'}
+                              </button>
+
+                              <button
+                                onClick={() => handleToggleRevokeKey(k)}
+                                className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                                  isRevoked
+                                    ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                                    : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+                                }`}
+                                title={isRevoked ? 'Khôi phục Key' : 'Thu hồi Key'}
+                              >
+                                {isRevoked ? <Unlock size={13} /> : <Lock size={13} />}
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteKey(k)}
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition cursor-pointer"
+                                title="Xóa Key"
+                              >
+                                <Trash2 size={13} />
                               </button>
                             </div>
                           </td>
@@ -1336,6 +1959,265 @@ export function SuperAdminPortal({ currentUser }) {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* ==================================================== */}
+      {/* MODAL 5: TẠO MÃ KEY BẢN QUYỀN MỚI                    */}
+      {/* ==================================================== */}
+      <Modal
+        isOpen={isKeyModalOpen}
+        onClose={() => setIsKeyModalOpen(false)}
+        title="Tạo Mã Key Bản Quyền Gói Dịch Vụ Mới"
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleSaveKey} className="space-y-3.5">
+          <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-800">
+            Tạo mã Key đóng gói sẵn để gửi cho khách hàng tự kích hoạt vào tài khoản của họ.
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-slate-700">
+                Mã Key Bản Quyền <span className="text-rose-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const newCode = generateRandomKey(keyForm.plan_code);
+                  setKeyForm({ ...keyForm, license_key: newCode });
+                }}
+                className="text-[11px] font-bold text-purple-600 hover:text-purple-700 cursor-pointer"
+              >
+                🎲 Sinh ngẫu nhiên
+              </button>
+            </div>
+            <input
+              type="text"
+              required
+              value={keyForm.license_key}
+              onChange={(e) => setKeyForm({ ...keyForm, license_key: e.target.value.toUpperCase() })}
+              placeholder="OMNI-ENT-XXXX-XXXX-XXXX"
+              className="w-full px-3 py-2 text-xs font-mono font-bold tracking-wider rounded-xl bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-purple-400 text-purple-900"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Gói Cước</label>
+              <select
+                value={keyForm.plan_code}
+                onChange={(e) => {
+                  const code = e.target.value;
+                  const p = plans.find((x) => x.code === code);
+                  setKeyForm({
+                    ...keyForm,
+                    plan_code: code,
+                    plan_name: p ? p.name : code,
+                    duration_months: p ? p.duration_months : 12,
+                    price: p ? p.price : keyForm.price,
+                    license_key: generateRandomKey(code)
+                  });
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              >
+                {plans.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Thời Hạn (Tháng)</label>
+              <input
+                type="number"
+                min="1"
+                value={keyForm.duration_months}
+                onChange={(e) => setKeyForm({ ...keyForm, duration_months: Number(e.target.value) })}
+                className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Giá Bán (VND)</label>
+              <input
+                type="number"
+                min="0"
+                step="100000"
+                value={keyForm.price}
+                onChange={(e) => setKeyForm({ ...keyForm, price: Number(e.target.value) })}
+                className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-purple-400 font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Gán Riêng Cho Cty (Tùy chọn)
+              </label>
+              <select
+                value={keyForm.company_id}
+                onChange={(e) => {
+                  const cId = e.target.value;
+                  const comp = companies.find((x) => x.id === cId);
+                  setKeyForm({
+                    ...keyForm,
+                    company_id: cId,
+                    company_name: comp ? comp.company_name : ''
+                  });
+                }}
+                className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              >
+                <option value="">-- Mọi doanh nghiệp --</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.company_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Ghi Chú Key</label>
+            <input
+              type="text"
+              value={keyForm.notes}
+              onChange={(e) => setKeyForm({ ...keyForm, notes: e.target.value })}
+              placeholder="VD: Khách hàng chuyển khoản Vietcombank, ưu đãi..."
+              className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-pastel-100">
+            <button
+              type="button"
+              onClick={() => setIsKeyModalOpen(false)}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-soft transition cursor-pointer"
+            >
+              Tạo & Lưu Mã Key
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ==================================================== */}
+      {/* MODAL 6: XEM DANH SÁCH USERS CỦA MỘT DOANH NGHIỆP    */}
+      {/* ==================================================== */}
+      <Modal
+        isOpen={isCompanyUsersModalOpen}
+        onClose={() => setIsCompanyUsersModalOpen(false)}
+        title={`Danh Sách Người Dùng: ${selectedCompanyForUsers?.company_name || ''}`}
+        maxWidth="max-w-3xl"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-pastel-100">
+            <div>
+              <p className="text-xs text-slate-500">
+                Toàn bộ tài khoản nhân sự đang hoạt động trong doanh nghiệp này.
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                MST: {selectedCompanyForUsers?.tax_id || 'Chưa cập nhật'} • Gói cước:{' '}
+                <span className="font-bold text-purple-700">{selectedCompanyForUsers?.plan_code}</span>
+              </p>
+            </div>
+            <span className="text-xs font-bold text-sky-700 bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
+              {companyUsersList.length} thành viên
+            </span>
+          </div>
+
+          {loadingUsers ? (
+            <div className="py-12 text-center text-slate-400">
+              <RefreshCw size={24} className="mx-auto mb-2 animate-spin text-purple-500" />
+              <p className="text-xs">Đang tải danh sách người dùng...</p>
+            </div>
+          ) : companyUsersList.length === 0 ? (
+            <div className="py-12 text-center text-slate-400">
+              <Users size={36} className="mx-auto mb-2 text-slate-300 opacity-60" />
+              <p className="text-xs">Doanh nghiệp này chưa có tài khoản người dùng nào được tạo.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto max-h-96 overflow-y-auto rounded-xl border border-pastel-200">
+              <table className="w-full text-left border-collapse">
+                <thead className="sticky top-0 bg-slate-50 border-b border-pastel-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="py-2.5 px-3">Họ Tên & Tài Khoản</th>
+                    <th className="py-2.5 px-3">Email & Điện Thoại</th>
+                    <th className="py-2.5 px-3">Vai Trò (Role)</th>
+                    <th className="py-2.5 px-3">Phòng Ban</th>
+                    <th className="py-2.5 px-3">Ngày Tham Gia</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-pastel-100 text-xs">
+                  {companyUsersList.map((u) => (
+                    <tr key={u.id} className="hover:bg-slate-50/70 transition">
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={u.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=80'}
+                            alt={u.name}
+                            className="w-7 h-7 rounded-lg object-cover ring-1 ring-pastel-200"
+                          />
+                          <div>
+                            <div className="font-bold text-slate-800">{u.name}</div>
+                            <div className="text-[10px] text-slate-400">ID: {u.id}</div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-2.5 px-3">
+                        <div className="text-slate-700 font-medium">{u.email}</div>
+                        {u.phone && <div className="text-[10px] text-slate-400">{u.phone}</div>}
+                      </td>
+
+                      <td className="py-2.5 px-3">
+                        {u.role === 'ADMIN' ? (
+                          <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold">
+                            Quản Trị Viên (Admin)
+                          </span>
+                        ) : u.role === 'MANAGER' ? (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold">
+                            Quản Lý (Manager)
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 text-[10px] font-bold">
+                            Nhân Viên (Staff)
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-2.5 px-3 text-slate-600">
+                        {u.department || 'Chung'}
+                      </td>
+
+                      <td className="py-2.5 px-3 text-slate-500 font-mono text-[11px]">
+                        {formatDate(u.created_at?.slice(0, 10))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="flex justify-end pt-3 border-t border-pastel-100">
+            <button
+              onClick={() => setIsCompanyUsersModalOpen(false)}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

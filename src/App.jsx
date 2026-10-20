@@ -34,6 +34,10 @@ export default function App() {
     try {
       const saved = localStorage.getItem('currentUser');
       const u = saved ? JSON.parse(saved) : null;
+      if (u?.role === 'SUPER_ADMIN') {
+        const fromPath = getTabFromPath(window.location.pathname, u?.role);
+        return ['overview', 'companies', 'keys', 'plans', 'revenue'].includes(fromPath) ? fromPath : 'overview';
+      }
       return getTabFromPath(window.location.pathname, u?.role);
     } catch {
       return 'dashboard';
@@ -214,16 +218,19 @@ export default function App() {
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
-          {loading && !summaryData ? (
+          {currentUser?.role === 'SUPER_ADMIN' ? (
+            <SuperAdminPortal
+              currentUser={currentUser}
+              activeTab={['overview', 'companies', 'keys', 'plans', 'revenue'].includes(currentTab) ? currentTab : 'overview'}
+              onNavigateTab={setCurrentTab}
+            />
+          ) : loading && !summaryData ? (
             <div className="h-96 flex flex-col items-center justify-center gap-3 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-pastel-500" />
               <p className="text-xs font-medium">Đang đồng bộ dữ liệu hệ thống...</p>
             </div>
           ) : (
             <>
-              {currentTab === 'super-admin' && (
-                <SuperAdminPortal currentUser={currentUser} />
-              )}
 
               {currentTab === 'dashboard' && (
                 <Dashboard

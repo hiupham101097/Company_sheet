@@ -2527,38 +2527,74 @@ app.post('/api/license/activate', async (c) => {
       return c.json({ success: false, message: 'Vui lòng nhập mã bản quyền (License Key)' }, 400);
     }
 
-    // Supported key formats:
-    // 1. Predefined standard keys: OMNI-ENTERPRISE-2026, OMNI-VIP-8888, OMNI-PRO-9999, OMNI-LIFETIME-PRO
-    // 2. Pattern: OMNI-XXXX-XXXX-XXXX or prefix OMNI-ENT-
-    const validPredefined = [
-      'OMNI-ENTERPRISE-2026',
-      'OMNI-VIP-8888',
-      'OMNI-PRO-9999',
-      'OMNI-LIFETIME-PRO',
-      'OMNI-VIP-2026',
-      'ENTERPRISE-PRO-8888'
-    ];
-
-    const pattern = /^OMNI-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
-    const entPrefix = cleanKey.startsWith('OMNI-ENT-');
-
-    if (!validPredefined.includes(cleanKey) && !pattern.test(cleanKey) && !entPrefix) {
-      return c.json({
-        success: false,
-        message: 'Mã bản quyền không hợp lệ. Vui lòng kiểm tra lại hoặc liên hệ Hotline/Zalo để được cấp mã kích hoạt.'
-      }, 400);
-    }
-
     const now = new Date().toISOString();
     const { companyId } = await getTenantContext(c);
+
+    // 1. Kiểm tra trong bảng license_keys do Super Admin tạo
+    const dbKey = await c.env.DB.prepare('SELECT * FROM license_keys WHERE license_key = ?').bind(cleanKey).first().catch(() => null);
+
+    let planCode = 'LIFETIME';
+    let planName = 'Gói Vĩnh Viễn Trọn Đời';
+    let durationMonths = 120;
+
+    if (dbKey) {
+      if (dbKey.status === 'USED') {
+        return c.json({ success: false, message: 'Mã bản quyền này đã được kích hoạt trước đó.' }, 400);
+      }
+      if (dbKey.status === 'REVOKED') {
+        return c.json({ success: false, message: 'Mã bản quyền này đã bị thu hồi hoặc hết hiệu lực.' }, 400);
+      }
+      if (dbKey.company_id && companyId && dbKey.company_id !== companyId) {
+        return c.json({ success: false, message: 'Mã bản quyền này được chỉ định riêng cho doanh nghiệp khác.' }, 403);
+      }
+
+      planCode = dbKey.plan_code || 'LIFETIME';
+      planName = dbKey.plan_name || 'Bản Quyền Doanh Nghiệp';
+      durationMonths = Number(dbKey.duration_months) || 12;
+
+      // Đánh dấu key đã sử dụng
+      await c.env.DB.prepare(`
+        UPDATE license_keys 
+        SET status = 'USED', company_id = ?, activated_at = datetime('now')
+        WHERE id = ?
+      `).bind(companyId, dbKey.id).run();
+    } else {
+      // 2. Kiểm tra danh sách key tiêu chuẩn
+      const validPredefined = [
+        'OMNI-ENTERPRISE-2026',
+        'OMNI-VIP-8888',
+        'OMNI-PRO-9999',
+        'OMNI-LIFETIME-PRO',
+        'OMNI-VIP-2026',
+        'ENTERPRISE-PRO-8888'
+      ];
+
+      const pattern = /^OMNI-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+      const entPrefix = cleanKey.startsWith('OMNI-ENT-');
+
+      if (!validPredefined.includes(cleanKey) && !pattern.test(cleanKey) && !entPrefix) {
+        return c.json({
+          success: false,
+          message: 'Mã bản quyền không hợp lệ. Vui lòng kiểm tra lại hoặc liên hệ Hotline/Zalo để được cấp mã kích hoạt.'
+        }, 400);
+      }
+    }
+
+    // Tính ngày hết hạn
+    let expireDateVal = '2099-12-31';
+    if (planCode !== 'LIFETIME') {
+      const d = new Date();
+      d.setMonth(d.getMonth() + durationMonths);
+      expireDateVal = d.toISOString().slice(0, 10);
+    }
 
     // Kích hoạt bản quyền cho từng tenant độc lập
     if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
       await c.env.DB.prepare(`
         UPDATE company_tenants
-        SET plan_code = 'LIFETIME', license_status = 'ACTIVE'
+        SET plan_code = ?, license_status = 'ACTIVE', expire_date = ?
         WHERE id = ?
-      `).bind(companyId).run();
+      `).bind(planCode, expireDateVal, companyId).run();
 
       await c.env.DB.prepare(`
         INSERT INTO company_settings (company_id, key, value, updated_at)
@@ -2592,12 +2628,14 @@ app.post('/api/license/activate', async (c) => {
 
     return c.json({
       success: true,
-      message: '🎉 Kích hoạt Bản Quyền Doanh Nghiệp (Enterprise) thành công! Mọi chức năng đã được mở khóa toàn diện.',
+      message: `🎉 Kích hoạt thành công ${planName}! Mọi chức năng đã được mở khóa toàn diện.`,
       data: {
         tier: 'ENTERPRISE',
+        plan_code: planCode,
         isDemo: false,
         key: cleanKey,
-        activatedAt: now
+        activatedAt: now,
+        expire_date: expireDateVal
       }
     });
   } catch (err) {
@@ -2920,6 +2958,14 @@ app.get('/api/super-admin/overview', async (c) => {
     const expiredCompanies = await c.env.DB.prepare("SELECT count(*) as count FROM company_tenants WHERE license_status = 'EXPIRED'").first('count') || 0;
     const lockedCompanies = await c.env.DB.prepare("SELECT count(*) as count FROM company_tenants WHERE license_status = 'LOCKED'").first('count') || 0;
 
+    // Thống kê số lượng người dùng / users toàn nền tảng
+    const totalUsers = await c.env.DB.prepare("SELECT count(*) as count FROM users WHERE role != 'SUPER_ADMIN'").first('count') || 0;
+
+    // Thống kê mã bản quyền Keys
+    const totalKeys = await c.env.DB.prepare('SELECT count(*) as count FROM license_keys').first('count') || 0;
+    const activeKeys = await c.env.DB.prepare("SELECT count(*) as count FROM license_keys WHERE status = 'ACTIVE'").first('count') || 0;
+    const usedKeys = await c.env.DB.prepare("SELECT count(*) as count FROM license_keys WHERE status = 'USED'").first('count') || 0;
+
     const totalRevenueRes = await c.env.DB.prepare("SELECT sum(amount) as total FROM license_orders WHERE payment_status IN ('PAID', 'COMPLETED')").first('total') || 0;
     const totalOrders = await c.env.DB.prepare('SELECT count(*) as count FROM license_orders').first('count') || 0;
 
@@ -2936,8 +2982,9 @@ app.get('/api/super-admin/overview', async (c) => {
     `).all();
 
     const recentCompanies = await c.env.DB.prepare(`
-      SELECT * FROM company_tenants 
-      ORDER BY created_at DESC 
+      SELECT c.*, (SELECT count(*) FROM users u WHERE u.company_id = c.id) as user_count
+      FROM company_tenants c 
+      ORDER BY c.created_at DESC 
       LIMIT 6
     `).all();
 
@@ -2950,6 +2997,10 @@ app.get('/api/super-admin/overview', async (c) => {
           trialCompanies: Number(trialCompanies),
           expiredCompanies: Number(expiredCompanies),
           lockedCompanies: Number(lockedCompanies),
+          totalUsers: Number(totalUsers),
+          totalKeys: Number(totalKeys),
+          activeKeys: Number(activeKeys),
+          usedKeys: Number(usedKeys),
           totalRevenue: Number(totalRevenueRes),
           totalOrders: Number(totalOrders)
         },
@@ -2963,14 +3014,134 @@ app.get('/api/super-admin/overview', async (c) => {
   }
 });
 
-// 2. Danh sách Doanh nghiệp (Company Tenants)
+// 2. Danh sách Doanh nghiệp (Company Tenants kèm số lượng người dùng)
 app.get('/api/super-admin/companies', async (c) => {
   try {
-    const list = await c.env.DB.prepare('SELECT * FROM company_tenants ORDER BY created_at DESC').all();
+    const list = await c.env.DB.prepare(`
+      SELECT c.*, 
+             (SELECT count(*) FROM users u WHERE u.company_id = c.id) as user_count,
+             (SELECT count(*) FROM assets a WHERE a.company_id = c.id) as asset_count,
+             (SELECT count(*) FROM contracts ctr WHERE ctr.company_id = c.id) as contract_count
+      FROM company_tenants c 
+      ORDER BY c.created_at DESC
+    `).all();
     return c.json({
       success: true,
       data: list.results || []
     });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 2.5 Danh sách người dùng trực thuộc một Doanh nghiệp cụ thể
+app.get('/api/super-admin/companies/:id/users', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const users = await c.env.DB.prepare(`
+      SELECT id, name, email, role, department, phone, status, created_at
+      FROM users
+      WHERE company_id = ?
+      ORDER BY created_at DESC
+    `).bind(id).all();
+    return c.json({
+      success: true,
+      data: users.results || []
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 2.8 Quản lý License Keys (Tạo key cấp phép, xây dựng gói)
+app.get('/api/super-admin/keys', async (c) => {
+  try {
+    const keys = await c.env.DB.prepare(`
+      SELECT * FROM license_keys 
+      ORDER BY created_at DESC
+    `).all();
+    return c.json({ success: true, data: keys.results || [] });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+app.post('/api/super-admin/keys', async (c) => {
+  try {
+    const body = await c.req.json();
+    let {
+      license_key,
+      plan_code = 'ANNUAL_1Y',
+      plan_name,
+      company_id = null,
+      company_name = null,
+      duration_months = 12,
+      price = 0,
+      notes = ''
+    } = body;
+
+    // Tự sinh mã key chuẩn nếu chưa nhập: OMNI-ENT-XXXX-XXXX-XXXX
+    if (!license_key || !license_key.trim()) {
+      const randSegment = () => Math.random().toString(36).substring(2, 6).toUpperCase();
+      license_key = `OMNI-ENT-${randSegment()}-${randSegment()}-${randSegment()}`;
+    } else {
+      license_key = license_key.trim().toUpperCase();
+    }
+
+    if (!plan_name) {
+      if (plan_code === 'LIFETIME') plan_name = 'Gói Vĩnh Viễn Trọn Đời';
+      else if (plan_code === 'ANNUAL_1Y') plan_name = 'Gói Tiêu Chuẩn 1 Năm';
+      else if (plan_code === 'TRIAL_2M') plan_name = 'Gói Dùng Thử 2 Tháng';
+      else plan_name = `Gói Cước ${plan_code}`;
+    }
+
+    const id = `key_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+    await c.env.DB.prepare(`
+      INSERT INTO license_keys (id, license_key, plan_code, plan_name, company_id, company_name, duration_months, price, status, notes, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, datetime('now'))
+    `).bind(
+      id,
+      license_key,
+      plan_code,
+      plan_name,
+      company_id || null,
+      company_name || null,
+      Number(duration_months) || 12,
+      Number(price) || 0,
+      notes || ''
+    ).run();
+
+    return c.json({
+      success: true,
+      message: 'Tạo mã bản quyền (License Key) thành công!',
+      data: { id, license_key, plan_code, plan_name, price }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+app.put('/api/super-admin/keys/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const { status, notes } = await c.req.json();
+    await c.env.DB.prepare(`
+      UPDATE license_keys 
+      SET status = COALESCE(?, status), notes = COALESCE(?, notes)
+      WHERE id = ?
+    `).bind(status || null, notes || null, id).run();
+    return c.json({ success: true, message: 'Cập nhật trạng thái Key thành công!' });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+app.delete('/api/super-admin/keys/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    await c.env.DB.prepare('DELETE FROM license_keys WHERE id = ?').bind(id).run();
+    return c.json({ success: true, message: 'Xóa mã Key thành công!' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
   }

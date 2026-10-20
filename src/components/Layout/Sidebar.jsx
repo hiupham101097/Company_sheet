@@ -14,7 +14,12 @@ import {
   Zap,
   ShieldCheck,
   User,
-  X
+  X,
+  Building2,
+  KeyRound,
+  Package,
+  Receipt,
+  BarChart3
 } from 'lucide-react';
 import { getBrandDisplayName } from '../../utils/brandHelper';
 
@@ -31,33 +36,36 @@ export function Sidebar({
   brandName,
   companyName
 }) {
-  const allMenuItems = [
-    {
-      id: 'super-admin',
-      label: 'Quản Trị Nền Tảng (Tổng)',
-      icon: Crown,
-      badge: 'Master',
-      roles: ['SUPER_ADMIN']
-    },
-    { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
-    { id: 'assets', label: 'Tài sản & Thiết bị', icon: Laptop, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
-    { id: 'finance', label: 'Doanh thu & Chi phí', icon: TrendingUp, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
+  const superAdminMenuItems = [
+    { id: 'overview', label: 'Thống Kê Nền Tảng & User', icon: BarChart3, badge: 'Master' },
+    { id: 'companies', label: 'Duyệt Doanh Nghiệp & Quyền', icon: Building2 },
+    { id: 'keys', label: 'Tạo Keys Bản Quyền', icon: KeyRound, badge: 'Keys' },
+    { id: 'plans', label: 'Xây Dựng Gói Cước', icon: Package },
+    { id: 'revenue', label: 'Doanh Thu & Hóa Đơn', icon: Receipt },
+  ];
+
+  const tenantMenuItems = [
+    { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'assets', label: 'Tài sản & Thiết bị', icon: Laptop, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'finance', label: 'Doanh thu & Chi phí', icon: TrendingUp, roles: ['ADMIN', 'MANAGER'] },
     {
       id: 'tasks',
       label: 'Công việc & Nhắc hạn',
       icon: CheckSquare,
       badge: overdueCount > 0 ? `${overdueCount}` : null,
       badgeType: 'danger',
-      roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF']
+      roles: ['ADMIN', 'MANAGER', 'STAFF']
     },
-    { id: 'contracts', label: 'Hợp đồng & Biên bản', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
-    { id: 'attendance', label: 'Chấm công', icon: CalendarCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'STAFF'] },
-    { id: 'users', label: 'Quản lý Nhân sự', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN'] },
-    { id: 'categories', label: 'Quản lý Danh mục', icon: FolderTree, roles: ['SUPER_ADMIN', 'ADMIN'] },
-    { id: 'settings', label: 'Cài đặt hệ thống', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'] },
+    { id: 'contracts', label: 'Hợp đồng & Biên bản', icon: FileText, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'attendance', label: 'Chấm công', icon: CalendarCheck, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { id: 'users', label: 'Quản lý Nhân sự', icon: Users, roles: ['ADMIN'] },
+    { id: 'categories', label: 'Quản lý Danh mục', icon: FolderTree, roles: ['ADMIN'] },
+    { id: 'settings', label: 'Cài đặt hệ thống', icon: Settings, roles: ['ADMIN', 'MANAGER'] },
   ];
 
-  const menuItems = allMenuItems.filter((item) => item.roles.includes(userRole));
+  const menuItems = userRole === 'SUPER_ADMIN'
+    ? superAdminMenuItems
+    : tenantMenuItems.filter((item) => item.roles.includes(userRole));
 
   const roleLabels = {
     SUPER_ADMIN: { label: 'Tài Khoản Tổng (Master)', color: 'bg-purple-50 text-purple-700 border-purple-200' },
@@ -132,12 +140,12 @@ export function Sidebar({
         {/* Navigation Links */}
         <div className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
           <div className="px-3 pb-2 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
-            Menu Điều Hành
+            {userRole === 'SUPER_ADMIN' ? 'Quản Trị Nền Tảng (Master)' : 'Menu Điều Hành'}
           </div>
 
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const isActive = currentTab === item.id;
+            const isActive = currentTab === item.id || (item.id === 'overview' && currentTab === 'super-admin');
 
             return (
               <button
@@ -177,7 +185,19 @@ export function Sidebar({
 
         {/* License Status Card in Sidebar */}
         <div className="px-3 pt-2">
-          {licenseInfo?.isDemo ? (
+          {userRole === 'SUPER_ADMIN' ? (
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 border border-purple-500/30 text-white shadow-soft">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Crown size={16} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold truncate text-white">Platform Master</p>
+                  <p className="text-[10px] text-purple-300 font-semibold truncate">Toàn quyền nền tảng</p>
+                </div>
+              </div>
+            </div>
+          ) : licenseInfo?.isDemo ? (
             <div className="p-3 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-xs font-bold text-amber-800">
@@ -240,7 +260,7 @@ export function Sidebar({
           </button>
 
           {/* Quick Settings & System Info at bottom */}
-          {(userRole === 'ADMIN' || userRole === 'MANAGER' || userRole === 'SUPER_ADMIN') && (
+          {(userRole === 'ADMIN' || userRole === 'MANAGER') && (
             <button
               onClick={() => handleSelectTab('settings')}
               className={`w-full p-2.5 rounded-xl border flex items-center gap-3 transition-all text-left ${

@@ -15,7 +15,11 @@ export const SLUG_TO_TAB = {
   '/nhan-su': 'users',
   '/danh-muc': 'categories',
   '/cai-dat': 'settings',
-  '/quan-tri-tong': 'super-admin',
+  '/quan-tri-tong': 'overview',
+  '/quan-tri-tong/doanh-nghiep': 'companies',
+  '/quan-tri-tong/keys': 'keys',
+  '/quan-tri-tong/goi-cuoc': 'plans',
+  '/quan-tri-tong/doanh-thu': 'revenue',
 };
 
 export const TAB_TO_SLUG = {
@@ -29,6 +33,11 @@ export const TAB_TO_SLUG = {
   categories: '/danh-muc',
   settings: '/cai-dat',
   'super-admin': '/quan-tri-tong',
+  overview: '/quan-tri-tong',
+  companies: '/quan-tri-tong/doanh-nghiep',
+  keys: '/quan-tri-tong/keys',
+  plans: '/quan-tri-tong/goi-cuoc',
+  revenue: '/quan-tri-tong/doanh-thu',
 };
 
 export const TAB_SEO_META = {
@@ -81,6 +90,31 @@ export const TAB_SEO_META = {
     slug: '/quan-tri-tong',
     title: 'Cổng Quản Trị Nền Tảng Tối Cao (Master Admin) | OMNI ASSETS',
     description: 'Cấp quyền bản quyền doanh nghiệp, quản lý các gói cước 1 năm, vĩnh viễn, dùng thử và thống kê doanh thu.'
+  },
+  overview: {
+    slug: '/quan-tri-tong',
+    title: 'Thống Kê Nền Tảng & Người Dùng | OMNI ASSETS',
+    description: 'Báo cáo chỉ số toàn hệ thống, tổng số người dùng, doanh nghiệp hoạt động và license keys.'
+  },
+  companies: {
+    slug: '/quan-tri-tong/doanh-nghiep',
+    title: 'Duyệt Doanh Nghiệp & Cấp Quyền Bản Quyền | OMNI ASSETS',
+    description: 'Danh sách tổ chức, doanh nghiệp, số lượng user và phân quyền gói dịch vụ.'
+  },
+  keys: {
+    slug: '/quan-tri-tong/keys',
+    title: 'Tạo Mã Key Bản Quyền Gói Dịch Vụ | OMNI ASSETS',
+    description: 'Trình tạo mã license keys tự động, phân phối mã kích hoạt cho khách hàng và doanh nghiệp.'
+  },
+  plans: {
+    slug: '/quan-tri-tong/goi-cuoc',
+    title: 'Xây Dựng Gói Dịch Vụ Nền Tảng | OMNI ASSETS',
+    description: 'Cấu hình gói cước dùng thử, 1 năm, vĩnh viễn và chính sách giá nền tảng.'
+  },
+  revenue: {
+    slug: '/quan-tri-tong/doanh-thu',
+    title: 'Doanh Thu & Đơn Hàng Gói Nền Tảng | OMNI ASSETS',
+    description: 'Báo cáo doanh thu thanh toán bản quyền và quản lý hóa đơn khách hàng.'
   }
 };
 
@@ -89,15 +123,16 @@ export const TAB_SEO_META = {
  */
 export function getTabFromPath(pathname = window.location.pathname, userRole = 'STAFF') {
   const cleanPath = pathname.toLowerCase().replace(/\/+$/, '') || '/';
+  const superAdminTabs = ['overview', 'companies', 'keys', 'plans', 'revenue', 'super-admin'];
   if (SLUG_TO_TAB[cleanPath]) {
-    // Nếu slug là super admin nhưng user không phải super admin thì fallback về dashboard
-    if (SLUG_TO_TAB[cleanPath] === 'super-admin' && userRole !== 'SUPER_ADMIN') {
+    const tab = SLUG_TO_TAB[cleanPath];
+    if (superAdminTabs.includes(tab) && userRole !== 'SUPER_ADMIN') {
       return 'dashboard';
     }
-    return SLUG_TO_TAB[cleanPath];
+    return tab;
   }
   if (userRole === 'SUPER_ADMIN') {
-    return 'super-admin';
+    return 'overview';
   }
   return 'dashboard';
 }

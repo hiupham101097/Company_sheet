@@ -137,51 +137,61 @@ export function Navbar({
 
       {/* Right Action buttons */}
       <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-        {/* Quick Check-in/Check-out Buttons with Strict Daily State */}
-        {isCheckedOut ? (
-          <div
-            title={`Bạn đã hoàn thành ca làm việc hôm nay lúc ${myTodayRecord.check_out} (Tổng giờ: ${myTodayRecord.total_hours || 0}h). Hẹn gặp lại ngày mai!`}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs cursor-default select-none"
-          >
-            <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
-            <span className="hidden sm:inline">Hoàn thành ca ({myTodayRecord.check_out})</span>
-            <span className="sm:hidden">Đã tan ca</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1 bg-pastel-50 p-1 rounded-xl border border-pastel-200/70">
-            <button
-              onClick={() => handleQuickCheck('CHECK_IN')}
-              disabled={isChecking || isCheckedIn}
-              title={isCheckedIn ? `Đã vào ca lúc ${myTodayRecord.check_in}. Một ngày chỉ check-in 1 lần!` : "Điểm danh vào ca hôm nay"}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                isCheckedIn
-                  ? 'bg-emerald-50 text-emerald-700 opacity-80 cursor-not-allowed font-bold'
-                  : 'bg-white text-pastel-700 hover:text-pastel-800 shadow-xs hover:bg-pastel-100/60'
-              } disabled:opacity-60`}
+        {/* Quick Check-in/Check-out Buttons with Strict Daily State (Only for Tenant Staff/Admin, not Super Admin) */}
+        {currentUser?.role !== 'SUPER_ADMIN' && (
+          isCheckedOut ? (
+            <div
+              title={`Bạn đã hoàn thành ca làm việc hôm nay lúc ${myTodayRecord.check_out} (Tổng giờ: ${myTodayRecord.total_hours || 0}h). Hẹn gặp lại ngày mai!`}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs cursor-default select-none"
             >
-              <CheckCircle2 size={13} className={isCheckedIn ? 'text-emerald-600' : 'text-pastel-500'} />
-              <span className="hidden sm:inline">
-                {isCheckedIn ? `Đã vào (${myTodayRecord.check_in})` : 'Vào ca'}
-              </span>
-            </button>
-            <button
-              onClick={() => handleQuickCheck('CHECK_OUT')}
-              disabled={isChecking || !isCheckedIn}
-              title={!isCheckedIn ? "Cần vào ca trước khi tan ca" : "Điểm danh tan ca"}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                isCheckedIn
-                  ? 'bg-slate-700 text-white hover:bg-slate-800 shadow-xs'
-                  : 'text-slate-400 bg-slate-100/60 opacity-50 cursor-not-allowed'
-              }`}
-            >
-              <Clock size={13} className={isCheckedIn ? 'text-white' : 'text-slate-400'} />
-              <span className="hidden sm:inline">Tan ca</span>
-            </button>
-          </div>
+              <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+              <span className="hidden sm:inline">Hoàn thành ca ({myTodayRecord.check_out})</span>
+              <span className="sm:hidden">Đã tan ca</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 bg-pastel-50 p-1 rounded-xl border border-pastel-200/70">
+              <button
+                onClick={() => handleQuickCheck('CHECK_IN')}
+                disabled={isChecking || isCheckedIn}
+                title={isCheckedIn ? `Đã vào ca lúc ${myTodayRecord.check_in}. Một ngày chỉ check-in 1 lần!` : "Điểm danh vào ca hôm nay"}
+                className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  isCheckedIn
+                    ? 'bg-emerald-50 text-emerald-700 opacity-80 cursor-not-allowed font-bold'
+                    : 'bg-white text-pastel-700 hover:text-pastel-800 shadow-xs hover:bg-pastel-100/60'
+                } disabled:opacity-60`}
+              >
+                <CheckCircle2 size={13} className={isCheckedIn ? 'text-emerald-600' : 'text-pastel-500'} />
+                <span className="hidden sm:inline">
+                  {isCheckedIn ? `Đã vào (${myTodayRecord.check_in})` : 'Vào ca'}
+                </span>
+              </button>
+              <button
+                onClick={() => handleQuickCheck('CHECK_OUT')}
+                disabled={isChecking || !isCheckedIn}
+                title={!isCheckedIn ? "Cần vào ca trước khi tan ca" : "Điểm danh tan ca"}
+                className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  isCheckedIn
+                    ? 'bg-slate-700 text-white hover:bg-slate-800 shadow-xs'
+                    : 'text-slate-400 bg-slate-100/60 opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <Clock size={13} className={isCheckedIn ? 'text-white' : 'text-slate-400'} />
+                <span className="hidden sm:inline">Tan ca</span>
+              </button>
+            </div>
+          )
         )}
 
-        {/* License Status Badge */}
-        {licenseInfo?.isDemo ? (
+        {/* License Status Badge / Master Badge */}
+        {currentUser?.role === 'SUPER_ADMIN' ? (
+          <div
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold shadow-xs select-none"
+            title="Tài khoản Master Quản Trị Nền Tảng Tối Cao"
+          >
+            <Crown size={14} className="text-purple-600 shrink-0" />
+            <span className="text-[11px] font-bold">Quản Trị Nền Tảng</span>
+          </div>
+        ) : licenseInfo?.isDemo ? (
           <button
             onClick={() => onOpenUpgrade && onOpenUpgrade('Khám phá và nâng cấp Bản Quyền Enterprise để mở khóa toàn bộ hệ thống')}
             className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95"
