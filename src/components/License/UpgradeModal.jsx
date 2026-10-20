@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Crown,
@@ -100,6 +100,21 @@ export function UpgradeModal({
   const [copiedStk, setCopiedStk] = useState(false);
   const [copiedSyntax, setCopiedSyntax] = useState(false);
 
+  const modalBodyRef = useRef(null);
+
+  const scrollToTop = () => {
+    setTimeout(() => {
+      if (modalBodyRef.current) {
+        modalBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 60);
+  };
+
+  const switchTab = (tab) => {
+    setActiveTab(tab);
+    scrollToTop();
+  };
+
   // Load danh mục gói cước từ cơ sở dữ liệu
   useEffect(() => {
     if (isOpen) {
@@ -154,6 +169,7 @@ export function UpgradeModal({
     }
     // Gói có phí: CHUYỂN SANG MÀN THANH TOÁN
     setActiveTab('payment');
+    scrollToTop();
   };
 
   // Người dùng xác nhận đã chuyển khoản
@@ -182,6 +198,7 @@ export function UpgradeModal({
         date: new Date().toLocaleDateString('vi-VN')
       });
       setPaymentCompleted(true);
+      scrollToTop();
     } catch (err) {
       alert(err.message || 'Lỗi khi gửi xác nhận thanh toán');
     } finally {
@@ -302,7 +319,7 @@ export function UpgradeModal({
           <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 dark:bg-slate-900/70 rounded-2xl overflow-x-auto">
             <button
               type="button"
-              onClick={() => setActiveTab('plans')}
+              onClick={() => switchTab('plans')}
               className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 cursor-pointer ${
                 activeTab === 'plans'
                   ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
@@ -315,7 +332,7 @@ export function UpgradeModal({
 
             <button
               type="button"
-              onClick={() => setActiveTab('payment')}
+              onClick={() => switchTab('payment')}
               className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 cursor-pointer ${
                 activeTab === 'payment'
                   ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
@@ -328,7 +345,7 @@ export function UpgradeModal({
 
             <button
               type="button"
-              onClick={() => setActiveTab('activate')}
+              onClick={() => switchTab('activate')}
               className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 cursor-pointer ${
                 activeTab === 'activate'
                   ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
@@ -342,7 +359,7 @@ export function UpgradeModal({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+        <div ref={modalBodyRef} className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6">
 
           {/* ==================================================== */}
           {/* TAB 1: DANH SÁCH GÓI DỊCH VỤ (CHỌN GÓI CÓ PHÍ)      */}
@@ -362,7 +379,7 @@ export function UpgradeModal({
               </div>
 
               {/* Lưới các gói cước */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className={`grid grid-cols-1 ${plans.length === 2 ? 'md:grid-cols-2 max-w-3xl mx-auto' : 'md:grid-cols-3'} gap-5`}>
                 {plans.map((p) => {
                   let featureList = [];
                   try {
@@ -377,7 +394,7 @@ export function UpgradeModal({
                   return (
                     <div
                       key={p.id || p.code}
-                      className={`relative rounded-3xl p-6 flex flex-col justify-between transition-all duration-200 border shadow-soft hover:shadow-soft-lg ${
+                      className={`relative rounded-3xl p-5 flex flex-col justify-between transition-all duration-200 border shadow-soft hover:shadow-soft-lg ${
                         isLifetime
                           ? 'bg-gradient-to-b from-amber-50/70 via-white to-amber-50/30 border-amber-300 ring-2 ring-amber-400/20'
                           : isPopular
@@ -385,31 +402,31 @@ export function UpgradeModal({
                           : 'bg-white border-slate-200'
                       }`}
                     >
-                      {p.badge && (
-                        <div className="absolute top-4 right-4">
-                          <span
-                            className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
-                              isLifetime
-                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                : 'bg-indigo-100 text-indigo-800 border border-indigo-300'
-                            }`}
-                          >
-                            {p.badge}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="space-y-4">
+                      <div className="space-y-3.5">
                         <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                            Mã gói: {p.code}
+                          {/* Mã gói và Badge nằm trên 1 hàng flex, hoàn toàn không bị đè lên nhau */}
+                          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                              MÃ GÓI: {p.code}
+                            </span>
+                            {p.badge && (
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider shrink-0 ${
+                                  isLifetime
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                    : 'bg-indigo-100 text-indigo-800 border border-indigo-300'
+                                }`}
+                              >
+                                {p.badge}
+                              </span>
+                            )}
                           </div>
-                          <h3 className="text-lg font-black text-slate-900 mt-0.5">{p.name}</h3>
+                          <h3 className="text-lg font-black text-slate-900 leading-snug">{p.name}</h3>
                         </div>
 
-                        <div className="pt-2 pb-4 border-b border-slate-100">
+                        <div className="pt-2 pb-3 border-b border-slate-100">
                           <div className="flex items-baseline gap-1">
-                            <span className="text-3xl font-black text-slate-900">
+                            <span className="text-2xl sm:text-3xl font-black text-slate-900">
                               {isFree ? 'Miễn Phí' : formatCurrency(p.price)}
                             </span>
                             {!isFree && (
@@ -423,18 +440,18 @@ export function UpgradeModal({
                           </p>
                         </div>
 
-                        <div className="space-y-2 py-2">
+                        <div className="space-y-1.5 py-1">
                           <div className="text-xs font-bold text-slate-700">Quyền lợi bao gồm:</div>
-                          {featureList.map((feat, idx) => (
+                          {featureList.slice(0, 5).map((feat, idx) => (
                             <div key={idx} className="flex items-start gap-2 text-xs text-slate-600">
-                              <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                              <span>{feat}</span>
+                              <CheckCircle2 size={13} className="text-emerald-500 shrink-0 mt-0.5" />
+                              <span className="leading-snug">{feat}</span>
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      <div className="pt-5 border-t border-slate-100 mt-4">
+                      <div className="pt-4 border-t border-slate-100 mt-4">
                         <button
                           type="button"
                           onClick={() => handleSelectPlan(p)}
