@@ -112,21 +112,39 @@ function generateSeoHtml(path, origin) {
 </html>`;
 }
 
-// Bắt các request từ Zalo, Facebook, Twitter, Telegram crawlers để trả về đầy đủ thẻ SEO Open Graph & Logo
+// Phục vụ SPA routes (như /tong-quan, /tai-san, v.v.) và SEO Crawler
 app.use('*', async (c, next) => {
   const url = new URL(c.req.url);
   const path = url.pathname.toLowerCase();
 
-  // Bỏ qua các API và file tĩnh
-  if (path.startsWith('/api') || path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|json|xml|txt)$/)) {
+  // 1. Bỏ qua các API endpoint
+  if (path.startsWith('/api')) {
     return next();
   }
 
+  // 2. Bỏ qua các file tĩnh có định dạng đuôi file
+  if (path.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|json|xml|txt)$/)) {
+    return next();
+  }
+
+  // 3. Nếu là Social Crawler (Zalo, Facebook, Twitter, Telegram...) -> Trả về HTML chứa OpenGraph tags & Logo
   const userAgent = (c.req.header('user-agent') || '').toLowerCase();
   const isSocialCrawler = /facebookexternalhit|zalo|twitterbot|linkedinbot|telegrambot|skypeuripreview|whatsapp|slackbot|discordbot|googlebot|bingbot|applebot/i.test(userAgent);
 
   if (isSocialCrawler) {
     return c.html(generateSeoHtml(path, url.origin));
+  }
+
+  // 4. Nếu là người dùng thực truy cập vào SPA route (kể cả F5 /tong-quan, /tai-san, /cai-dat...)
+  // Luôn nạp index.html để React Router xử lý giao diện máy khách, triệt tiêu 404
+  if (c.env?.ASSETS) {
+    try {
+      const indexReq = new Request(new URL('/index.html', c.req.url));
+      const indexRes = await c.env.ASSETS.fetch(indexReq);
+      if (indexRes && indexRes.status === 200) {
+        return indexRes;
+      }
+    } catch (_) {}
   }
 
   return next();
@@ -3326,6 +3344,55 @@ app.post('/api/reminders/refresh', async (c) => {
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
   }
+});
+
+// Favicon handler
+app.get('/favicon.ico', async (c) => {
+  if (c.env?.ASSETS) {
+    const assetFav = await c.env.ASSETS.fetch(c.req.raw);
+    if (assetFav.status !== 404) return assetFav;
+    const logoRes = await c.env.ASSETS.fetch(new Request(new URL('/logo.png', c.req.url)));
+    if (logoRes.status === 200) {
+      const headers = new Headers(logoRes.headers);
+      headers.set('Content-Type', 'image/png');
+      return new Response(logoRes.body, { status: 200, headers });
+    }
+  }
+  return c.redirect('/logo.png', 302);
+});
+
+// ==========================================
+// STATIC ASSETS & SPA ROUTING FALLBACK
+// ==========================================
+app.notFound(async (c) => {
+  const url = new URL(c.req.url);
+  const path = url.pathname;
+
+  // Nếu là request API mà không tồn tại route -> trả về JSON 404
+  if (path.startsWith('/api')) {
+    return c.json({ success: false, message: `API endpoint ${path} not found` }, 404);
+  }
+
+  // Phục vụ từ Cloudflare Static Assets
+  if (c.env?.ASSETS) {
+    const assetRes = await c.env.ASSETS.fetch(c.req.raw);
+    if (assetRes.status !== 404) {
+      return assetRes;
+    }
+
+    // Nếu không tìm thấy file vật lý và là SPA route (như /tong-quan, /tai-san, /cai-dat, v.v.)
+    // Tự động fallback nạp index.html với HTTP 200 để React Router tiếp quản
+    const indexUrl = new URL('/index.html', c.req.url);
+    const indexRes = await c.env.ASSETS.fetch(new Request(indexUrl.toString(), c.req.raw));
+    if (indexRes.status === 200) {
+      const headers = new Headers(indexRes.headers);
+      headers.set('Content-Type', 'text/html; charset=utf-8');
+      return new Response(indexRes.body, { status: 200, headers });
+    }
+    return assetRes;
+  }
+
+  return c.text('Not Found', 404);
 });
 
 export default {

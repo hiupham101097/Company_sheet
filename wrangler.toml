@@ -5,6 +5,7 @@ compatibility_date = "2024-09-23"
 # Cloudflare Static Assets (Frontend React)
 [assets]
 directory = "dist"
+binding = "ASSETS"
 not_found_handling = "single-page-application"
 
 # Cloudflare D1 Native Database Binding
