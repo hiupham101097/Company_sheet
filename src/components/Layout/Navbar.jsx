@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bell,
   Search,
@@ -484,9 +485,9 @@ export function Navbar({
           )}
         </div>
 
-        {/* Modal Chi Tiết Thông Báo Khi Người Dùng Nhấp Vào */}
-        {selectedReminder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
+        {/* Modal Chi Tiết Thông Báo Khi Người Dùng Nhấp Vào (Render qua Portal vào document.body) */}
+        {selectedReminder && typeof document !== 'undefined' && createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
             <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-scale-in">
               {/* Header Modal */}
               <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-pastel-50/40">
@@ -629,7 +630,8 @@ export function Navbar({
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* User Profile Info & Logout */}
