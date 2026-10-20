@@ -551,7 +551,31 @@ app.get('/api/reports/dashboard-summary', async (c) => {
     const usersCount = (await c.env.DB.prepare(usersCountQuery).bind(...params).first())?.count || 0;
 
     // Reminders
-    const urgentReminders = [
+    const urgentReminders = [];
+
+    // Tự động gửi thông báo cấp Key bản quyền vào quả chuông của doanh nghiệp
+    if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      try {
+        const pendingKeys = await c.env.DB
+          .prepare("SELECT * FROM license_keys WHERE company_id = ? AND status = 'ACTIVE'")
+          .bind(companyId)
+          .all();
+
+        for (const pk of (pendingKeys?.results || [])) {
+          urgentReminders.push({
+            id: `lic_${pk.id}`,
+            title: `🔑 Bản quyền mới: Bạn được cấp mã "${pk.license_key}" (${pk.plan_name || pk.plan_code}). Nhấn để kích hoạt ngay!`,
+            date: pk.created_at ? pk.created_at.slice(0, 10) : today,
+            level: 'warning',
+            key: pk.license_key
+          });
+        }
+      } catch (err) {
+        console.error('Lỗi truy vấn pending license keys:', err);
+      }
+    }
+
+    urgentReminders.push(
       ...overdueTasks.map((t) => ({
         id: `ovd_${t.id}`,
         title: `Công việc quá hạn: "${t.title}"`,
@@ -570,7 +594,7 @@ app.get('/api/reports/dashboard-summary', async (c) => {
         date: ct.end_date,
         level: 'info'
       }))
-    ];
+    );
 
     // Enterprise Company Name
     let currentCompanyName = 'OMNI ASSETS';
@@ -2559,25 +2583,10 @@ app.post('/api/license/activate', async (c) => {
         WHERE id = ?
       `).bind(companyId, dbKey.id).run();
     } else {
-      // 2. Kiểm tra danh sách key tiêu chuẩn
-      const validPredefined = [
-        'OMNI-ENTERPRISE-2026',
-        'OMNI-VIP-8888',
-        'OMNI-PRO-9999',
-        'OMNI-LIFETIME-PRO',
-        'OMNI-VIP-2026',
-        'ENTERPRISE-PRO-8888'
-      ];
-
-      const pattern = /^OMNI-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
-      const entPrefix = cleanKey.startsWith('OMNI-ENT-');
-
-      if (!validPredefined.includes(cleanKey) && !pattern.test(cleanKey) && !entPrefix) {
-        return c.json({
-          success: false,
-          message: 'Mã bản quyền không hợp lệ. Vui lòng kiểm tra lại hoặc liên hệ Hotline/Zalo để được cấp mã kích hoạt.'
-        }, 400);
-      }
+      return c.json({
+        success: false,
+        message: 'Mã bản quyền không hợp lệ hoặc không tồn tại trên hệ thống. Vui lòng kiểm tra lại hoặc liên hệ Hotline/Zalo 0394264400 để được cấp mã kích hoạt.'
+      }, 400);
     }
 
     // Tính ngày hết hạn
@@ -3125,13 +3134,16 @@ app.post('/api/super-admin/keys', async (c) => {
 app.put('/api/super-admin/keys/:id', async (c) => {
   try {
     const id = c.req.param('id');
-    const { status, notes } = await c.req.json();
+    const { status, notes, company_id, company_name } = await c.req.json();
     await c.env.DB.prepare(`
       UPDATE license_keys 
-      SET status = COALESCE(?, status), notes = COALESCE(?, notes)
+      SET status = COALESCE(?, status), 
+          notes = COALESCE(?, notes),
+          company_id = COALESCE(?, company_id),
+          company_name = COALESCE(?, company_name)
       WHERE id = ?
-    `).bind(status || null, notes || null, id).run();
-    return c.json({ success: true, message: 'Cập nhật trạng thái Key thành công!' });
+    `).bind(status || null, notes || null, company_id || null, company_name || null, id).run();
+    return c.json({ success: true, message: 'Cập nhật thông tin Key thành công!' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
   }

@@ -95,11 +95,6 @@ export function UpgradeModal({
     }
   };
 
-  const handleUseQuickKey = (k) => {
-    setLicenseKey(k);
-    setError('');
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
       <div className="relative w-full max-w-3xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
@@ -291,37 +286,6 @@ export function UpgradeModal({
                   )}
                 </div>
               </form>
-
-              {/* Quick Key Suggestion for Test/Demo */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/60">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
-                      Mã Kích Hoạt Nhanh Dành Cho Quản Trị Viên (Test Key)
-                    </span>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Nhấn vào mã bên dưới để điền tự động và kiểm thử nâng cấp hệ thống:
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {[
-                    'OMNI-ENTERPRISE-2026',
-                    'OMNI-VIP-8888',
-                    'OMNI-PRO-9999'
-                  ].map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => handleUseQuickKey(k)}
-                      className="px-3 py-1.5 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:border-indigo-500 rounded-lg text-xs font-mono font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition-all hover:shadow"
-                    >
-                      <Key className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>{k}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 

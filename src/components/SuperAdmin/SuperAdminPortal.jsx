@@ -29,7 +29,11 @@ import {
   UserCheck,
   UserX,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  Mail,
+  Send,
+  Bell,
+  Share2
 } from 'lucide-react';
 import { Modal } from '../Common/Modal';
 import { Badge } from '../Common/Badge';
@@ -65,6 +69,12 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [isCompanyUsersModalOpen, setIsCompanyUsersModalOpen] = useState(false);
+  const [isSendKeyModalOpen, setIsSendKeyModalOpen] = useState(false);
+  const [selectedKeyForSend, setSelectedKeyForSend] = useState(null);
+  const [sendKeyEmail, setSendKeyEmail] = useState('');
+  const [sendKeyCompanyId, setSendKeyCompanyId] = useState('');
+  const [sendKeyTab, setSendKeyTab] = useState('gmail'); // 'gmail' | 'bell'
+  const [copiedEmailText, setCopiedEmailText] = useState(false);
 
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -417,6 +427,102 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
       setTimeout(() => setCopiedKeyId(null), 2500);
     } else {
       prompt('Sao chép mã Key bản quyền này:', keyString);
+    }
+  };
+
+  // Mở modal Gửi Key (Gmail & Chuông thông báo)
+  const handleOpenSendKey = (k) => {
+    setSelectedKeyForSend(k);
+    const assignedComp = companies.find(c => c.id === k.company_id) || companies.find(c => c.company_name === k.company_name);
+    setSendKeyCompanyId(k.company_id || (assignedComp?.id || ''));
+    setSendKeyEmail(assignedComp?.admin_email || '');
+    setCopiedEmailText(false);
+    setSendKeyTab('gmail');
+    setIsSendKeyModalOpen(true);
+  };
+
+  const getEmailContent = (k, toEmail) => {
+    if (!k) return { subject: '', body: '' };
+    const compName = k.company_name || companies.find(c => c.id === sendKeyCompanyId)?.company_name || 'Quý Doanh Nghiệp';
+    const duration = k.duration_months >= 999 ? 'Vĩnh viễn (Trọn đời)' : `${k.duration_months} tháng`;
+    const appUrl = window.location.origin;
+
+    const subject = `[OMNI ASSETS] Bàn Giao Mã Kích Hoạt Bản Quyền Gói ${k.plan_name || k.plan_code} - ${compName}`;
+    const body = `Kính gửi Quý Doanh nghiệp ${compName},
+
+Đội ngũ Quản trị OMNI ASSETS trân trọng bàn giao mã kích hoạt bản quyền gói dịch vụ phần mềm quản trị doanh nghiệp & tài sản:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THÔNG TIN BẢN QUYỀN:
+• Doanh nghiệp: ${compName}
+• Gói dịch vụ: ${k.plan_name || k.plan_code}
+• Thời hạn sử dụng: ${duration}
+• Trạng thái: Sẵn sàng kích hoạt
+
+🔑 MÃ KÍCH HOẠT BẢN QUYỀN (LICENSE KEY):
+>>> ${k.license_key} <<<
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+HƯỚNG DẪN 3 BƯỚC KÍCH HOẠT NHANH:
+1. Đăng nhập vào hệ thống tại: ${appUrl}
+2. Nhấn vào biểu tượng "Chuông thông báo" 🔔 hoặc huy hiệu "Nâng cấp gói" trên thanh menu
+3. Điền mã key "${k.license_key}" vào ô "Mã kích hoạt bản quyền" và nhấn "Kích hoạt bản quyền ngay". Toàn bộ tính năng cao cấp sẽ được mở khóa tức thì!
+
+Nếu cần hỗ trợ kỹ thuật hoặc xuất hóa đơn VAT, Quý khách vui lòng liên hệ:
+• Hotline / Zalo hỗ trợ 24/7: 0394264400
+• Website: ${appUrl}
+
+Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cùng OMNI ASSETS!`;
+
+    return { subject, body };
+  };
+
+  const handleOpenGmailWeb = () => {
+    if (!selectedKeyForSend) return;
+    const { subject, body } = getEmailContent(selectedKeyForSend, sendKeyEmail);
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(sendKeyEmail.trim())}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleOpenMailto = () => {
+    if (!selectedKeyForSend) return;
+    const { subject, body } = getEmailContent(selectedKeyForSend, sendKeyEmail);
+    const mailtoUrl = `mailto:${encodeURIComponent(sendKeyEmail.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
+  };
+
+  const handleCopyEmailTemplate = () => {
+    if (!selectedKeyForSend) return;
+    const { subject, body } = getEmailContent(selectedKeyForSend, sendKeyEmail);
+    const fullText = `Tiêu đề: ${subject}\n\n${body}`;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(fullText);
+      setCopiedEmailText(true);
+      setTimeout(() => setCopiedEmailText(false), 2500);
+    } else {
+      prompt('Nội dung thư bàn giao Key:', fullText);
+    }
+  };
+
+  const handleAssignKeyToCompany = async () => {
+    if (!selectedKeyForSend) return;
+    if (!sendKeyCompanyId) {
+      alert('Vui lòng chọn một doanh nghiệp để phát thông báo chuông!');
+      return;
+    }
+    const targetComp = companies.find(c => c.id === sendKeyCompanyId);
+    try {
+      setLoading(true);
+      await api.updateSuperAdminKey(selectedKeyForSend.id, {
+        company_id: sendKeyCompanyId,
+        company_name: targetComp?.company_name || selectedKeyForSend.company_name
+      });
+      fetchData();
+      alert(`Đã gán và phát thông báo thành công cho doanh nghiệp "${targetComp?.company_name}"!\n\nKhi tài khoản của doanh nghiệp này đăng nhập, biểu tượng Chuông 🔔 sẽ sáng lên kèm mã Key để họ kích hoạt.`);
+    } catch (err) {
+      alert(err.message || 'Lỗi khi gán mã bản quyền');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1241,6 +1347,15 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
                               >
                                 <Copy size={12} />
                                 {isCopied ? 'Đã chép' : 'Chép'}
+                              </button>
+
+                              <button
+                                onClick={() => handleOpenSendKey(k)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 cursor-pointer transition"
+                                title="Gửi mã qua Gmail hoặc chuông thông báo"
+                              >
+                                <Mail size={12} />
+                                Gửi
                               </button>
 
                               <button
@@ -2218,6 +2333,203 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* ==================================================== */}
+      {/* MODAL 6: GỬI KEY CHO ĐỐI TÁC (GMAIL & THÔNG BÁO)     */}
+      {/* ==================================================== */}
+      <Modal
+        isOpen={isSendKeyModalOpen}
+        onClose={() => setIsSendKeyModalOpen(false)}
+        title="Gửi Mã Kích Hoạt Bản Quyền Cho Đối Tác"
+        maxWidth="max-w-2xl"
+      >
+        {selectedKeyForSend && (
+          <div className="space-y-4">
+            {/* Header thông tin Key */}
+            <div className="p-3.5 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">
+                  Mã bản quyền phát hành
+                </div>
+                <div className="font-mono font-black text-sm text-purple-900 mt-0.5">
+                  {selectedKeyForSend.license_key}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  Gói: <span className="font-bold text-slate-700">{selectedKeyForSend.plan_name}</span> ({selectedKeyForSend.duration_months >= 999 ? 'Trọn đời' : `${selectedKeyForSend.duration_months} tháng`})
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  {selectedKeyForSend.status === 'ACTIVE' ? 'Sẵn sàng kích hoạt' : selectedKeyForSend.status}
+                </span>
+                <div className="text-xs font-extrabold text-slate-800 mt-1">
+                  {formatCurrency(selectedKeyForSend.price)}
+                </div>
+              </div>
+            </div>
+
+            {/* Tabs chuyển đổi: Gửi Gmail / Phát chuông thông báo */}
+            <div className="flex items-center gap-2 border-b border-pastel-200 pb-2">
+              <button
+                type="button"
+                onClick={() => setSendKeyTab('gmail')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  sendKeyTab === 'gmail'
+                    ? 'bg-red-50 text-red-700 border border-red-200 shadow-sm'
+                    : 'text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                <Mail size={14} className="text-red-600" />
+                Gửi Qua Gmail / Email
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSendKeyTab('bell')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  sendKeyTab === 'bell'
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200 shadow-sm'
+                    : 'text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                <Bell size={14} className="text-amber-600" />
+                Phát Chuông Thông Báo (In-App)
+              </button>
+            </div>
+
+            {/* TAB CONTENT 1: GMAIL & EMAIL */}
+            {sendKeyTab === 'gmail' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Địa chỉ Email người nhận (Đối tác / Khách hàng):
+                  </label>
+                  <input
+                    type="email"
+                    value={sendKeyEmail}
+                    onChange={(e) => setSendKeyEmail(e.target.value)}
+                    placeholder="nguoidung@congty.com"
+                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-red-400 font-medium"
+                  />
+                  <div className="text-[10px] text-slate-400 mt-1">
+                    Hệ thống tự động điền Email quản trị viên nếu Key đã được liên kết với một doanh nghiệp trong danh sách.
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Xem trước nội dung thư gửi đi:
+                  </label>
+                  <div className="p-3 bg-slate-50 border border-pastel-200 rounded-xl text-[11px] font-mono text-slate-700 max-h-48 overflow-y-auto whitespace-pre-line leading-relaxed select-all">
+                    {getEmailContent(selectedKeyForSend, sendKeyEmail).body}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenGmailWeb}
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-soft transition cursor-pointer"
+                  >
+                    <Mail size={14} />
+                    Mở Gmail Soạn Sẵn
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenMailto}
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow-soft transition cursor-pointer"
+                  >
+                    <Send size={14} />
+                    Mở Outlook / Mail App
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyEmailTemplate}
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold transition cursor-pointer"
+                  >
+                    {copiedEmailText ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                    {copiedEmailText ? 'Đã chép nội dung!' : 'Chép nội dung thư'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT 2: PHÁT THÔNG BÁO VÀO TÀI KHOẢN (CHUÔNG 🔔) */}
+            {sendKeyTab === 'bell' && (
+              <div className="space-y-4">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <Bell size={14} />
+                    Cách thức chuông thông báo hoạt động:
+                  </div>
+                  <p className="mt-1 leading-relaxed">
+                    Khi bạn chọn và gán mã Key này cho một Doanh nghiệp, người dùng thuộc doanh nghiệp đó khi đăng nhập vào hệ thống sẽ thấy ngay thông báo tại <strong>Chuông thông báo 🔔 trên thanh menu</strong> kèm mã kích hoạt để họ bấm kích hoạt tức thì.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Chọn Doanh nghiệp nhận thông báo chuông:
+                  </label>
+                  <select
+                    value={sendKeyCompanyId}
+                    onChange={(e) => {
+                      const cid = e.target.value;
+                      setSendKeyCompanyId(cid);
+                      const comp = companies.find(c => c.id === cid);
+                      if (comp && comp.admin_email) {
+                        setSendKeyEmail(comp.admin_email);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-amber-400 font-medium"
+                  >
+                    <option value="">-- Chọn doanh nghiệp đối tác --</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.company_name} {c.admin_email ? `(${c.admin_email})` : ''} - Gói hiện tại: {c.plan_code}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {sendKeyCompanyId && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                    <div>
+                      Doanh nghiệp: <strong>{companies.find(c => c.id === sendKeyCompanyId)?.company_name}</strong>
+                      <div className="text-[11px] text-emerald-700 mt-0.5">
+                        Chuông thông báo đã được thiết lập sẵn. Nhấn nút bên dưới để xác nhận phát thông báo ngay.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-pastel-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsSendKeyModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAssignKeyToCompany}
+                    disabled={loading || !sendKeyCompanyId}
+                    className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white shadow-soft transition cursor-pointer inline-flex items-center gap-1.5"
+                  >
+                    <Bell size={13} />
+                    Phát Chuông Thông Báo Ngay
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );
