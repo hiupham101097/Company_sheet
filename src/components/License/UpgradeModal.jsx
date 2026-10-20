@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Crown,
@@ -15,9 +15,65 @@ import {
   Lock,
   ArrowRight,
   Zap,
-  Building2
+  Building2,
+  Package,
+  MessageCircle,
+  ArrowLeft
 } from 'lucide-react';
 import { api } from '../../services/api';
+
+const DEFAULT_PLANS = [
+  {
+    id: 'plan_annual_1y',
+    code: 'ANNUAL_1Y',
+    name: 'Gói Tiêu Chuẩn 1 Năm',
+    duration_months: 12,
+    price: 4800000,
+    badge: 'Phổ biến nhất',
+    features: [
+      'Không giới hạn số lượng tài sản & thiết bị',
+      'Không giới hạn nhân viên & phân quyền',
+      'Không giới hạn hợp đồng & biên bản bàn giao',
+      'In biên bản A4 chuẩn chỉnh, sạch đẹp, có mộc dấu',
+      'Xuất dữ liệu Excel / CSV toàn diện',
+      'Trợ lý AI OMNI-Bot Gemini 24/7',
+      'Lưu trữ Cloudflare D1 độ tin cậy cao'
+    ],
+    is_active: 1
+  },
+  {
+    id: 'plan_annual_2y',
+    code: 'ANNUAL_2Y',
+    name: 'Gói Tiết Kiệm 2 Năm',
+    duration_months: 24,
+    price: 8800000,
+    badge: 'Tiết kiệm 800.000đ',
+    features: [
+      'Toàn bộ quyền lợi của gói 1 Năm',
+      'Thời hạn sử dụng 24 tháng liên tục',
+      'Tiết kiệm 800.000đ so với mua lẻ từng năm',
+      'Ưu tiên hỗ trợ kỹ thuật và sao lưu dữ liệu riêng',
+      'Bảo hành & nâng cấp tính năng tự động miễn phí'
+    ],
+    is_active: 1
+  },
+  {
+    id: 'plan_lifetime',
+    code: 'LIFETIME',
+    name: 'Gói Vĩnh Viễn Trọn Đời',
+    duration_months: 999,
+    price: 12500000,
+    badge: 'Khuyên Dùng • VIP',
+    features: [
+      'Sở hữu vĩnh viễn trọn đời (Lifetime License)',
+      'Không bao giờ phát sinh chi phí duy trì hàng năm',
+      'Mở khóa toàn bộ tính năng và bản cập nhật mới trong tương lai',
+      'Kênh hỗ trợ VIP 1-1 riêng với đội ngũ kỹ thuật',
+      'Xuất hóa đơn VAT điện tử doanh nghiệp đầy đủ'
+    ],
+    is_active: 1
+  }
+];
 
 export function UpgradeModal({
   isOpen,
@@ -26,13 +82,47 @@ export function UpgradeModal({
   onLicenseUpdated,
   triggerReason
 }) {
-  const [activeTab, setActiveTab] = useState('activate'); // 'activate' | 'pricing' | 'contact'
+  const isDemo = licenseInfo?.isDemo ?? true;
+  const currentKey = licenseInfo?.key || '';
+
+  // Tab: 'plans' (Chọn Gói) | 'payment' (Thanh Toán VietQR) | 'activate' (Nhập Mã Bản Quyền)
+  const [activeTab, setActiveTab] = useState(isDemo ? 'plans' : 'activate');
+  const [plans, setPlans] = useState(DEFAULT_PLANS);
+  const [selectedPlan, setSelectedPlan] = useState(DEFAULT_PLANS[0]);
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [createdOrder, setCreatedOrder] = useState(null);
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+
   const [licenseKey, setLicenseKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [copiedStk, setCopiedStk] = useState(false);
   const [copiedSyntax, setCopiedSyntax] = useState(false);
+
+  // Load danh mục gói cước từ cơ sở dữ liệu
+  useEffect(() => {
+    if (isOpen) {
+      api.getSuperAdminPlans()
+        .then((res) => {
+          if (res?.data && res.data.length > 0) {
+            const activePlans = res.data.filter((p) => p.is_active && p.code !== 'TRIAL_2M');
+            if (activePlans.length > 0) {
+              setPlans(activePlans);
+              const popular = activePlans.find((p) => p.badge?.includes('Phổ biến') || p.code === 'ANNUAL_1Y') || activePlans[0];
+              setSelectedPlan(popular);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(val) || 0);
+  };
 
   const handleCopyStk = () => {
     if (navigator?.clipboard?.writeText) {
@@ -42,21 +132,64 @@ export function UpgradeModal({
     }
   };
 
+  const cleanOrg = (licenseInfo?.organization || licenseInfo?.company_name || 'CONGTY').replace(/\s+/g, '');
+  const transferSyntax = `OMNI ${cleanOrg} ${selectedPlan?.code || ''}`.trim();
+
   const handleCopySyntax = () => {
-    const org = (licenseInfo?.organization || licenseInfo?.company_name || 'CONGTY').replace(/\s+/g, '');
-    const syntax = `OMNI ${org}`;
     if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(syntax);
+      navigator.clipboard.writeText(transferSyntax);
       setCopiedSyntax(true);
       setTimeout(() => setCopiedSyntax(false), 2000);
     }
   };
 
-  if (!isOpen) return null;
+  // Chọn gói cước
+  const handleSelectPlan = (plan) => {
+    setSelectedPlan(plan);
+    setPaymentCompleted(false);
+    if (plan.price === 0) {
+      // Gói 0đ dùng thử
+      handleResetDemo();
+      return;
+    }
+    // Gói có phí: CHUYỂN SANG MÀN THANH TOÁN
+    setActiveTab('payment');
+  };
 
-  const isDemo = licenseInfo?.isDemo ?? true;
-  const currentKey = licenseInfo?.key || '';
+  // Người dùng xác nhận đã chuyển khoản
+  const handleConfirmPayment = async () => {
+    if (!selectedPlan) return;
+    try {
+      setSubmittingPayment(true);
+      const companyId = licenseInfo?.company_id || 'comp_1';
+      const companyName = licenseInfo?.organization || licenseInfo?.company_name || 'Khách Hàng Doanh Nghiệp';
+      const orderId = `ORD-${Date.now().toString().slice(-6)}`;
 
+      await api.createSuperAdminOrder({
+        company_id: companyId,
+        company_name: companyName,
+        plan_code: selectedPlan.code,
+        plan_name: selectedPlan.name,
+        amount: selectedPlan.price,
+        payment_status: 'PAID',
+        notes: `Khách chuyển khoản ACB qua VietQR cho gói: ${selectedPlan.name} (${formatCurrency(selectedPlan.price)})`
+      });
+
+      setCreatedOrder({
+        id: orderId,
+        plan_name: selectedPlan.name,
+        amount: selectedPlan.price,
+        date: new Date().toLocaleDateString('vi-VN')
+      });
+      setPaymentCompleted(true);
+    } catch (err) {
+      alert(err.message || 'Lỗi khi gửi xác nhận thanh toán');
+    } finally {
+      setSubmittingPayment(false);
+    }
+  };
+
+  // Kích hoạt key
   const handleActivate = async (e) => {
     if (e) e.preventDefault();
     const keyToUse = licenseKey.trim();
@@ -90,6 +223,7 @@ export function UpgradeModal({
     }
   };
 
+  // Trở về demo
   const handleResetDemo = async () => {
     if (!window.confirm('Bạn có chắc muốn chuyển về chế độ Dùng Thử (Demo) để kiểm thử lại các giới hạn?')) {
       return;
@@ -148,7 +282,7 @@ export function UpgradeModal({
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/20 transition-colors shrink-0 ml-2"
+              className="p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/20 transition-colors shrink-0 ml-2 cursor-pointer"
               title="Đóng cửa sổ"
             >
               <X className="w-5 h-5" />
@@ -163,44 +297,46 @@ export function UpgradeModal({
           )}
         </div>
 
-        {/* Sub Navigation Bar - Dedicated and clean */}
+        {/* 3 BƯỚC ĐIỀU HƯỚNG RÕ RÀNG */}
         <div className="px-6 pt-3 pb-2.5 bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700/80 shrink-0">
           <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 dark:bg-slate-900/70 rounded-2xl overflow-x-auto">
             <button
               type="button"
+              onClick={() => setActiveTab('plans')}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 cursor-pointer ${
+                activeTab === 'plans'
+                  ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 hover:bg-white/50 dark:hover:bg-slate-800/50'
+              }`}
+            >
+              <Package className="w-4 h-4 text-purple-600" />
+              <span>1. Chọn Gói Dịch Vụ</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('payment')}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 cursor-pointer ${
+                activeTab === 'payment'
+                  ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 hover:bg-white/50 dark:hover:bg-slate-800/50'
+              }`}
+            >
+              <CreditCard className="w-4 h-4 text-emerald-600" />
+              <span>2. Thanh Toán VietQR</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('activate')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 cursor-pointer ${
                 activeTab === 'activate'
                   ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 hover:bg-white/50 dark:hover:bg-slate-800/50'
               }`}
             >
-              <span>🔑</span>
-              <span>Nhập Mã Bản Quyền</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('pricing')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
-                activeTab === 'pricing'
-                  ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 hover:bg-white/50 dark:hover:bg-slate-800/50'
-              }`}
-            >
-              <span>⚡</span>
-              <span>So Sánh Tính Năng</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('contact')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
-                activeTab === 'contact'
-                  ? 'bg-white text-indigo-700 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 hover:bg-white/50 dark:hover:bg-slate-800/50'
-              }`}
-            >
-              <span>💳</span>
-              <span>Mua Bản Quyền & Hotline</span>
+              <Key className="w-4 h-4 text-amber-500" />
+              <span>3. Nhập Mã Bản Quyền</span>
             </button>
           </div>
         </div>
@@ -208,30 +344,423 @@ export function UpgradeModal({
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
 
-          {/* TAB 1: ACTIVATE KEY */}
+          {/* ==================================================== */}
+          {/* TAB 1: DANH SÁCH GÓI DỊCH VỤ (CHỌN GÓI CÓ PHÍ)      */}
+          {/* ==================================================== */}
+          {activeTab === 'plans' && (
+            <div className="space-y-6">
+              <div className="text-center max-w-lg mx-auto">
+                <span className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200">
+                  Bảng Giá Gói Dịch Vụ
+                </span>
+                <h4 className="text-xl font-black text-slate-900 dark:text-white mt-1.5">
+                  Chọn Gói Bản Quyền Phù Hợp Cho Doanh Nghiệp
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Chọn gói cước bên dưới để chuyển sang màn hình thanh toán VietQR quét mã tức thì.
+                </p>
+              </div>
+
+              {/* Lưới các gói cước */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {plans.map((p) => {
+                  let featureList = [];
+                  try {
+                    featureList = typeof p.features === 'string' ? JSON.parse(p.features) : p.features || [];
+                  } catch {
+                    featureList = p.features ? [p.features] : [];
+                  }
+                  const isFree = p.price === 0;
+                  const isLifetime = p.code === 'LIFETIME' || p.duration_months >= 999;
+                  const isPopular = p.badge?.includes('Phổ biến') || p.code === 'ANNUAL_1Y';
+
+                  return (
+                    <div
+                      key={p.id || p.code}
+                      className={`relative rounded-3xl p-6 flex flex-col justify-between transition-all duration-200 border shadow-soft hover:shadow-soft-lg ${
+                        isLifetime
+                          ? 'bg-gradient-to-b from-amber-50/70 via-white to-amber-50/30 border-amber-300 ring-2 ring-amber-400/20'
+                          : isPopular
+                          ? 'bg-gradient-to-b from-indigo-50/70 via-white to-purple-50/30 border-indigo-300 ring-2 ring-indigo-400/20'
+                          : 'bg-white border-slate-200'
+                      }`}
+                    >
+                      {p.badge && (
+                        <div className="absolute top-4 right-4">
+                          <span
+                            className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                              isLifetime
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : 'bg-indigo-100 text-indigo-800 border border-indigo-300'
+                            }`}
+                          >
+                            {p.badge}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            Mã gói: {p.code}
+                          </div>
+                          <h3 className="text-lg font-black text-slate-900 mt-0.5">{p.name}</h3>
+                        </div>
+
+                        <div className="pt-2 pb-4 border-b border-slate-100">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-black text-slate-900">
+                              {isFree ? 'Miễn Phí' : formatCurrency(p.price)}
+                            </span>
+                            {!isFree && (
+                              <span className="text-xs text-slate-500 font-medium">
+                                / {isLifetime ? 'Trọn đời' : `${p.duration_months} tháng`}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            {isLifetime ? 'Sở hữu vĩnh viễn, không gia hạn thêm' : `Thời hạn ${p.duration_months} tháng kể từ ngày kích hoạt`}
+                          </p>
+                        </div>
+
+                        <div className="space-y-2 py-2">
+                          <div className="text-xs font-bold text-slate-700">Quyền lợi bao gồm:</div>
+                          {featureList.map((feat, idx) => (
+                            <div key={idx} className="flex items-start gap-2 text-xs text-slate-600">
+                              <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                              <span>{feat}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="pt-5 border-t border-slate-100 mt-4">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectPlan(p)}
+                          className={`w-full py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer ${
+                            isLifetime
+                              ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white'
+                              : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white'
+                          }`}
+                        >
+                          <span>{isFree ? 'Dùng Thử Miễn Phí' : 'Chọn Mua Gói Này'}</span>
+                          <ArrowRight size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Bảng so sánh tính năng rút gọn bên dưới */}
+              <div className="pt-4 border-t border-slate-200">
+                <div className="text-center mb-3">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Đối Chiếu Quyền Lợi Bản Demo vs Enterprise
+                  </span>
+                </div>
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs text-xs">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 font-bold border-b border-slate-200 text-slate-700">
+                      <tr>
+                        <th className="p-3">Tính năng</th>
+                        <th className="p-3 text-center w-36 text-slate-500">Bản Demo</th>
+                        <th className="p-3 text-center w-44 text-indigo-600 font-extrabold bg-indigo-50/50">Enterprise Full</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-600">
+                      <tr>
+                        <td className="p-2.5 font-medium">📦 Quản lý Tài sản</td>
+                        <td className="p-2.5 text-center text-rose-500">Tối đa 5 tài sản</td>
+                        <td className="p-2.5 text-center text-emerald-600 font-bold bg-indigo-50/20">Không giới hạn (∞)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-medium">👥 Nhân sự & Phân quyền</td>
+                        <td className="p-2.5 text-center text-rose-500">Tối đa 4 nhân viên</td>
+                        <td className="p-2.5 text-center text-emerald-600 font-bold bg-indigo-50/20">Không giới hạn (∞)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-medium">🖨️ In ấn Biên bản & Xuất Excel</td>
+                        <td className="p-2.5 text-center text-amber-600">Dính watermark Demo</td>
+                        <td className="p-2.5 text-center text-emerald-600 font-bold bg-indigo-50/20">In sạch đẹp, mộc dấu, xuất Excel</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================== */}
+          {/* TAB 2: MÀN HÌNH THANH TOÁN VIETQR & BÁO THÀNH CÔNG   */}
+          {/* ==================================================== */}
+          {activeTab === 'payment' && (
+            <div className="space-y-5">
+              {!paymentCompleted ? (
+                <>
+                  {/* Banner Gói đã chọn */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-sky-50 dark:from-purple-950/40 dark:to-indigo-950/40 border border-purple-200/90 flex items-center justify-between">
+                    <div>
+                      <div className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">
+                        Gói Dịch Vụ Bạn Đã Chọn Mua:
+                      </div>
+                      <div className="text-base font-black text-slate-900 mt-0.5">
+                        {selectedPlan?.name || 'Gói Tiêu Chuẩn 1 Năm'}
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        Thời hạn: {selectedPlan?.duration_months >= 999 ? 'Trọn đời (Vĩnh viễn)' : `${selectedPlan?.duration_months} tháng kể từ ngày kích hoạt`}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-2xl font-black text-indigo-700">
+                        {formatCurrency(selectedPlan?.price || 4800000)}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('plans')}
+                        className="text-xs font-bold text-purple-700 hover:underline mt-0.5 inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <ArrowLeft size={12} />
+                        Đổi gói khác
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Thẻ thanh toán VietQR */}
+                  <div className="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                    <div className="px-6 py-3.5 bg-gradient-to-r from-slate-50 to-indigo-50/40 border-b border-slate-200 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                          <CreditCard className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm text-slate-800 dark:text-white">
+                            Thông Tin Chuyển Khoản Ngân Hàng ACB
+                          </h4>
+                          <p className="text-[11px] text-slate-500">
+                            Quét mã VietQR để chuyển tiền nhanh 24/7 không cần gõ STK
+                          </p>
+                        </div>
+                      </div>
+
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        VietQR • Napas 247
+                      </span>
+                    </div>
+
+                    <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                      {/* Mã QR */}
+                      <div className="md:col-span-4 flex flex-col items-center justify-center p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80">
+                        <div className="p-2.5 bg-white rounded-2xl shadow-sm border border-slate-200/80">
+                          <img
+                            src="/payment-qr.png"
+                            alt="Mã VietQR ACB PHAM MINH HIEU"
+                            className="w-44 h-44 aspect-square object-contain rounded-xl hover:scale-105 transition-transform duration-200 cursor-pointer"
+                            title="Nhấn để xem ảnh phóng to"
+                            onClick={() => window.open('/payment-qr.png', '_blank')}
+                          />
+                        </div>
+                        <div className="mt-3 text-center">
+                          <div className="text-xs font-bold text-slate-700 flex items-center justify-center gap-1">
+                            <span>📱 Quét mã VietQR 24/7</span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Dùng App ngân hàng bất kỳ để quét
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Các trường thông tin */}
+                      <div className="md:col-span-8 space-y-2.5">
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
+                          <div>
+                            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                              Ngân hàng thụ hưởng
+                            </div>
+                            <div className="text-sm font-bold text-slate-800 mt-0.5">
+                              ACB - Ngân Hàng TMCP Á Châu
+                            </div>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-100 text-blue-700">
+                            ACB
+                          </span>
+                        </div>
+
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
+                          <div>
+                            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                              Số tài khoản
+                            </div>
+                            <div className="text-xl font-black text-indigo-600 mt-0.5 tracking-wider">
+                              7909707
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleCopyStk}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 border border-slate-300 transition shadow-xs cursor-pointer"
+                            title="Sao chép số tài khoản"
+                          >
+                            {copiedStk ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                            {copiedStk ? 'Đã sao chép' : 'Sao chép STK'}
+                          </button>
+                        </div>
+
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
+                          <div>
+                            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                              Chủ tài khoản
+                            </div>
+                            <div className="text-sm font-extrabold text-slate-900 mt-0.5 tracking-wide">
+                              PHAM MINH HIEU
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-200 flex items-center justify-between">
+                          <div className="min-w-0 pr-2">
+                            <div className="text-[11px] font-semibold text-indigo-700 uppercase tracking-wider">
+                              Nội dung chuyển khoản (Ghi rõ để duyệt nhanh)
+                            </div>
+                            <div className="text-sm font-extrabold text-indigo-900 mt-0.5 truncate">
+                              {transferSyntax}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleCopySyntax}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition shadow-xs cursor-pointer shrink-0"
+                            title="Sao chép nội dung chuyển khoản"
+                          >
+                            {copiedSyntax ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-indigo-500" />}
+                            {copiedSyntax ? 'Đã sao chép' : 'Sao chép cú pháp'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* NÚT XÁC NHẬN ĐÃ CHUYỂN KHOẢN HOÀN TẤT */}
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={handleConfirmPayment}
+                      disabled={submittingPayment}
+                      className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-base shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-3 transition-all active:scale-98 cursor-pointer disabled:opacity-60"
+                    >
+                      {submittingPayment ? (
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-6 h-6 text-emerald-200" />
+                          <span>Tôi Đã Chuyển Khoản Hoàn Tất</span>
+                        </>
+                      )}
+                    </button>
+                    <p className="text-center text-[11px] text-slate-400 mt-2">
+                      Nhấn vào nút sau khi chuyển tiền để hệ thống ghi nhận đơn hàng và kích hoạt tài khoản ngay.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                /* ==================================================== */
+                /* MÀN HÌNH BÁO THANH TOÁN THÀNH CÔNG                  */
+                /* ==================================================== */
+                <div className="py-6 px-4 flex flex-col items-center text-center space-y-5 animate-fadeIn">
+                  <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 ring-8 ring-emerald-50">
+                    <CheckCircle2 className="w-12 h-12 animate-bounce" />
+                  </div>
+
+                  <div className="space-y-1.5 max-w-md">
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      Giao dịch được ghi nhận
+                    </span>
+                    <h3 className="text-2xl font-black text-slate-900 mt-2">
+                      Đã Ghi Nhận Thanh Toán Thành Công!
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                      Cảm ơn Quý doanh nghiệp! Đơn hàng của bạn đã được ghi nhận trên hệ thống đối soát tự động.
+                    </p>
+                  </div>
+
+                  {/* Thông tin đơn hàng tóm tắt */}
+                  <div className="w-full max-w-md p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-xs">
+                    <div className="flex justify-between py-1 border-b border-slate-200/60">
+                      <span className="text-slate-500">Mã đơn hàng:</span>
+                      <strong className="font-mono text-slate-800">{createdOrder?.id}</strong>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-200/60">
+                      <span className="text-slate-500">Gói bản quyền:</span>
+                      <strong className="text-indigo-600">{createdOrder?.plan_name}</strong>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-200/60">
+                      <span className="text-slate-500">Số tiền thanh toán:</span>
+                      <strong className="text-emerald-700 text-sm">{formatCurrency(createdOrder?.amount)}</strong>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-slate-500">Trạng thái:</span>
+                      <span className="font-bold text-amber-600 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                        Đang đối soát & cấp bản quyền (5-10 phút)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Nút hành động */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md pt-2">
+                    <a
+                      href={`https://zalo.me/0394264400?text=${encodeURIComponent(`Chào Admin, tôi vừa chuyển khoản thanh toán ${createdOrder?.plan_name} (Mã đơn: ${createdOrder?.id}, Số tiền: ${formatCurrency(createdOrder?.amount)}). Nhờ Admin kiểm tra và duyệt kích hoạt sớm giúp tôi!`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-soft transition cursor-pointer"
+                    >
+                      <MessageCircle size={16} />
+                      Báo Zalo Duyệt Ngay (1 Phút)
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('activate')}
+                      className="py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-soft transition cursor-pointer"
+                    >
+                      <Key size={16} />
+                      Nhập Mã Kích Hoạt
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ==================================================== */}
+          {/* TAB 3: NHẬP MÃ KÍCH HOẠT                             */}
+          {/* ==================================================== */}
           {activeTab === 'activate' && (
             <div className="space-y-6">
               {isDemo ? (
                 <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-4 flex items-start gap-3">
-                  <Zap className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  <div className="text-xs md:text-sm text-amber-800 dark:text-amber-300">
+                  <Zap className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="text-xs md:text-sm text-amber-800">
                     <p className="font-semibold">Bạn đang sử dụng phiên bản Dùng Thử (Demo)</p>
-                    <p className="mt-1 text-amber-700/90 dark:text-amber-400/85">
+                    <p className="mt-1 text-amber-700">
                       Phiên bản Demo giới hạn tối đa 5 tài sản, 4 nhân viên, 3 hợp đồng, in biên bản có watermark và khóa xuất Excel. Nhập mã bản quyền do bộ phận kinh doanh cung cấp để mở khóa toàn diện ngay lập tức.
                     </p>
                   </div>
                 </div>
               ) : (
                 <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl p-4 flex items-start gap-3">
-                  <ShieldCheck className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                  <div className="text-xs md:text-sm text-emerald-800 dark:text-emerald-300 flex-1">
+                  <ShieldCheck className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="text-xs md:text-sm text-emerald-800 flex-1">
                     <p className="font-bold text-base">Hệ Thống Đã Được Kích Hoạt Bản Quyền Doanh Nghiệp (Enterprise)!</p>
-                    <p className="mt-1 text-emerald-700 dark:text-emerald-400">
+                    <p className="mt-1 text-emerald-700">
                       Mọi giới hạn số lượng tài sản, người dùng, giao dịch và in ấn đều đã được gỡ bỏ hoàn toàn.
                     </p>
                     {currentKey && (
-                      <div className="mt-2 text-xs font-mono bg-white dark:bg-slate-900 p-2 rounded-lg border border-emerald-200 dark:border-emerald-800 inline-block">
-                        License Key: <strong className="text-emerald-600 dark:text-emerald-400">{currentKey}</strong>
+                      <div className="mt-2 text-xs font-mono bg-white p-2 rounded-lg border border-emerald-200 inline-block">
+                        License Key: <strong className="text-emerald-600">{currentKey}</strong>
                       </div>
                     )}
                   </div>
@@ -241,7 +770,7 @@ export function UpgradeModal({
               {/* Form Input Key */}
               <form onSubmit={handleActivate} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                     Mã Kích Hoạt Bản Quyền (License Key)
                   </label>
                   <div className="relative">
@@ -255,24 +784,24 @@ export function UpgradeModal({
                         setLicenseKey(e.target.value.toUpperCase());
                         setError('');
                       }}
-                      placeholder="VD: OMNI-ENTERPRISE-2026 hoặc OMNI-XXXX-XXXX-XXXX"
-                      className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono tracking-wider focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 uppercase transition-all"
+                      placeholder="VD: OMNI-ENT-2026-XXXX hoặc dán mã được cấp vào đây"
+                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono tracking-wider focus:ring-2 focus:ring-indigo-500 uppercase transition-all"
                     />
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-                    Mã được gửi qua Email hoặc hóa đơn khi quý khách mua gói phần mềm.
+                  <p className="text-xs text-slate-500 mt-1.5">
+                    Mã bản quyền được gửi qua <strong>Chuông thông báo 🔔</strong>, <strong>Email</strong> hoặc <strong>Zalo</strong> sau khi bạn hoàn tất chuyển khoản.
                   </p>
                 </div>
 
                 {error && (
-                  <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-xs md:text-sm text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs md:text-sm text-rose-600 flex items-center gap-2">
                     <XCircle className="w-4 h-4 shrink-0" />
                     <span>{error}</span>
                   </div>
                 )}
 
                 {successMsg && (
-                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs md:text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs md:text-sm text-emerald-600 flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>{successMsg}</span>
                   </div>
@@ -282,7 +811,7 @@ export function UpgradeModal({
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex-1 min-w-[200px] py-3 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-60"
+                    className="flex-1 min-w-[200px] py-3 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
                   >
                     {loading ? (
                       <RefreshCw className="w-5 h-5 animate-spin" />
@@ -299,7 +828,7 @@ export function UpgradeModal({
                       type="button"
                       onClick={handleResetDemo}
                       disabled={loading}
-                      className="py-3 px-4 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition-colors"
+                      className="py-3 px-4 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-100 text-xs font-semibold transition-colors cursor-pointer"
                     >
                       Kiểm thử lại bản Demo
                     </button>
@@ -309,297 +838,22 @@ export function UpgradeModal({
             </div>
           )}
 
-          {/* TAB 2: PRICING & FEATURE COMPARISON */}
-          {activeTab === 'pricing' && (
-            <div className="space-y-4">
-              <div className="text-center max-w-md mx-auto mb-4">
-                <h4 className="text-lg font-bold text-slate-900 dark:text-white">So Sánh Quyền Lợi & Giới Hạn</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Nâng cấp Enterprise để sở hữu hệ thống vĩnh viễn, không lo giới hạn tài sản
-                </p>
-              </div>
-
-              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-                <table className="w-full text-left text-xs md:text-sm">
-                  <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
-                    <tr>
-                      <th className="p-3.5">Tính năng & Phân hệ</th>
-                      <th className="p-3.5 text-center bg-slate-50 dark:bg-slate-800/40 w-36">
-                        <span className="text-slate-600 dark:text-slate-400">Bản Demo (Thử nghiệm)</span>
-                      </th>
-                      <th className="p-3.5 text-center bg-indigo-50/80 dark:bg-indigo-950/50 w-44 text-indigo-600 dark:text-indigo-400">
-                        <span className="flex items-center justify-center gap-1 font-extrabold">
-                          <Crown className="w-4 h-4 text-amber-500" /> Enterprise Full
-                        </span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-600 dark:text-slate-300">
-                    <tr>
-                      <td className="p-3 font-medium">📦 Quản lý Tài sản & Thiết bị</td>
-                      <td className="p-3 text-center bg-slate-50/50 dark:bg-slate-800/20 text-rose-500 font-semibold">Tối đa 5 tài sản</td>
-                      <td className="p-3 text-center bg-indigo-50/30 dark:bg-indigo-950/20 text-emerald-600 font-bold">Không giới hạn (∞)</td>
-                    </tr>
-                    <tr>
-                      <td className="p-3 font-medium">👥 Quản lý Nhân sự & Phân quyền</td>
-                      <td className="p-3 text-center bg-slate-50/50 dark:bg-slate-800/20 text-rose-500 font-semibold">Tối đa 4 nhân viên</td>
-                      <td className="p-3 text-center bg-indigo-50/30 dark:bg-indigo-950/20 text-emerald-600 font-bold">Không giới hạn (∞)</td>
-                    </tr>
-                    <tr>
-                      <td className="p-3 font-medium">📄 Hợp đồng & Biên bản bàn giao</td>
-                      <td className="p-3 text-center bg-slate-50/50 dark:bg-slate-800/20 text-rose-500 font-semibold">Tối đa 3 hợp đồng</td>
-                      <td className="p-3 text-center bg-indigo-50/30 dark:bg-indigo-950/20 text-emerald-600 font-bold">Không giới hạn (∞)</td>
-                    </tr>
-                    <tr>
-                      <td className="p-3 font-medium">💰 Quản lý Tài chính & Thu Chi</td>
-                      <td className="p-3 text-center bg-slate-50/50 dark:bg-slate-800/20 text-rose-500 font-semibold">Tối đa 5 phiếu ghi</td>
-                      <td className="p-3 text-center bg-indigo-50/30 dark:bg-indigo-950/20 text-emerald-600 font-bold">Không giới hạn (∞)</td>
-                    </tr>
-                    <tr>
-                      <td className="p-3 font-medium">🖨️ In ấn Biên bản bàn giao A4</td>
-                      <td className="p-3 text-center bg-slate-50/50 dark:bg-slate-800/20 text-amber-600 font-medium">Dính watermark Demo</td>
-                      <td className="p-3 text-center bg-indigo-50/30 dark:bg-indigo-950/20 text-emerald-600 font-bold">Chuẩn A4 sạch đẹp, có mộc</td>
-                    </tr>
-                    <tr>
-                      <td className="p-3 font-medium">📊 Xuất dữ liệu Excel / CSV</td>
-                      <td className="p-3 text-center bg-slate-50/50 dark:bg-slate-800/20 text-rose-500 font-medium">
-                        <XCircle className="w-4 h-4 mx-auto text-rose-500" />
-                      </td>
-                      <td className="p-3 text-center bg-indigo-50/30 dark:bg-indigo-950/20 text-emerald-600 font-bold">
-                        <CheckCircle2 className="w-4 h-4 mx-auto text-emerald-600" />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="p-3 font-medium">🤖 Trợ lý AI OMNI-Bot Gemini</td>
-                      <td className="p-3 text-center bg-slate-50/50 dark:bg-slate-800/20 text-slate-500">Giới hạn câu hỏi</td>
-                      <td className="p-3 text-center bg-indigo-50/30 dark:bg-indigo-950/20 text-emerald-600 font-bold">Trợ lý riêng tư 24/7</td>
-                    </tr>
-                    <tr>
-                      <td className="p-3 font-medium">☁️ Lưu trữ Dữ liệu Điện toán Đám mây</td>
-                      <td className="p-3 text-center bg-slate-50/50 dark:bg-slate-800/20 text-slate-500">Cơ bản</td>
-                      <td className="p-3 text-center bg-indigo-50/30 dark:bg-indigo-950/20 text-emerald-600 font-bold">Cloudflare D1 bảo mật cao</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex justify-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('activate')}
-                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-md flex items-center gap-2"
-                >
-                  <span>Tôi đã có mã bản quyền</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: CONTACT & PAYMENT */}
-          {activeTab === 'contact' && (
-            <div className="space-y-5">
-              {/* Thẻ thanh toán VietQR chính thức (Hero Payment Card) */}
-              <div className="bg-white dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-                {/* Header thanh toán */}
-                <div className="px-6 py-3.5 bg-gradient-to-r from-slate-50 to-indigo-50/40 dark:from-slate-800 dark:to-indigo-950/20 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                      <CreditCard className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-800 dark:text-white">
-                        Thông Tin Chuyển Khoản Ngân Hàng
-                      </h4>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Hỗ trợ chuyển nhanh liên ngân hàng 24/7 qua VietQR
-                      </p>
-                    </div>
-                  </div>
-
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    VietQR • Napas 247
-                  </span>
-                </div>
-
-                {/* Bố cục 2 phần: Bên trái là QR to rõ, Bên phải là danh sách thông tin */}
-                <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                  {/* Cột 1: Mã QR sắc nét */}
-                  <div className="md:col-span-4 flex flex-col items-center justify-center p-4 bg-slate-50/80 dark:bg-slate-900/50 rounded-2xl border border-slate-200/80 dark:border-slate-800">
-                    <div className="p-2.5 bg-white rounded-2xl shadow-sm border border-slate-200/80">
-                      <img
-                        src="/payment-qr.png"
-                        alt="Mã VietQR ACB PHAM MINH HIEU"
-                        className="w-44 h-44 aspect-square object-contain rounded-xl hover:scale-105 transition-transform duration-200 cursor-pointer"
-                        title="Nhấn để xem ảnh phóng to"
-                        onClick={() => window.open('/payment-qr.png', '_blank')}
-                      />
-                    </div>
-                    <div className="mt-3 text-center">
-                      <div className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1">
-                        <span>📱 Quét mã VietQR 24/7</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Dùng App ngân hàng hoặc Ví để quét
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Cột 2: Danh sách các trường thông tin */}
-                  <div className="md:col-span-8 space-y-2.5">
-                    {/* Ngân hàng */}
-                    <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
-                      <div>
-                        <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                          Ngân hàng thụ hưởng
-                        </div>
-                        <div className="text-sm font-bold text-slate-800 dark:text-white mt-0.5">
-                          ACB - Ngân Hàng TMCP Á Châu
-                        </div>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300">
-                        ACB
-                      </span>
-                    </div>
-
-                    {/* Số tài khoản */}
-                    <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
-                      <div>
-                        <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                          Số tài khoản
-                        </div>
-                        <div className="text-xl font-black text-indigo-600 dark:text-indigo-400 mt-0.5 tracking-wider">
-                          7909707
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleCopyStk}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-slate-700 dark:text-slate-200 hover:text-indigo-600 border border-slate-300 dark:border-slate-700 transition shadow-xs cursor-pointer"
-                        title="Sao chép số tài khoản"
-                      >
-                        {copiedStk ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
-                        {copiedStk ? 'Đã sao chép' : 'Sao chép STK'}
-                      </button>
-                    </div>
-
-                    {/* Chủ tài khoản */}
-                    <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
-                      <div>
-                        <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                          Chủ tài khoản
-                        </div>
-                        <div className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5 tracking-wide">
-                          PHAM MINH HIEU
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Cú pháp chuyển khoản */}
-                    <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/30 rounded-xl border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-between">
-                      <div className="min-w-0 pr-2">
-                        <div className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
-                          Nội dung chuyển khoản (Ghi đúng để duyệt ngay)
-                        </div>
-                        <div className="text-sm font-extrabold text-indigo-900 dark:text-indigo-200 mt-0.5 truncate">
-                          OMNI {(licenseInfo?.organization || licenseInfo?.company_name || 'CONGTY').replace(/\s+/g, '')}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleCopySyntax}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 transition shadow-xs cursor-pointer shrink-0"
-                        title="Sao chép nội dung chuyển khoản"
-                      >
-                        {copiedSyntax ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-indigo-500" />}
-                        {copiedSyntax ? 'Đã sao chép' : 'Sao chép cú pháp'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 3 Kênh liên hệ hỗ trợ & Hotline */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <a
-                  href="tel:0394264400"
-                  className="p-3.5 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700 flex items-center gap-3 hover:border-indigo-300 hover:shadow-xs transition group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                    <PhoneCall className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-medium text-slate-400">Hotline 24/7</div>
-                    <div className="text-sm font-black text-slate-800 dark:text-white group-hover:text-indigo-600 transition">
-                      0394264400
-                    </div>
-                  </div>
-                </a>
-
-                <a
-                  href="https://zalo.me/0394264400"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="p-3.5 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700 flex items-center gap-3 hover:border-emerald-300 hover:shadow-xs transition group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 font-black text-xs">
-                    Zalo
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-medium text-slate-400">Zalo Hỗ Trợ Nhanh</div>
-                    <div className="text-sm font-black text-slate-800 dark:text-white group-hover:text-emerald-600 transition">
-                      0394264400
-                    </div>
-                  </div>
-                </a>
-
-                <a
-                  href="mailto:hieupham101097@gmail.com"
-                  className="p-3.5 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700 flex items-center gap-3 hover:border-purple-300 hover:shadow-xs transition group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 font-black text-sm">
-                    @
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-medium text-slate-400">Email Xuất Hóa Đơn VAT</div>
-                    <div className="text-xs font-bold text-slate-800 dark:text-white group-hover:text-purple-600 transition truncate">
-                      hieupham101097@gmail.com
-                    </div>
-                  </div>
-                </a>
-              </div>
-
-              {/* Thông báo chân trang */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50/60 dark:from-amber-950/30 dark:to-orange-950/20 border border-amber-200/80 dark:border-amber-800/50 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
-                <span>⚡ Sau khi chuyển khoản, bộ phận hỗ trợ sẽ cấp mã kích hoạt trong vòng 5-10 phút. Bấm sang tab <strong>"Nhập Mã Bản Quyền"</strong> để mở khóa tức thì.</span>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('activate')}
-                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs shrink-0 ml-3 shadow-xs cursor-pointer transition"
-                >
-                  Nhập mã ngay
-                </button>
-              </div>
-            </div>
-          )}
-
         </div>
 
-        {/* Modal Footer */}
-        <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <Building2 className="w-4 h-4 text-indigo-500" />
-            <span>OMNI ASSETS Enterprise Suite &copy; 2026</span>
+        {/* Chân Modal */}
+        <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-slate-500 text-xs flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 text-[11px]">
+            <Building2 size={13} />
+            <span>Hệ Thống Quản Trị OMNI ASSETS Enterprise Suite © 2026</span>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 font-semibold transition-colors"
+            className="text-xs font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
           >
             Đóng
           </button>
         </div>
-
       </div>
     </div>
   );
