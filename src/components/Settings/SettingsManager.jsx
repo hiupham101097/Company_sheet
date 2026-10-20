@@ -107,12 +107,35 @@ export function SettingsManager({
     }
   };
 
-  // Tính toán thời gian chấm công cho bảng xem trước
-  const [stdH, stdM] = (settings.work_start_time || '08:30').split(':').map(Number);
+  // Hàm chuyển đổi 'HH:mm' thành số phút chính xác (tránh lỗi 00 phút bị rơi vào default do falsy)
+  const parseTimeToMinutes = (timeStr, defaultH = 8, defaultM = 0) => {
+    if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
+      return defaultH * 60 + defaultM;
+    }
+    const [h, m] = timeStr.split(':').map(Number);
+    const validH = Number.isFinite(h) && h >= 0 && h <= 23 ? h : defaultH;
+    const validM = Number.isFinite(m) && m >= 0 && m <= 59 ? m : defaultM;
+    return validH * 60 + validM;
+  };
+
+  const startTotalMinutes = parseTimeToMinutes(settings.work_start_time, 8, 0);
+  const endTotalMinutes = parseTimeToMinutes(settings.work_end_time, 17, 30);
   const graceMinutes = Number(settings.late_grace_minutes) || 0;
-  const lateMinutes = (stdH || 8) * 60 + (stdM || 30) + graceMinutes;
+  const lateMinutes = startTotalMinutes + graceMinutes;
   const lateH = Math.floor(lateMinutes / 60).toString().padStart(2, '0');
   const lateM = (lateMinutes % 60).toString().padStart(2, '0');
+
+  // Tính thời lượng làm việc chuẩn trừ giờ nghỉ trưa
+  let netWorkMinutes = endTotalMinutes - startTotalMinutes;
+  if (settings.lunch_break_start && settings.lunch_break_end) {
+    const lunchStart = parseTimeToMinutes(settings.lunch_break_start, 12, 0);
+    const lunchEnd = parseTimeToMinutes(settings.lunch_break_end, 13, 30);
+    const lunchDuration = lunchEnd - lunchStart;
+    if (lunchDuration > 0 && lunchDuration < netWorkMinutes) {
+      netWorkMinutes -= lunchDuration;
+    }
+  }
+  const standardWorkHours = netWorkMinutes > 0 ? (netWorkMinutes / 60).toFixed(1) : '8.0';
 
   return (
     <div className="space-y-6 animate-fade-in font-sans">
@@ -393,7 +416,7 @@ export function SettingsManager({
                     {settings.work_start_time} - {settings.work_end_time}
                   </h4>
                   <p className="text-xs text-pastel-100">
-                    Thời lượng ca làm việc tiêu chuẩn: 8.0 giờ/ngày
+                    Thời lượng ca làm việc tiêu chuẩn: {standardWorkHours} giờ/ngày
                   </p>
                 </div>
 
