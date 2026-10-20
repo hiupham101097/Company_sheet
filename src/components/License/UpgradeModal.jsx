@@ -31,6 +31,26 @@ export function UpgradeModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [copiedStk, setCopiedStk] = useState(false);
+  const [copiedSyntax, setCopiedSyntax] = useState(false);
+
+  const handleCopyStk = () => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText('7909707');
+      setCopiedStk(true);
+      setTimeout(() => setCopiedStk(false), 2000);
+    }
+  };
+
+  const handleCopySyntax = () => {
+    const org = licenseInfo?.organization || licenseInfo?.company_name || 'CONGTY';
+    const syntax = `OMNI ${org} 0394264400`;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(syntax);
+      setCopiedSyntax(true);
+      setTimeout(() => setCopiedSyntax(false), 2000);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -381,30 +401,80 @@ export function UpgradeModal({
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                {/* Bank transfer info */}
-                <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/40 border border-indigo-200 dark:border-indigo-800/60">
-                  <div className="flex items-center gap-2.5 text-indigo-700 dark:text-indigo-400 font-bold text-sm mb-3">
-                    <CreditCard className="w-5 h-5" />
-                    <span>Thông Tin Thanh Toán Bản Quyền</span>
+                {/* Bank transfer info & VietQR */}
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/90 via-purple-50/80 to-sky-50/90 dark:from-indigo-950/40 dark:to-purple-950/40 border border-indigo-200/90 dark:border-indigo-800/60 shadow-soft">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400 font-bold text-sm">
+                      <CreditCard className="w-5 h-5" />
+                      <span>Thông Tin Chuyển Khoản & Quét Mã VietQR</span>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 uppercase tracking-wider">
+                      VietQR • Napas 247
+                    </span>
                   </div>
-                  <div className="space-y-2 text-xs md:text-sm text-slate-700 dark:text-slate-300">
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400 block text-xs">Ngân hàng:</span>
-                      <strong className="text-indigo-600 dark:text-indigo-300">ACB (Ngân hàng Á Châu)</strong>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    {/* QR Code image display */}
+                    <div className="flex flex-col items-center shrink-0 p-2.5 bg-white dark:bg-slate-900 rounded-2xl border border-indigo-200/80 dark:border-indigo-800 shadow-md">
+                      <img
+                        src="/payment-qr.png"
+                        alt="Mã QR Chuyển Khoản ACB PHAM MINH HIEU"
+                        className="w-36 h-auto rounded-xl object-contain hover:scale-105 transition-transform duration-200 cursor-pointer"
+                        title="Nhấn để phóng to mã QR"
+                        onClick={() => window.open('/payment-qr.png', '_blank')}
+                      />
+                      <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1.5 flex items-center gap-1">
+                        <span>📱 Quét mã chuyển tiền nhanh</span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400 block text-xs">Số tài khoản:</span>
-                      <strong className="text-base font-mono font-bold text-slate-900 dark:text-white">7909707</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400 block text-xs">Chủ tài khoản:</span>
-                      <strong className="text-slate-900 dark:text-white">PHAM MINH HIEU</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 dark:text-slate-400 block text-xs">Cú pháp chuyển khoản:</span>
-                      <span className="font-mono bg-white dark:bg-slate-900 px-2 py-1 rounded border border-indigo-200 dark:border-indigo-800 font-bold text-indigo-600 dark:text-indigo-400 text-xs inline-block">
-                        OMNI [Tên Công Ty] [SĐT]
-                      </span>
+
+                    {/* Text Details */}
+                    <div className="space-y-2 text-xs md:text-sm text-slate-700 dark:text-slate-300 flex-1 w-full">
+                      <div>
+                        <span className="text-slate-500 dark:text-slate-400 block text-[11px] font-semibold">Ngân hàng thụ hưởng:</span>
+                        <strong className="text-indigo-700 dark:text-indigo-300 font-bold">ACB (Ngân hàng Á Châu)</strong>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 dark:text-slate-400 block text-[11px] font-semibold">Số tài khoản:</span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <strong className="text-lg font-mono font-black text-slate-900 dark:text-white tracking-wider">
+                            7909707
+                          </strong>
+                          <button
+                            type="button"
+                            onClick={handleCopyStk}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition shadow-xs cursor-pointer"
+                            title="Sao chép số tài khoản"
+                          >
+                            {copiedStk ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                            {copiedStk ? 'Đã chép' : 'Chép STK'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 dark:text-slate-400 block text-[11px] font-semibold">Chủ tài khoản:</span>
+                        <strong className="text-slate-900 dark:text-white font-extrabold tracking-wide">PHAM MINH HIEU</strong>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 dark:text-slate-400 block text-[11px] font-semibold">Cú pháp chuyển khoản:</span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="font-mono bg-white dark:bg-slate-900 px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 font-bold text-indigo-700 dark:text-indigo-400 text-xs inline-block">
+                            OMNI {licenseInfo?.organization || 'CONGTY'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleCopySyntax}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition shadow-xs cursor-pointer"
+                            title="Sao chép cú pháp chuyển khoản"
+                          >
+                            {copiedSyntax ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                            {copiedSyntax ? 'Đã chép' : 'Chép cú pháp'}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
