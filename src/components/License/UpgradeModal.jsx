@@ -726,6 +726,38 @@ export function UpgradeModal({
                     </div>
                   </div>
 
+                  {/* Quét mã Zalo Admin để duyệt nhanh (tránh bị chặn kết bạn qua SĐT) */}
+                  <div className="w-full max-w-md p-4 bg-gradient-to-br from-blue-50/70 via-indigo-50/50 to-white rounded-2xl border border-blue-200/80 shadow-xs flex flex-col sm:flex-row items-center gap-4 text-left">
+                    <div className="p-2 bg-white rounded-xl shadow-xs border border-blue-100 shrink-0">
+                      <img
+                        src="/zalo-qr.png"
+                        alt="Mã QR Zalo Admin (Hp)"
+                        className="w-28 h-28 aspect-square object-contain rounded-lg cursor-pointer hover:scale-105 transition-transform"
+                        onClick={() => window.open('/zalo-qr.png', '_blank')}
+                        title="Bấm để xem ảnh QR Zalo phóng to"
+                      />
+                    </div>
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                        <h4 className="text-xs font-bold text-slate-800">Mã QR Zalo Quản Trị Viên (Hp)</h4>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        Mở App Zalo bấm nút <strong>Quét QR [⛶]</strong> để quét kết bạn và gửi hóa đơn đối soát, nhận mã kích hoạt trong 1 phút (an toàn, không lo bị chặn kết bạn).
+                      </p>
+                      <div className="pt-1 flex items-center gap-3">
+                        <a
+                          href="/zalo-qr.png"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          <span>🔍 Xem mã QR Zalo phóng to</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Nút hành động */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md pt-2">
                     <a
