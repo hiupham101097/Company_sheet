@@ -152,7 +152,7 @@ export function UserManager({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-28">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -173,7 +173,7 @@ export function UserManager({
 
         <button
           onClick={handleOpenAddModal}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all shrink-0"
         >
           <Plus size={16} />
           <span>Thêm Nhân Viên Mới</span>
@@ -255,8 +255,8 @@ export function UserManager({
         </div>
       </div>
 
-      {/* Staff Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {/* Staff Cards Grid - Clean responsive columns with ample card width */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
         {filteredUsers.length === 0 ? (
           <div className="col-span-full py-16 text-center bg-white rounded-3xl border border-pastel-200/80">
             <Users size={36} className="mx-auto text-pastel-400 mb-2" />
@@ -269,32 +269,37 @@ export function UserManager({
             return (
               <div
                 key={user.id}
-                className="bg-white p-5 rounded-2xl border border-pastel-200 shadow-soft card-hover flex flex-col justify-between"
+                className="bg-white p-5 rounded-2xl border border-pastel-200/90 shadow-soft hover:shadow-soft-lg transition-all card-hover flex flex-col justify-between overflow-hidden relative min-w-0"
               >
                 <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <img
-                        src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.name}`}
+                        src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.name)}`}
                         alt={user.name}
-                        className="w-12 h-12 rounded-2xl object-cover ring-2 ring-pastel-200 shrink-0"
+                        className="w-12 h-12 rounded-2xl object-cover ring-2 ring-pastel-200/80 shrink-0 shadow-sm"
                       />
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-bold text-slate-800 leading-tight truncate">{user.name}</h4>
-                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 text-sky-800 border border-sky-200/80 text-[10px] font-semibold mt-1 max-w-[170px] truncate">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-bold text-slate-800 leading-snug truncate" title={user.name}>
+                          {user.name}
+                        </h4>
+                        <div
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-sky-50 text-sky-700 border border-sky-200/70 text-[11px] font-medium mt-1 max-w-full truncate"
+                          title={user.department || 'Chưa gán'}
+                        >
                           <Building2 size={11} className="text-sky-600 shrink-0" />
                           <span className="truncate">{user.department || 'Chưa gán'}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-0.5 shrink-0 ml-1">
                       <button
                         onClick={() => handleOpenEditModal(user)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
                         title="Chỉnh sửa thông tin & đổi phòng ban"
                       >
-                        <Edit2 size={14} />
+                        <Edit2 size={15} />
                       </button>
                       {user.id !== 'usr_admin' && user.id !== 'usr_1' && (
                         <button
@@ -302,21 +307,23 @@ export function UserManager({
                           className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                           title="Xóa nhân viên"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={15} />
                         </button>
                       )}
                     </div>
                   </div>
 
                   <div className="mt-4 pt-3.5 border-t border-slate-100 space-y-2 text-xs text-slate-600">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <Mail size={13} className="text-slate-400 shrink-0" />
-                      <span className="truncate">{user.email}</span>
+                      <span className="truncate font-medium text-slate-700" title={user.email}>
+                        {user.email}
+                      </span>
                     </div>
                     {user.phone && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <Phone size={13} className="text-slate-400 shrink-0" />
-                        <span className="font-mono">{user.phone}</span>
+                        <span className="font-mono text-slate-700">{user.phone}</span>
                       </div>
                     )}
                   </div>

@@ -267,7 +267,7 @@ export function Navbar({
 
           {/* Quick Settings Dropdown Menu */}
           {showSettingsMenu && (
-            <div className="absolute right-0 mt-2 w-72 max-w-[92vw] bg-white rounded-2xl shadow-soft-lg border border-pastel-200 py-2 z-50 animate-scale-in">
+            <div className="absolute right-0 mt-2 w-72 sm:w-80 min-w-[280px] sm:min-w-[320px] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl shadow-soft-lg border border-pastel-200 py-2 z-50 animate-scale-in">
               <div className="px-4 py-2.5 border-b border-slate-100 bg-pastel-50/50">
                 <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                   <Settings size={13} className="text-pastel-600" />
@@ -410,14 +410,14 @@ export function Navbar({
 
           {/* Notifications Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-84 max-w-[92vw] bg-white rounded-2xl shadow-soft-lg border border-pastel-200 py-2 z-50 animate-scale-in">
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 min-w-[320px] sm:min-w-[380px] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl shadow-soft-lg border border-pastel-200 py-2 z-50 animate-scale-in">
               <div className="px-4 py-2.5 border-b border-slate-100 bg-pastel-50/50">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider whitespace-nowrap">
                     Thông Báo & Nhắc Hạn
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-semibold text-pastel-700 bg-pastel-100 px-2 py-0.5 rounded-full">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[11px] font-semibold text-pastel-700 bg-pastel-100 px-2.5 py-0.5 rounded-full whitespace-nowrap">
                       {urgentReminders.length} việc
                     </span>
                     <button
@@ -450,10 +450,10 @@ export function Navbar({
                         setSelectedReminder(item);
                         setShowNotifications(false);
                       }}
-                      className="w-full text-left p-3 hover:bg-pastel-50/70 transition-colors flex items-start gap-2.5 cursor-pointer group"
+                      className="w-full text-left p-3.5 hover:bg-pastel-50/70 transition-colors flex items-start gap-3 cursor-pointer group"
                     >
                       <div
-                        className={`mt-0.5 p-1 rounded-md shrink-0 ${
+                        className={`mt-0.5 p-1.5 rounded-lg shrink-0 ${
                           item.level === 'danger'
                             ? 'bg-rose-100 text-rose-600'
                             : item.level === 'warning'
@@ -461,17 +461,17 @@ export function Navbar({
                             : 'bg-sky-100 text-sky-600'
                         }`}
                       >
-                        <AlertTriangle size={13} />
+                        <AlertTriangle size={14} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-slate-700 font-semibold leading-relaxed group-hover:text-pastel-700 transition">
                           {item.title}
                         </p>
-                        <div className="flex items-center justify-between gap-2 mt-1">
+                        <div className="flex items-center justify-between gap-2 mt-1.5">
                           <span className="text-[10px] text-slate-400 font-mono">
                             Hạn: {formatDateVN(item.date)}
                           </span>
-                          <span className="text-[10px] font-bold text-pastel-600 group-hover:underline flex items-center gap-0.5">
+                          <span className="text-[10px] font-bold text-pastel-600 group-hover:underline whitespace-nowrap flex items-center gap-0.5 shrink-0">
                             Xem chi tiết ➔
                           </span>
                         </div>

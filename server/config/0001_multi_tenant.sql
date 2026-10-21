@@ -9,8 +9,11 @@ ALTER TABLE attendance ADD COLUMN company_id TEXT;
 ALTER TABLE categories ADD COLUMN company_id TEXT;
 ALTER TABLE ai_contract_templates ADD COLUMN company_id TEXT;
 
--- Assign all existing data to comp_1 (OMNI ASSETS & LOGISTICS demo company)
-UPDATE users SET company_id = 'comp_1' WHERE id != 'super_admin_master' AND email != 'hieupham101097@gmail.com';
+-- Assign existing legacy data to comp_1 only if company_id is NULL
+UPDATE users SET company_id = 'comp_techcorp' WHERE email = 'hieu.pham.test@techcorp.vn';
+UPDATE users SET company_id = 'comp_bthander' WHERE email = 'hieupham101097@gmail.com';
+UPDATE users SET company_id = 'SYSTEM' WHERE id = 'super_admin_master';
+UPDATE users SET company_id = 'comp_1' WHERE company_id IS NULL;
 UPDATE assets SET company_id = 'comp_1' WHERE company_id IS NULL;
 UPDATE finance SET company_id = 'comp_1' WHERE company_id IS NULL;
 UPDATE tasks SET company_id = 'comp_1' WHERE company_id IS NULL;
@@ -36,11 +39,22 @@ VALUES (
   datetime('now')
 );
 
--- Link user hieupham101097@gmail.com to comp_bthander
-UPDATE users SET company_id = 'comp_bthander' WHERE email = 'hieupham101097@gmail.com';
-
--- Ensure super_admin_master has role SUPER_ADMIN and company_id SYSTEM
-UPDATE users SET company_id = 'SYSTEM' WHERE id = 'super_admin_master';
+INSERT OR REPLACE INTO company_tenants (id, company_name, tax_id, admin_name, admin_email, admin_phone, plan_code, license_status, start_date, expire_date, revenue, notes, created_at)
+VALUES (
+  'comp_techcorp',
+  'Công Ty Cổ Phần Công Nghệ TechCorp',
+  '0312998877',
+  'Phạm Minh Hiếu',
+  'hieu.pham.test@techcorp.vn',
+  '0988776655',
+  'TRIAL_2M',
+  'ACTIVE',
+  date('now'),
+  date('now', '+2 months'),
+  0,
+  'Doanh nghiệp Công nghệ TechCorp',
+  datetime('now')
+);
 
 -- Company-specific settings table for complete isolation
 CREATE TABLE IF NOT EXISTS company_settings (
