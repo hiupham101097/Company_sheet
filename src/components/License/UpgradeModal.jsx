@@ -126,7 +126,7 @@ export function UpgradeModal({
   if (!isOpen) return null;
 
   const formatCurrency = (val) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(val) || 0);
+    return `${(Number(val) || 0).toLocaleString('vi-VN')} VNĐ`;
   };
 
   const handleCopyStk = () => {
@@ -264,8 +264,8 @@ export function UpgradeModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+      <div className="relative w-full max-w-6xl xl:max-w-7xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
 
         {/* Header gradient banner */}
         <div className="relative bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 px-6 py-5 text-white overflow-hidden shrink-0 border-b border-indigo-900/60">
@@ -395,201 +395,59 @@ export function UpgradeModal({
         {/* Modal Body */}
         <div ref={modalBodyRef} className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6">
 
-          {/* BANNER THÔNG TIN GÓI HIỆN TẠI TƯỜNG MINH */}
-          <div className="p-5 rounded-3xl bg-gradient-to-br from-indigo-50/90 via-purple-50/60 to-amber-50/70 dark:from-slate-800 dark:via-purple-950/20 dark:to-slate-800 border-2 border-indigo-200/90 dark:border-slate-700 shadow-soft space-y-4">
-            {/* Row 1: Header + Clear Status Badge */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-100/90 pb-3.5">
-              <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md ${
-                  isPaidPlan
-                    ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
-                    : isFreeTrial
-                    ? 'bg-gradient-to-br from-amber-500 to-orange-500'
-                    : 'bg-rose-500'
-                }`}>
-                  {isPaidPlan ? <Crown size={24} /> : isFreeTrial ? <Zap size={24} className="fill-white" /> : <AlertTriangle size={24} />}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tình Trạng Bản Quyền:</span>
-                    <span className={`text-xs font-black px-2.5 py-0.5 rounded-full border shadow-2xs ${
-                      isPaidPlan
-                        ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                        : isFreeTrial
-                        ? 'bg-amber-100 text-amber-900 border-amber-300'
-                        : 'bg-rose-100 text-rose-900 border-rose-300'
-                    }`}>
-                      {isPaidPlan
-                        ? '✅ ĐÃ MUA & KÍCH HOẠT THÀNH CÔNG'
-                        : isFreeTrial
-                        ? '🎁 ĐANG DÙNG THỬ MIỄN PHÍ (CHƯA MUA GÓI TRẢ PHÍ)'
-                        : '⚠️ HẾT HẠN DÙNG THỬ (CHƯA MUA BẢN QUYỀN)'}
-                    </span>
-                  </div>
-                  <h4 className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-0.5">
+          {/* BANNER THÔNG TIN GÓI HIỆN TẠI (TINH GỌN, CHUYÊN NGHIỆP) */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-purple-50/60 to-amber-50/70 dark:from-slate-800 dark:via-purple-950/20 dark:to-slate-800 border border-indigo-200/90 dark:border-slate-700 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs ${
+                isPaidPlan
+                  ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                  : isFreeTrial
+                  ? 'bg-gradient-to-br from-amber-500 to-orange-500'
+                  : 'bg-rose-500'
+              }`}>
+                {isPaidPlan ? <Crown size={20} /> : isFreeTrial ? <Zap size={20} className="fill-white" /> : <AlertTriangle size={20} />}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tình trạng:</span>
+                  <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full border shadow-2xs ${
+                    isPaidPlan
+                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                      : isFreeTrial
+                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                      : 'bg-rose-100 text-rose-900 border-rose-300'
+                  }`}>
+                    {isPaidPlan
+                      ? 'ĐÃ KÍCH HOẠT'
+                      : isFreeTrial
+                      ? 'ĐANG DÙNG THỬ (0Đ)'
+                      : 'HẾT HẠN DÙNG THỬ'}
+                  </span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-white truncate">
                     {licenseInfo?.plan_name || (isFreeTrial ? 'Gói Dùng Thử 2 Tháng (Trial 60 Ngày)' : 'Bản Demo Giới Hạn')}
-                  </h4>
+                  </span>
                 </div>
-              </div>
-
-              {/* Right quick action */}
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => switchTab('activate')}
-                  className="px-3.5 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
-                >
-                  <Key size={14} className="text-amber-500" />
-                  <span>Kích Hoạt Key Khác</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Row 2: 4 Thước Đo Tường Minh (Chi Phí, Thời Hạn, Số Ngày, Bản Quyền) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 rounded-2xl bg-white/95 border border-indigo-100/90 shadow-2xs">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">1. Chi Phí Đã Trả</span>
-                <p className={`text-sm font-black mt-1 ${isPaidPlan ? 'text-emerald-700' : isFreeTrial ? 'text-amber-700' : 'text-slate-600'}`}>
-                  {isPaidPlan ? 'Đã Thanh Toán' : isFreeTrial ? '0 VNĐ (Miễn Phí)' : 'Chưa Mua Gói'}
-                </p>
-                <span className="text-[10px] text-slate-500 block mt-0.5 truncate">
-                  {isPaidPlan ? 'Bản quyền hợp lệ' : isFreeTrial ? 'Tặng 60 ngày trải nghiệm' : 'Đã hết lượt miễn phí'}
-                </span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-white/95 border border-indigo-100/90 shadow-2xs">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">2. Hạn Dùng Đến Ngày</span>
-                <p className="text-sm font-black text-slate-800 mt-1">
-                  {isLifetime ? 'Vĩnh Viễn (∞)' : licenseInfo?.expire_date || 'Chưa xác định'}
-                </p>
-                <span className="text-[10px] text-slate-500 block mt-0.5 truncate">
-                  {isLifetime ? 'Không cần gia hạn' : licenseInfo?.start_date ? `Từ: ${licenseInfo.start_date}` : 'Theo chu kỳ gói'}
-                </span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-white/95 border border-indigo-100/90 shadow-2xs">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">3. Thời Gian Còn Lại</span>
-                <p className={`text-sm font-black mt-1 ${
-                  isLifetime
-                    ? 'text-emerald-700'
-                    : (licenseInfo?.days_remaining ?? 0) > 10
-                    ? 'text-indigo-700'
-                    : 'text-rose-600'
-                }`}>
-                  {isLifetime ? 'Trọn Đời (∞)' : licenseInfo?.days_remaining !== undefined && licenseInfo?.days_remaining !== null ? `Còn ${licenseInfo.days_remaining} ngày` : 'N/A'}
-                </p>
-                <span className="text-[10px] text-slate-500 block mt-0.5 truncate">
-                  {isLifetime ? 'Không giới hạn ngày' : (licenseInfo?.days_remaining ?? 0) <= 0 ? 'Đã hết hạn sử dụng' : 'Tính từ hôm nay'}
-                </span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-white/95 border border-indigo-100/90 shadow-2xs">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">4. Quyền Quản Trị</span>
-                <p className={`text-sm font-black mt-1 ${isPaidPlan ? 'text-emerald-700' : isFreeTrial ? 'text-amber-700' : 'text-rose-600'}`}>
-                  {isPaidPlan ? 'Mở Khóa Toàn Bộ (Full)' : isFreeTrial ? 'Dùng Thử Có Hạn Chế' : 'Bị Khóa (Hết Hạn)'}
-                </p>
-                <span className="text-[10px] text-slate-500 block mt-0.5 truncate">
-                  {isPaidPlan ? 'Toàn quyền không giới hạn' : isFreeTrial ? 'Giới hạn 20 tài sản, 3 nhân sự' : 'Tối đa 5 tài sản (Demo)'}
-                </span>
-              </div>
-            </div>
-
-            {/* Quotas Usage Bar: Dung lượng tài nguyên đã dùng thực tế */}
-            <div className="p-3.5 rounded-2xl bg-white/95 border border-indigo-100/90 shadow-2xs space-y-2.5">
-              <div className="flex items-center justify-between text-xs flex-wrap gap-2">
-                <span className="font-extrabold text-slate-800 flex items-center gap-1.5">
-                  <ShieldCheck size={15} className="text-indigo-600 shrink-0" />
-                  Hạn Mức Tài Nguyên Đang Sử Dụng ({isPaidPlan ? 'Bản Quyền Đã Mua: Không Giới Hạn' : 'Gói Dùng Thử: Có Hạn Chế'}):
-                </span>
-                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border shadow-2xs ${
-                  isPaidPlan 
-                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300' 
-                    : 'bg-amber-100 text-amber-900 border-amber-300'
-                }`}>
-                  {isPaidPlan ? '✅ Vô Hạn (Unlimited)' : '⚠️ Giới Hạn Dùng Thử'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-0.5">
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-600 font-bold">📦 Tài sản &amp; Thiết bị</span>
-                    <span className="font-black text-slate-900">
-                      {licenseInfo?.limits?.assets?.current ?? 0} / {licenseInfo?.limits?.assets?.max === 'UNLIMITED' ? '∞' : (licenseInfo?.limits?.assets?.max ?? 20)}
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all ${isPaidPlan ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                      style={{ 
-                        width: isPaidPlan 
-                          ? '12%' 
-                          : `${Math.min(100, Math.round(((licenseInfo?.limits?.assets?.current || 0) / (licenseInfo?.limits?.assets?.max === 'UNLIMITED' ? 100 : (licenseInfo?.limits?.assets?.max || 20))) * 100))}%` 
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-600 font-bold">👥 Tài khoản Nhân sự</span>
-                    <span className="font-black text-slate-900">
-                      {licenseInfo?.limits?.users?.current ?? 0} / {licenseInfo?.limits?.users?.max === 'UNLIMITED' ? '∞' : (licenseInfo?.limits?.users?.max ?? 3)}
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all ${isPaidPlan ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                      style={{ 
-                        width: isPaidPlan 
-                          ? '15%' 
-                          : `${Math.min(100, Math.round(((licenseInfo?.limits?.users?.current || 0) / (licenseInfo?.limits?.users?.max === 'UNLIMITED' ? 100 : (licenseInfo?.limits?.users?.max || 3))) * 100))}%` 
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-600 font-bold">📑 Hợp đồng &amp; Biên bản</span>
-                    <span className="font-black text-slate-900">
-                      {licenseInfo?.limits?.contracts?.current ?? 0} / {licenseInfo?.limits?.contracts?.max === 'UNLIMITED' ? '∞' : (licenseInfo?.limits?.contracts?.max ?? 5)}
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all ${isPaidPlan ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                      style={{ 
-                        width: isPaidPlan 
-                          ? '10%' 
-                          : `${Math.min(100, Math.round(((licenseInfo?.limits?.contracts?.current || 0) / (licenseInfo?.limits?.contracts?.max === 'UNLIMITED' ? 100 : (licenseInfo?.limits?.contracts?.max || 5))) * 100))}%` 
-                      }}
-                    />
-                  </div>
+                <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-1 flex-wrap">
+                  <span>Hạn dùng: <strong className="text-slate-700 dark:text-slate-300">{isLifetime ? 'Vĩnh viễn (∞)' : licenseInfo?.expire_date || '60 ngày'}</strong></span>
+                  <span>Thời gian: <strong className={isLifetime ? 'text-emerald-700' : (licenseInfo?.days_remaining ?? 0) > 10 ? 'text-indigo-700' : 'text-rose-600'}>
+                    {isLifetime ? 'Trọn đời (∞)' : licenseInfo?.days_remaining !== undefined && licenseInfo?.days_remaining !== null ? `Còn ${licenseInfo.days_remaining} ngày` : 'N/A'}
+                  </strong></span>
+                  <span>Quyền lợi: <strong className={isPaidPlan ? 'text-emerald-700' : 'text-amber-700'}>
+                    {isPaidPlan ? 'Toàn bộ tính năng không giới hạn' : 'Giới hạn 20 tài sản, 3 nhân sự'}
+                  </strong></span>
                 </div>
               </div>
             </div>
 
-            {/* Row 3: Hướng Dẫn / Lời Nhắc Rõ Ràng */}
-            <div className="p-3.5 rounded-2xl bg-white/90 border border-indigo-100 text-xs text-slate-700 leading-relaxed">
-              {isFreeTrial ? (
-                <div className="space-y-1.5">
-                  <p>
-                    🎁 <strong>Bạn đang sử dụng Gói Dùng Thử 2 Tháng (0đ):</strong> Đây là gói cước miễn phí 60 ngày để doanh nghiệp trải nghiệm giao diện và quy trình vận hành. Bạn <strong>chưa mua bất kỳ gói bản quyền trả phí nào</strong>.
-                  </p>
-                  <p className="text-amber-900 font-medium">
-                    ⚠️ <strong>Hạn chế của gói dùng thử:</strong> Hệ thống giới hạn tối đa <strong>20 tài sản</strong>, <strong>3 tài khoản nhân sự</strong>, <strong>5 hợp đồng &amp; 5 biên bản</strong>, cố định <strong>1 phòng ban</strong>, in ấn có watermark thử nghiệm và <strong>khóa tính năng tự động gửi email 6:00 AM &amp; Telegram Bot</strong>. Để mở khóa toàn bộ hệ thống không giới hạn, hãy chọn mua 1 gói trả phí bên dưới!
-                  </p>
-                </div>
-              ) : isPaidPlan ? (
-                <p>
-                  🎉 <strong>Bản quyền chính thức:</strong> Doanh nghiệp của bạn <strong>đã mua và kích hoạt thành công</strong> {licenseInfo?.plan_name}. Toàn bộ giới hạn đã được dỡ bỏ: không giới hạn tài sản, không giới hạn nhân sự và mở khóa 100% tính năng cao cấp.
-                </p>
-              ) : (
-                <p>
-                  ⚠️ <strong>Thông báo hết hạn:</strong> Gói dùng thử đã hết hạn. Hệ thống đang chuyển về chế độ <strong>DEMO bị khóa thêm mới</strong>. Vui lòng chọn mua 1 gói dịch vụ bên dưới để mở khóa lại toàn bộ dữ liệu.
-                </p>
-              )}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => switchTab('activate')}
+                className="px-3.5 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs whitespace-nowrap"
+              >
+                <Key size={13} className="text-amber-500" />
+                <span>Kích Hoạt Key Khác</span>
+              </button>
             </div>
           </div>
 
@@ -659,32 +517,32 @@ export function UpgradeModal({
                         <div className="space-y-3">
                           {/* Status banner nếu là gói hiện tại */}
                           {isCurrentPlan ? (
-                            <div className={`py-1.5 px-2.5 rounded-xl text-[10px] font-black uppercase text-center flex items-center justify-center gap-1.5 shadow-2xs ${
+                            <div className={`py-1.5 px-2 rounded-xl text-[10px] font-extrabold uppercase text-center flex items-center justify-center gap-1.5 shadow-2xs whitespace-nowrap ${
                               isPaidPlan
                                 ? 'bg-emerald-600 text-white'
                                 : 'bg-amber-500 text-white'
                             }`}>
                               {isPaidPlan ? <CheckCircle2 size={13} /> : <Zap size={13} className="fill-white" />}
-                              <span>{isPaidPlan ? '⭐ BẠN ĐÃ MUA GÓI NÀY' : '⭐ BẠN ĐANG DÙNG GÓI NÀY (0Đ)'}</span>
+                              <span>{isPaidPlan ? 'ĐÃ KÍCH HOẠT' : 'ĐANG DÙNG (0Đ)'}</span>
                             </div>
                           ) : isFree ? (
-                            <div className="py-1 px-2 rounded-xl text-[10px] font-bold uppercase text-center bg-slate-100 text-slate-500">
-                              GÓI DÙNG THỬ 0Đ (HẠN CHẾ QUYỀN)
+                            <div className="py-1 px-2 rounded-xl text-[10px] font-bold uppercase text-center bg-slate-100 text-slate-500 whitespace-nowrap">
+                              DÙNG THỬ (0Đ)
                             </div>
                           ) : (
-                            <div className="py-1 px-2 rounded-xl text-[10px] font-extrabold uppercase text-center bg-indigo-50 text-indigo-700 border border-indigo-100">
-                              GÓI MỞ KHÓA TOÀN BỘ (CHƯA MUA)
+                            <div className="py-1 px-2 rounded-xl text-[10px] font-bold uppercase text-center bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
+                              CHƯA MUA
                             </div>
                           )}
 
                           <div>
                             <div className="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
-                              <span className="text-[9px] font-mono font-bold text-slate-400 uppercase">
+                              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">
                                 {p.code}
                               </span>
                               {p.badge && (
                                 <span
-                                  className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 ${
+                                  className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 whitespace-nowrap ${
                                     isLifetime
                                       ? 'bg-amber-100 text-amber-900 border border-amber-300'
                                       : isPopular
@@ -698,19 +556,21 @@ export function UpgradeModal({
                                 </span>
                               )}
                             </div>
-                            <h3 className="text-base font-black text-slate-900 leading-snug">{p.name}</h3>
+                            <h3 className="text-base font-extrabold text-slate-900 leading-snug whitespace-nowrap truncate" title={p.name}>
+                              {p.name}
+                            </h3>
                           </div>
 
                           <div className="pt-2 pb-2.5 border-b border-slate-100">
-                            <div className="flex items-baseline gap-1">
+                            <div className="flex items-baseline gap-1.5 flex-wrap">
                               <span className={`text-xl sm:text-2xl font-black ${isFree ? 'text-amber-600' : 'text-slate-900'}`}>
                                 {isFree ? '0 VNĐ' : formatCurrency(p.price)}
                               </span>
-                              <span className="text-[11px] text-slate-500 font-medium">
+                              <span className="text-[11px] text-slate-500 font-semibold whitespace-nowrap">
                                 / {isLifetime ? 'Trọn đời' : isFree ? '60 ngày' : `${p.duration_months} tháng`}
                               </span>
                             </div>
-                            <p className="text-[10px] text-slate-400 mt-0.5">
+                            <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                               {isFree
                                 ? 'Tặng miễn phí 60 ngày trải nghiệm'
                                 : isLifetime
