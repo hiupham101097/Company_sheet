@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Crown,
@@ -35,6 +35,8 @@ export function UpgradeModal({
   const isDemo = licenseInfo?.isDemo ?? true;
   const currentKey = licenseInfo?.key || '';
   const isFreeTrial = (licenseInfo?.isTrial || licenseInfo?.plan_code === 'TRIAL_2M') && !licenseInfo?.isExpired;
+  // Số ngày trial thực tế từ API (days_total hoặc trial_days), không hardcode
+  const trialTotalDays = licenseInfo?.days_total || licenseInfo?.trial_days || licenseInfo?.duration_days || null;
   const isPaidPlan = !licenseInfo?.isTrial && !licenseInfo?.isDemo && licenseInfo?.plan_code !== 'TRIAL_2M' && licenseInfo?.plan_code !== 'DEMO' && !licenseInfo?.isExpired;
   const isExpiredDemo = licenseInfo?.isExpired || (licenseInfo?.isDemo && !licenseInfo?.isTrial);
   const isLifetime = licenseInfo?.plan_code === 'LIFETIME';
@@ -318,15 +320,15 @@ export function UpgradeModal({
                   {isPaidPlan
                     ? `Bản Quyền Đã Kích Hoạt • ${licenseInfo?.plan_name}`
                     : isFreeTrial
-                    ? 'Bạn Đang Sử Dụng Gói Dùng Thử Miễn Phí (Trial 60 Ngày)'
+                    ? `Bạn Đang Sử Dụng Gói Dùng Thử Miễn Phí${trialTotalDays ? ` (Trial ${trialTotalDays} Ngày)` : ''}`
                     : 'Nâng Cấp Bản Quyền Để Mở Khóa Toàn Bộ Tính Năng'}
                 </h3>
                 <p className="text-xs md:text-sm text-indigo-200/90 mt-0.5 leading-snug">
                   {isPaidPlan
                     ? `Doanh nghiệp ${resolvedOrgName} đã thanh toán bản quyền và được bảo đảm toàn bộ quyền lợi.`
                     : isFreeTrial
-                    ? `Doanh nghiệp ${resolvedOrgName} đang trong thời gian 60 ngày trải nghiệm miễn phí 100% tính năng (hạn dùng: ${licenseInfo?.expire_date || '60 ngày'}). Bạn chưa bị tính phí.`
-                    : 'Gói dùng thử 60 ngày đã kết thúc. Vui lòng chọn 1 gói trả phí bên dưới để gỡ bỏ giới hạn.'}
+                    ? `Doanh nghiệp ${resolvedOrgName} đang trong thời gian${trialTotalDays ? ` ${trialTotalDays} ngày` : ''} trải nghiệm miễn phí 100% tính năng (hạn dùng: ${licenseInfo?.expire_date || 'theo gói'}). Bạn chưa bị tính phí.`
+                    : `Gói dùng thử${trialTotalDays ? ` ${trialTotalDays} ngày` : ''} đã kết thúc. Vui lòng chọn 1 gói trả phí bên dưới để gỡ bỏ giới hạn.`}
                 </p>
               </div>
             </div>
@@ -405,7 +407,7 @@ export function UpgradeModal({
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 border border-amber-300">
-                      Đang Dùng Thử 60 Ngày (Trial 0đ)
+                      {trialTotalDays ? `Đang Dùng Thử ${trialTotalDays} Ngày (Trial 0đ)` : 'Đang Dùng Thử Miễn Phí (Trial 0đ)'}
                     </span>
                     <span className="text-xs text-amber-800 dark:text-amber-300 font-bold">
                       {licenseInfo?.days_remaining !== undefined ? `Còn ${licenseInfo.days_remaining} ngày` : 'Miễn phí'}
@@ -591,12 +593,12 @@ export function UpgradeModal({
                                 {isFree ? '0 VNĐ' : formatCurrency(p.price)}
                               </span>
                               <span className="text-[11px] text-slate-500 font-semibold whitespace-nowrap">
-                                / {isLifetime ? 'Trọn đời' : isFree ? '60 ngày' : `${p.duration_months} tháng`}
+                                / {isLifetime ? 'Trọn đời' : isFree ? (p.duration_months ? `${p.duration_months * 30} ngày` : 'dùng thử') : `${p.duration_months} tháng`}
                               </span>
                             </div>
                             <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                               {isFree
-                                ? 'Tặng miễn phí 60 ngày trải nghiệm'
+                                ? (p.duration_months ? `Tặng miễn phí ${p.duration_months * 30} ngày trải nghiệm` : `Tặng miễn phí trải nghiệm`)
                                 : isLifetime
                                 ? 'Sở hữu vĩnh viễn, không phí duy trì'
                                 : `Sử dụng trong ${p.duration_months} tháng`}
