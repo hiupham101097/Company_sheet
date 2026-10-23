@@ -6049,6 +6049,16 @@ app.notFound(async (c) => {
   if (c.env?.ASSETS) {
     const assetRes = await c.env.ASSETS.fetch(c.req.raw);
     if (assetRes.status !== 404) {
+      // Nếu là file HTML (index.html hoặc root), bắt buộc tắt cache trình duyệt để cập nhật mã mới tức thì khi deploy
+      const contentType = assetRes.headers.get('content-type') || '';
+      if (contentType.includes('text/html') || path === '/' || path === '/index.html') {
+        const headers = new Headers(assetRes.headers);
+        headers.set('Content-Type', 'text/html; charset=utf-8');
+        headers.set('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+        headers.set('Pragma', 'no-cache');
+        headers.set('Expires', '0');
+        return new Response(assetRes.body, { status: assetRes.status, headers });
+      }
       return assetRes;
     }
 
@@ -6059,6 +6069,9 @@ app.notFound(async (c) => {
     if (indexRes.status === 200) {
       const headers = new Headers(indexRes.headers);
       headers.set('Content-Type', 'text/html; charset=utf-8');
+      headers.set('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+      headers.set('Pragma', 'no-cache');
+      headers.set('Expires', '0');
       return new Response(indexRes.body, { status: 200, headers });
     }
     return assetRes;

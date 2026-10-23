@@ -348,7 +348,7 @@ export function UpgradeModal({
           )}
         </div>
 
-        {/* 3 BƯỚC ĐIỀU HƯỚNG RÕ RÀNG */}
+        {/* 3 BƯỚC ĐIỀU HƯỚNG */}
         <div className="px-6 pt-3 pb-2.5 bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700/80 shrink-0">
           <div className="flex items-center gap-1.5 p-1 bg-slate-200/70 dark:bg-slate-900/70 rounded-2xl overflow-x-auto">
             <button
@@ -361,7 +361,7 @@ export function UpgradeModal({
               }`}
             >
               <Package className="w-4 h-4 text-purple-600" />
-              <span>1. Bảng Giá &amp; Chọn Gói</span>
+              <span>Bảng Giá &amp; Gói Cước</span>
             </button>
 
             <button
@@ -374,7 +374,7 @@ export function UpgradeModal({
               }`}
             >
               <CreditCard className="w-4 h-4 text-emerald-600" />
-              <span>2. Thanh Toán VietQR</span>
+              <span>Thanh Toán VietQR</span>
             </button>
 
             <button
@@ -387,7 +387,7 @@ export function UpgradeModal({
               }`}
             >
               <Key className="w-4 h-4 text-amber-500" />
-              <span>3. Nhập Mã Kích Hoạt Key</span>
+              <span>Nhập Mã Kích Hoạt Key</span>
             </button>
           </div>
         </div>
@@ -395,61 +395,85 @@ export function UpgradeModal({
         {/* Modal Body */}
         <div ref={modalBodyRef} className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6">
 
-          {/* BANNER THÔNG TIN GÓI HIỆN TẠI (TINH GỌN, CHUYÊN NGHIỆP) */}
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-purple-50/60 to-amber-50/70 dark:from-slate-800 dark:via-purple-950/20 dark:to-slate-800 border border-indigo-200/90 dark:border-slate-700 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs ${
-                isPaidPlan
-                  ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
-                  : isFreeTrial
-                  ? 'bg-gradient-to-br from-amber-500 to-orange-500'
-                  : 'bg-rose-500'
-              }`}>
-                {isPaidPlan ? <Crown size={20} /> : isFreeTrial ? <Zap size={20} className="fill-white" /> : <AlertTriangle size={20} />}
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tình trạng:</span>
-                  <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full border shadow-2xs ${
-                    isPaidPlan
-                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                      : isFreeTrial
-                      ? 'bg-amber-100 text-amber-900 border-amber-300'
-                      : 'bg-rose-100 text-rose-900 border-rose-300'
-                  }`}>
-                    {isPaidPlan
-                      ? 'ĐÃ KÍCH HOẠT'
-                      : isFreeTrial
-                      ? 'ĐANG DÙNG THỬ (0Đ)'
-                      : 'HẾT HẠN DÙNG THỬ'}
-                  </span>
-                  <span className="text-xs font-bold text-slate-800 dark:text-white truncate">
-                    {licenseInfo?.plan_name || (isFreeTrial ? 'Gói Dùng Thử 2 Tháng (Trial 60 Ngày)' : 'Bản Demo Giới Hạn')}
-                  </span>
+          {/* Trạng thái bản quyền của doanh nghiệp (Thiết kế hiện đại, tinh giản chuẩn SaaS) */}
+          {isFreeTrial ? (
+            <div className="rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 p-4 border border-amber-300/70 dark:border-amber-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Zap size={20} className="fill-white" />
                 </div>
-                <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-1 flex-wrap">
-                  <span>Hạn dùng: <strong className="text-slate-700 dark:text-slate-300">{isLifetime ? 'Vĩnh viễn (∞)' : licenseInfo?.expire_date || '60 ngày'}</strong></span>
-                  <span>Thời gian: <strong className={isLifetime ? 'text-emerald-700' : (licenseInfo?.days_remaining ?? 0) > 10 ? 'text-indigo-700' : 'text-rose-600'}>
-                    {isLifetime ? 'Trọn đời (∞)' : licenseInfo?.days_remaining !== undefined && licenseInfo?.days_remaining !== null ? `Còn ${licenseInfo.days_remaining} ngày` : 'N/A'}
-                  </strong></span>
-                  <span>Quyền lợi: <strong className={isPaidPlan ? 'text-emerald-700' : 'text-amber-700'}>
-                    {isPaidPlan ? 'Toàn bộ tính năng không giới hạn' : 'Giới hạn 20 tài sản, 3 nhân sự'}
-                  </strong></span>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 border border-amber-300">
+                      Đang Dùng Thử 60 Ngày (Trial 0đ)
+                    </span>
+                    <span className="text-xs text-amber-800 dark:text-amber-300 font-bold">
+                      {licenseInfo?.days_remaining !== undefined ? `Còn ${licenseInfo.days_remaining} ngày` : 'Miễn phí'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                    Chọn một trong các gói cước trả phí bên dưới để gỡ bỏ mọi giới hạn tài nguyên và bảo vệ quyền lợi doanh nghiệp.
+                  </p>
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => switchTab('activate')}
-                className="px-3.5 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs whitespace-nowrap"
+                className="px-3.5 py-2 rounded-xl bg-white hover:bg-amber-50 border border-amber-300 text-xs font-bold text-amber-900 transition flex items-center justify-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
               >
-                <Key size={13} className="text-amber-500" />
-                <span>Kích Hoạt Key Khác</span>
+                <Key size={13} className="text-amber-600" />
+                <span>Đã có mã kích hoạt?</span>
               </button>
             </div>
-          </div>
+          ) : isPaidPlan ? (
+            <div className="rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 sm:p-5 text-white border border-indigo-500/30 shadow-lg relative overflow-hidden">
+              <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-emerald-500/10 to-transparent pointer-events-none"></div>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+                    <Crown size={24} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1">
+                        <CheckCircle2 size={11} /> Đã Kích Hoạt Bản Quyền Chính Thức
+                      </span>
+                      <span className="text-xs text-indigo-200 font-medium">
+                        {resolvedOrgName}
+                      </span>
+                    </div>
+                    <h4 className="text-lg font-black text-white mt-1">
+                      {licenseInfo?.plan_name || 'Gói Doanh Nghiệp Vĩnh Viễn'}
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="px-3.5 py-1.5 rounded-xl bg-white/10 backdrop-blur-xs border border-white/10 text-left">
+                    <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Thời hạn bản quyền</div>
+                    <div className="text-xs font-black text-emerald-300">
+                      {isLifetime ? 'Vĩnh Viễn (Trọn Đời)' : licenseInfo?.expire_date ? `Hạn đến ${licenseInfo.expire_date}` : 'Hợp lệ'}
+                    </div>
+                  </div>
+
+                  <div className="px-3.5 py-1.5 rounded-xl bg-white/10 backdrop-blur-xs border border-white/10 text-left">
+                    <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Hạn mức tài nguyên</div>
+                    <div className="text-xs font-black text-white">Không giới hạn (Full)</div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => switchTab('activate')}
+                    className="px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/20 text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Key size={13} className="text-amber-300" />
+                    <span>Đổi License Key</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {/* ==================================================== */}
           {/* TAB 1: DANH SÁCH GÓI DỊCH VỤ (CHỌN GÓI CÓ PHÍ)      */}

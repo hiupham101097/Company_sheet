@@ -260,49 +260,48 @@ export function Sidebar({
           ) : licenseInfo?.plan_code === 'LIFETIME' ? (
             <div 
               onClick={onOpenUpgrade}
-              className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-50 to-emerald-50 border-2 border-emerald-300 shadow-xs cursor-pointer hover:border-emerald-400 transition-all space-y-2"
+              className="p-3 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50/50 to-emerald-50/30 border border-emerald-300 shadow-xs cursor-pointer hover:border-emerald-400 hover:shadow-sm transition-all"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-                    <Crown size={15} />
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Crown size={16} />
                   </div>
-                  <div>
-                    <p className="text-xs font-black text-slate-800">✅ Đã Mua Bản Quyền</p>
-                    <p className="text-[10px] text-emerald-700 font-bold truncate">Vĩnh Viễn Trọn Đời (∞)</p>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-800 truncate whitespace-nowrap">Bản Quyền Vĩnh Viễn</p>
+                    <p className="text-[10px] text-emerald-700 font-semibold truncate whitespace-nowrap">Trọn đời (∞) • Không giới hạn</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  ĐÃ MUA
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap shrink-0">
+                  ✓ VIP
                 </span>
               </div>
             </div>
           ) : !licenseInfo?.isDemo && !licenseInfo?.isExpired ? (
             <div 
               onClick={onOpenUpgrade}
-              className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-200 shadow-xs cursor-pointer hover:border-indigo-300 transition-all space-y-2"
+              className="p-3 rounded-2xl bg-gradient-to-r from-indigo-50 via-purple-50/50 to-indigo-50/30 border border-indigo-200 shadow-xs cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                    <ShieldCheck size={15} />
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <ShieldCheck size={16} />
                   </div>
-                  <div>
-                    <p className="text-xs font-black text-slate-800">✅ Đã Mua Bản Quyền</p>
-                    <p className="text-[10px] text-indigo-700 font-bold truncate">
-                      {licenseInfo?.plan_name || 'Gói Tiêu Chuẩn 1 Năm'}
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-800 truncate whitespace-nowrap">
+                      {licenseInfo?.plan_name || 'Bản Quyền Doanh Nghiệp'}
+                    </p>
+                    <p className="text-[10px] text-indigo-700 font-semibold truncate whitespace-nowrap">
+                      {licenseInfo?.days_remaining !== undefined && licenseInfo?.days_remaining !== null
+                        ? `Còn ${licenseInfo.days_remaining} ngày (Đến ${licenseInfo?.expire_date || 'hết hạn'})`
+                        : 'Đã kích hoạt'}
                     </p>
                   </div>
                 </div>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
-                  ĐÃ MUA
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 whitespace-nowrap shrink-0">
+                  ✓ ĐÃ MUA
                 </span>
               </div>
-              <p className="text-[10px] text-indigo-600 font-semibold">
-                {licenseInfo?.days_remaining !== undefined && licenseInfo?.days_remaining !== null
-                  ? `Còn ${licenseInfo.days_remaining} ngày (Đến ${licenseInfo?.expire_date || 'hết hạn'})`
-                  : 'Bản quyền đang hoạt động'}
-              </p>
             </div>
           ) : (
             <div className="p-3.5 rounded-2xl bg-gradient-to-br from-rose-50 to-amber-50 border-2 border-rose-300 shadow-xs space-y-2">
