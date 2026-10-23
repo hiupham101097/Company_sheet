@@ -496,7 +496,7 @@ function wrapEmailHtml({ title, preheader = '', contentHtml, ctaText = null, cta
       margin: 0;
       padding: 0;
       background-color: #f8fafc;
-      font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       color: #1e293b;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
@@ -832,7 +832,7 @@ function getTimesheetEmailHtml({ companyName, userName, month, totalDaysWorked, 
 function getOtpEmailHtml({ companyName, otp, expiresInMinutes = 5 }) {
   const digits = String(otp || '').trim().split('');
   const digitsHtml = digits.map(d => `
-    <td style="width: 46px; height: 56px; background: #ffffff; border: 2px solid #10b981; border-radius: 12px; text-align: center; vertical-align: middle; font-size: 30px; font-weight: 800; color: #065f46; font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);">
+    <td style="width: 46px; height: 56px; background: #ffffff; border: 2px solid #10b981; border-radius: 12px; text-align: center; vertical-align: middle; font-size: 30px; font-weight: 800; color: #065f46; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);">
       ${d}
     </td>
   `).join('<td style="width: 8px;"></td>');
