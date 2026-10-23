@@ -20,6 +20,7 @@ async function request(endpoint, options = {}) {
       'x-user-role': userRole,
       'x-user-id': userId,
       'x-company-id': companyId,
+      'x-request-timestamp': Date.now().toString(),
       ...options.headers,
     },
     ...options,

@@ -55,12 +55,14 @@ app.use('/api/*', async (c, next) => {
     }
   }
 
-  // 3. Thực thi route và gắn Security Headers chuẩn OWASP
+  // 3. Thực thi route và gắn Security Headers chuẩn OWASP cho tầng mạng
   await next();
   c.res.headers.set('X-Content-Type-Options', 'nosniff');
   c.res.headers.set('X-Frame-Options', 'SAMEORIGIN');
   c.res.headers.set('X-XSS-Protection', '1; mode=block');
   c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  c.res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 });
 
 // ========================================================
