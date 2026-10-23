@@ -9,18 +9,12 @@
 export function initSecurityGuard() {
   if (typeof window === 'undefined') return;
 
-  // 1. In biểu ngữ cảnh báo bảo mật màu đỏ khổng lồ trong Console
+  // 1. In biểu ngữ cảnh báo bảo mật trong Console
   const printConsoleWarning = () => {
     try {
-      console.clear();
       console.log(
         '%c⛔ DỪNG LẠI! (ACCESS RESTRICTED)',
-        'color: #ef4444; font-size: 32px; font-weight: 900; -webkit-text-stroke: 1px black; text-shadow: 2px 2px 0 #000; padding: 6px 0;'
-      );
-      console.log(
-        '%cĐây là tính năng trình duyệt dành riêng cho Quản trị viên và Kỹ thuật viên hệ thống.\n' +
-        'Mọi hành vi can thiệp DOM, sao chép mã nguồn, sửa đổi dữ liệu hoặc cào trích xuất API đều bị máy chủ ghi nhận nhật ký bảo mật (IP & Device Fingerprint) và xử lý theo quy định.',
-        'color: #f59e0b; font-size: 13px; font-weight: bold; line-height: 1.6; padding: 4px 0;'
+        'color: #ef4444; font-size: 26px; font-weight: 900; -webkit-text-stroke: 1px black; padding: 4px 0;'
       );
       console.log(
         '%c🛡️ Hệ thống OMNI ASSETS được bảo vệ bởi Cloudflare WAF, Enterprise Multi-Tenancy & Anti-Scraping Shield.',
@@ -31,8 +25,6 @@ export function initSecurityGuard() {
 
   printConsoleWarning();
 
-  // Định kỳ xóa và in lại cảnh báo
-  setInterval(printConsoleWarning, 8000);
 
   // 2. Chặn chuột phải (Context Menu)
   document.addEventListener('contextmenu', (e) => {
@@ -87,31 +79,7 @@ export function initSecurityGuard() {
     }
   });
 
-  // 4. Bẫy Debugger Loop (Anti-Debugging Trap)
-  // Khi DevTools được mở, trình duyệt sẽ tự động nhảy vào breakpoint `debugger` và bị đóng băng
-  const startDebuggerTrap = () => {
-    const trap = () => {
-      try {
-        const start = performance.now();
-        // Vòng lặp debugger ngầm
-        (function() {
-          return false;
-        }
-        ['constructor']('debugger')());
-        const end = performance.now();
-        // Nếu chênh lệch thời gian > 100ms, nghĩa là DevTools đang mở và đã dừng ở breakpoint
-        if (end - start > 100) {
-          printConsoleWarning();
-        }
-      } catch (_) {}
-    };
-
-    // Chạy ngầm định kỳ
-    setInterval(trap, 300);
-  };
-
-  // Kích hoạt bẫy debugger trên môi trường Production
-  if (!window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
-    startDebuggerTrap();
-  }
+  // 4. Bẫy Debugger Loop - Tắt hoàn toàn trên môi trường Production để tránh gây trắng màn hình / vi phạm CSP
+  // Giữ lại biểu ngữ cảnh báo và cơ chế chặn phím tắt Inspect/Copy an toàn
 }
+

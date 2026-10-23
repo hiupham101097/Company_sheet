@@ -3,12 +3,17 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
 import { initSecurityGuard } from './utils/securityGuard';
+import { ErrorBoundary } from './components/Common/ErrorBoundary';
 
-// Khởi chạy hệ thống bảo vệ Anti-Inspection & DevTools Trap
-initSecurityGuard();
+try {
+  initSecurityGuard();
+} catch (_) {}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>,
 );
+

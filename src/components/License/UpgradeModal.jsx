@@ -171,6 +171,19 @@ export function UpgradeModal({
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(val) || 0);
   };
 
+  const formatPlanDisplayName = (p) => {
+    if (!p) return 'Gói Dịch Vụ';
+    if (p.code === 'TRIAL_2M' || p.price === 0) return 'Gói Dùng Thử 2 Tháng (Trial 60N)';
+    if (p.code === 'ANNUAL_1Y' || (p.duration_months === 12 && p.price === 4800000)) return 'Gói Tiêu Chuẩn 1 Năm';
+    if (p.code === 'ANNUAL_2Y' || (p.duration_months === 24 && p.price === 8800000)) return 'Gói Tiết Kiệm 2 Năm';
+    if (p.code === 'LIFETIME' || p.duration_months >= 999) return 'Gói Vĩnh Viễn Trọn Đời';
+    if (p.name === 'Tháng' || p.name === 'Năm' || p.name === 'Vĩnh Viễn') {
+      return p.duration_months === 2 ? 'Gói Dùng Thử 2 Tháng' : p.duration_months === 12 ? 'Gói Tiêu Chuẩn 1 Năm' : p.duration_months === 24 ? 'Gói Tiết Kiệm 2 Năm' : 'Gói Vĩnh Viễn Trọn Đời';
+    }
+    return p.name || 'Gói Dịch Vụ';
+  };
+
+
   const handleCopyStk = () => {
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText('7909707');
@@ -729,9 +742,9 @@ export function UpgradeModal({
                                 {p.badge}
                               </span>
                             )}
-                          </div>
-                          <h3 className="text-base font-black text-slate-900 leading-snug">{p.name}</h3>
+                          <h3 className="text-base font-black text-slate-900 leading-snug">{formatPlanDisplayName(p)}</h3>
                         </div>
+
 
                         <div className="pt-2 pb-2.5 border-b border-slate-100">
                           <div className="flex items-baseline gap-1">

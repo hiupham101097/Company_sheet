@@ -20,6 +20,8 @@ export const SLUG_TO_TAB = {
   '/quan-tri-tong/keys': 'keys',
   '/quan-tri-tong/goi-cuoc': 'plans',
   '/quan-tri-tong/doanh-thu': 'revenue',
+  '/quan-tri-tong/ho-tro': 'support-desk',
+  '/quan-tri-tong/thong-bao': 'announcements',
 };
 
 export const TAB_TO_SLUG = {
@@ -38,7 +40,10 @@ export const TAB_TO_SLUG = {
   keys: '/quan-tri-tong/keys',
   plans: '/quan-tri-tong/goi-cuoc',
   revenue: '/quan-tri-tong/doanh-thu',
+  'support-desk': '/quan-tri-tong/ho-tro',
+  announcements: '/quan-tri-tong/thong-bao',
 };
+
 
 export const TAB_SEO_META = {
   dashboard: {
@@ -123,19 +128,31 @@ export const TAB_SEO_META = {
  */
 export function getTabFromPath(pathname = window.location.pathname, userRole = 'STAFF') {
   const cleanPath = pathname.toLowerCase().replace(/\/+$/, '') || '/';
-  const superAdminTabs = ['overview', 'companies', 'keys', 'plans', 'revenue', 'super-admin'];
+  const superAdminTabs = ['overview', 'companies', 'keys', 'plans', 'revenue', 'super-admin', 'support-desk', 'announcements', 'settings'];
+
+  // Nếu là tài khoản Quản trị Nền tảng (SUPER_ADMIN)
+  if (userRole === 'SUPER_ADMIN') {
+    if (SLUG_TO_TAB[cleanPath]) {
+      const tab = SLUG_TO_TAB[cleanPath];
+      if (superAdminTabs.includes(tab)) {
+        return tab;
+      }
+    }
+    // Khi Super Admin truy cập trang chủ / hoặc /tong-quan, luôn điều hướng về overview
+    return 'overview';
+  }
+
+  // Dành cho tài khoản doanh nghiệp (ADMIN, MANAGER, STAFF)
   if (SLUG_TO_TAB[cleanPath]) {
     const tab = SLUG_TO_TAB[cleanPath];
-    if (superAdminTabs.includes(tab) && userRole !== 'SUPER_ADMIN') {
+    if (superAdminTabs.includes(tab) && tab !== 'settings') {
       return 'dashboard';
     }
     return tab;
   }
-  if (userRole === 'SUPER_ADMIN') {
-    return 'overview';
-  }
   return 'dashboard';
 }
+
 
 /**
  * Cập nhật động SEO Meta Tags, Canonical URL và Slug trình duyệt

@@ -5507,10 +5507,37 @@ async function initPricingPlansTable(db) {
         'Xuất hóa đơn VAT điện tử doanh nghiệp đầy đủ'
       ])).run().catch(() => {});
     }
+
+    // Tự động chuẩn hóa lại tên gói cước đầy đủ trong database nếu trước đó bị lưu tên ngắn (Tháng / Năm)
+    await db.prepare(`
+
+      UPDATE pricing_plans 
+      SET name = 'Gói Dùng Thử 2 Tháng (Trial 60N)', badge = 'Dùng Thử 0đ (Hạn Chế Quyền)'
+      WHERE code = 'TRIAL_2M' AND (name = 'Tháng' OR name = 'Gói Dùng Thử 2 Tháng')
+    `).run().catch(() => {});
+
+    await db.prepare(`
+      UPDATE pricing_plans 
+      SET name = 'Gói Tiêu Chuẩn 1 Năm', badge = 'Phổ biến nhất'
+      WHERE code = 'ANNUAL_1Y' AND (name = 'Năm' OR name = '1 Năm')
+    `).run().catch(() => {});
+
+    await db.prepare(`
+      UPDATE pricing_plans 
+      SET name = 'Gói Tiết Kiệm 2 Năm', badge = 'Tiết kiệm 800.000đ'
+      WHERE code = 'ANNUAL_2Y' AND (name = 'Năm' OR name = '2 Năm')
+    `).run().catch(() => {});
+
+    await db.prepare(`
+      UPDATE pricing_plans 
+      SET name = 'Gói Vĩnh Viễn Trọn Đời', badge = 'Khuyên Dùng • VIP'
+      WHERE code = 'LIFETIME' AND (name = 'Vĩnh Viễn' OR name = 'Trọn Đời')
+    `).run().catch(() => {});
   } catch (err) {
     console.error('Error initPricingPlansTable:', err);
   }
 }
+
 
 // 6. Quản lý danh sách Gói Cước (Pricing Plans)
 app.get('/api/super-admin/plans', async (c) => {

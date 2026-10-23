@@ -36,8 +36,9 @@ export default function App() {
       const u = saved ? JSON.parse(saved) : null;
       if (u?.role === 'SUPER_ADMIN') {
         const fromPath = getTabFromPath(window.location.pathname, u?.role);
-        return ['overview', 'companies', 'keys', 'plans', 'revenue'].includes(fromPath) ? fromPath : 'overview';
+        return ['overview', 'companies', 'keys', 'plans', 'support-desk', 'announcements', 'revenue', 'settings'].includes(fromPath) ? fromPath : 'overview';
       }
+
       return getTabFromPath(window.location.pathname, u?.role);
     } catch {
       return 'dashboard';
@@ -90,21 +91,22 @@ export default function App() {
         licRes,
         setRes
       ] = await Promise.all([
-        api.getDashboardSummary(),
-        api.getMonthlySummary(),
-        api.getAssets(),
-        api.getFinance(),
-        api.getTasks(),
-        api.getContracts(),
-        api.getHandovers(),
-        api.getAttendance(),
-        api.getAttendanceSummary(),
-        api.getUsers(),
+        api.getDashboardSummary().catch(() => ({ data: { totalAssets: 0, pendingTasks: 0, urgentReminders: [] } })),
+        api.getMonthlySummary().catch(() => ({ data: {} })),
+        api.getAssets().catch(() => ({ data: [] })),
+        api.getFinance().catch(() => ({ data: [] })),
+        api.getTasks().catch(() => ({ data: [] })),
+        api.getContracts().catch(() => ({ data: [] })),
+        api.getHandovers().catch(() => ({ data: [] })),
+        api.getAttendance().catch(() => ({ data: [] })),
+        api.getAttendanceSummary().catch(() => ({ data: {} })),
+        api.getUsers().catch(() => ({ data: [] })),
         api.getLicenseStatus().catch(() => ({ success: false, data: { isDemo: true, tier: 'DEMO' } })),
         api.getSettings().catch(() => ({ success: false, data: { settings: {} } }))
       ]);
 
-      setSummaryData(sumRes.data);
+      setSummaryData(sumRes?.data || { totalAssets: 0, pendingTasks: 0, urgentReminders: [] });
+
       const resolvedCompany =
         sumRes?.data?.company_name ||
         sumRes?.data?.companyName ||
