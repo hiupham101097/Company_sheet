@@ -3334,7 +3334,13 @@ async function initSettingsTable(db) {
       ['license_tier', 'DEMO', 'LICENSE', 'Cấp độ bản quyền (DEMO hoặc ENTERPRISE)', new Date().toISOString()],
       ['license_key', '', 'LICENSE', 'Khóa bản quyền đã kích hoạt', new Date().toISOString()],
       ['license_status', 'ACTIVE', 'LICENSE', 'Trạng thái bản quyền', new Date().toISOString()],
-      ['license_activated_at', '', 'LICENSE', 'Thời gian kích hoạt bản quyền', new Date().toISOString()]
+      ['license_activated_at', '', 'LICENSE', 'Thời gian kích hoạt bản quyền', new Date().toISOString()],
+      // PAYMENT & BANKING (VIETQR)
+      ['bank_name', 'ACB - Ngân Hàng TMCP Á Châu', 'PAYMENT', 'Tên ngân hàng thụ hưởng thanh toán', new Date().toISOString()],
+      ['bank_code', 'ACB', 'PAYMENT', 'Mã viết tắt ngân hàng', new Date().toISOString()],
+      ['bank_bin', '970416', 'PAYMENT', 'Mã BIN ngân hàng chuẩn VietQR', new Date().toISOString()],
+      ['bank_account_number', '7909707', 'PAYMENT', 'Số tài khoản ngân hàng thụ hưởng', new Date().toISOString()],
+      ['bank_account_holder', 'PHAM MINH HIEU', 'PAYMENT', 'Họ tên chủ tài khoản thụ hưởng', new Date().toISOString()]
     ];
 
     for (const [key, val, cat, desc, upd] of defaults) {
@@ -3382,6 +3388,8 @@ async function getLicenseStatus(db, companyId) {
         isExpired = true;
         licenseStatus = 'EXPIRED';
       }
+    } else if (planCode === 'TRIAL_2M') {
+      daysRemaining = 60;
     }
 
     const isPaid = !isExpired && (planCode === 'ANNUAL_1Y' || planCode === 'ANNUAL_2Y' || planCode === 'LIFETIME');
@@ -3395,6 +3403,11 @@ async function getLicenseStatus(db, companyId) {
     const maxFinance = isPaid ? Infinity : (isTrial ? 10 : 5);
     const maxDepartments = isPaid ? Infinity : (isTrial ? 1 : 1);
 
+    let planRow = null;
+    try {
+      planRow = await db.prepare('SELECT name, price, badge, features FROM pricing_plans WHERE code = ?').bind(planCode).first().catch(() => null);
+    } catch (_) {}
+
     return {
       tier: isPaid ? 'ENTERPRISE' : (isTrial ? 'TRIAL' : 'DEMO'),
       isTrial,
@@ -3402,9 +3415,13 @@ async function getLicenseStatus(db, companyId) {
       isDemo,
       isExpired,
       plan_code: planCode,
+      plan_name: planRow?.name || (planCode === 'TRIAL_2M' ? 'Gói Dùng Thử 2 Tháng (Trial 60N)' : planCode === 'LIFETIME' ? 'Gói Vĩnh Viễn Trọn Đời' : 'Gói Tiêu Chuẩn 1 Năm'),
+      plan_price: planRow?.price || 0,
+      plan_badge: planRow?.badge || (isTrial ? 'Dùng Thử 0đ (Hạn Chế Quyền)' : 'Bản Quyền Đã Kích Hoạt'),
       status: licenseStatus,
       expire_date: expireDate,
       days_remaining: daysRemaining,
+      company_id: companyId || 'comp_1',
       company_name: companyName,
       companyName: companyName,
       limits: {
@@ -3429,9 +3446,13 @@ async function getLicenseStatus(db, companyId) {
       isDemo: false,
       isExpired: false,
       plan_code: 'TRIAL_2M',
+      plan_name: 'Gói Dùng Thử 2 Tháng (Trial 60N)',
+      plan_price: 0,
+      plan_badge: 'Dùng Thử 0đ (Hạn Chế Quyền)',
       status: 'ACTIVE',
       expire_date: null,
       days_remaining: 60,
+      company_id: companyId || 'comp_1',
       company_name: 'Doanh Nghiệp',
       companyName: 'Doanh Nghiệp',
       limits: {
@@ -3450,6 +3471,111 @@ async function getLicenseStatus(db, companyId) {
     };
   }
 }
+
+// ==========================================
+// LICENSE & PLANS API (100% DYNAMIC VIA D1)
+// ==========================================
+app.get('/api/license/status', async (c) => {
+  try {
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    const targetCompId = (isSuperAdmin && (!companyId || companyId === 'ALL')) ? 'comp_1' : companyId;
+    const license = await getLicenseStatus(c.env.DB, targetCompId);
+    return c.json({ success: true, data: license });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+app.post('/api/license/activate', async (c) => {
+  try {
+    const { license_key } = await c.req.json();
+    if (!license_key || !license_key.trim()) {
+      return c.json({ success: false, message: 'Vui lòng cung cấp mã bản quyền (License Key)' }, 400);
+    }
+    const cleanKey = license_key.trim().toUpperCase();
+    const keyRecord = await c.env.DB.prepare('SELECT * FROM license_keys WHERE UPPER(license_key) = ?').bind(cleanKey).first().catch(() => null);
+
+    if (!keyRecord) {
+      return c.json({ success: false, message: 'Mã bản quyền không tồn tại trên hệ thống hoặc đã nhập sai.' }, 400);
+    }
+    if (keyRecord.status === 'REVOKED' || keyRecord.status === 'EXPIRED') {
+      return c.json({ success: false, message: 'Mã bản quyền này đã bị thu hồi hoặc đã hết hiệu lực.' }, 400);
+    }
+
+    const { companyId } = await getTenantContext(c);
+    const targetCompId = (!companyId || companyId === 'ALL') ? 'comp_1' : companyId;
+
+    let newExpire = null;
+    if (keyRecord.plan_code === 'LIFETIME' || keyRecord.duration_months >= 999) {
+      newExpire = '2099-12-31';
+    } else {
+      const months = Number(keyRecord.duration_months) || 12;
+      const d = new Date();
+      d.setMonth(d.getMonth() + months);
+      newExpire = d.toISOString().split('T')[0];
+    }
+
+    await c.env.DB.prepare(`
+      UPDATE company_tenants 
+      SET plan_code = ?, license_status = 'ACTIVE', expire_date = ?
+      WHERE id = ?
+    `).bind(keyRecord.plan_code, newExpire, targetCompId).run();
+
+    await c.env.DB.prepare(`
+      UPDATE license_keys
+      SET status = 'USED', company_id = ?, used_at = datetime('now')
+      WHERE id = ?
+    `).bind(targetCompId, keyRecord.id).run().catch(() => {});
+
+    const updatedLicense = await getLicenseStatus(c.env.DB, targetCompId);
+    return c.json({
+      success: true,
+      message: `Kích hoạt thành công gói ${keyRecord.plan_name || keyRecord.plan_code}! Toàn bộ giới hạn hệ thống đã được mở khóa.`,
+      data: updatedLicense
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+app.post('/api/license/reset-demo', async (c) => {
+  try {
+    const { companyId } = await getTenantContext(c);
+    const targetCompId = (!companyId || companyId === 'ALL') ? 'comp_1' : companyId;
+
+    const expDate = new Date();
+    expDate.setDate(expDate.getDate() + 60);
+    const expStr = expDate.toISOString().split('T')[0];
+
+    await c.env.DB.prepare(`
+      UPDATE company_tenants 
+      SET plan_code = 'TRIAL_2M', license_status = 'ACTIVE', expire_date = ?
+      WHERE id = ?
+    `).bind(expStr, targetCompId).run();
+
+    const updatedLicense = await getLicenseStatus(c.env.DB, targetCompId);
+    return c.json({
+      success: true,
+      message: 'Đã chuyển về Gói Dùng Thử 2 Tháng (Trial 60N)',
+      data: updatedLicense
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+app.get('/api/plans', async (c) => {
+  try {
+    await initPricingPlansTable(c.env.DB);
+    const plans = await c.env.DB.prepare('SELECT * FROM pricing_plans WHERE is_active = 1 ORDER BY price ASC').all();
+    return c.json({
+      success: true,
+      data: plans.results || []
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
 
 app.get('/api/settings', async (c) => {
   try {

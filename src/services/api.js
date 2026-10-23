@@ -40,6 +40,7 @@ export const api = {
   getLicenseStatus: () => request('/license/status'),
   activateLicense: (data) => request('/license/activate', { method: 'POST', body: JSON.stringify(data) }),
   resetDemoLicense: () => request('/license/reset-demo', { method: 'POST' }),
+  getPlans: () => request('/plans'),
 
   // Xác thực đăng nhập & Đăng ký doanh nghiệp
   login: (credentials) => request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),

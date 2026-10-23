@@ -23,78 +23,6 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 
-const DEFAULT_PLANS = [
-  {
-    id: 'plan_trial_2m',
-    code: 'TRIAL_2M',
-    name: 'Gói Dùng Thử 2 Tháng (60 Ngày)',
-    duration_months: 2,
-    price: 0,
-    badge: 'Trải Nghiệm 0đ (Hạn Chế Quyền)',
-    features: [
-      'Trải nghiệm thực tế đầy đủ giao diện trong 60 ngày',
-      'Giới hạn tối đa 20 tài sản thiết bị (20/20)',
-      'Giới hạn tối đa 3 tài khoản nhân sự (1 Quản trị + 2 Nhân viên)',
-      'Giới hạn tối đa 5 hợp đồng & 5 biên bản bàn giao',
-      'Cố định 1 phòng ban duy nhất',
-      'Xuất file Excel cơ bản, in ấn có watermark thử nghiệm',
-      'Khóa tự động gửi Email thông báo & Telegram Bot'
-    ],
-    is_active: 1
-  },
-  {
-    id: 'plan_annual_1y',
-    code: 'ANNUAL_1Y',
-    name: 'Gói Tiêu Chuẩn 1 Năm',
-    duration_months: 12,
-    price: 4800000,
-    badge: 'Phổ biến nhất',
-    features: [
-      'Không giới hạn số lượng tài sản & thiết bị (Unlimited)',
-      'Không giới hạn nhân viên & phân quyền phòng ban',
-      'Không giới hạn hợp đồng & biên bản bàn giao',
-      'In biên bản A4 chuẩn chỉnh, sạch đẹp, có mộc dấu pháp nhân',
-      'Xuất dữ liệu Excel / CSV toàn diện',
-      'Tự động gửi email 6:00 AM & giao việc nhân sự',
-      'Trợ lý AI OMNI-Bot Gemini 24/7',
-      'Lưu trữ Cloudflare D1 độ tin cậy cao'
-    ],
-    is_active: 1
-  },
-  {
-    id: 'plan_annual_2y',
-    code: 'ANNUAL_2Y',
-    name: 'Gói Tiết Kiệm 2 Năm',
-    duration_months: 24,
-    price: 8800000,
-    badge: 'Tiết kiệm 800.000đ',
-    features: [
-      'Toàn bộ quyền lợi của gói 1 Năm',
-      'Thời hạn sử dụng 24 tháng liên tục',
-      'Tiết kiệm 800.000đ so với mua lẻ từng năm',
-      'Ưu tiên hỗ trợ kỹ thuật và sao lưu dữ liệu riêng',
-      'Bảo hành & nâng cấp tính năng tự động miễn phí'
-    ],
-    is_active: 1
-  },
-  {
-    id: 'plan_lifetime',
-    code: 'LIFETIME',
-    name: 'Gói Vĩnh Viễn Trọn Đời',
-    duration_months: 999,
-    price: 12500000,
-    badge: 'Khuyên Dùng • VIP',
-    features: [
-      'Sở hữu vĩnh viễn trọn đời (Lifetime License)',
-      'Không bao giờ phát sinh chi phí duy trì hàng năm',
-      'Mở khóa toàn bộ tính năng và bản cập nhật mới trong tương lai',
-      'Kênh hỗ trợ VIP 1-1 riêng với đội ngũ kỹ thuật',
-      'Xuất hóa đơn VAT điện tử doanh nghiệp đầy đủ'
-    ],
-    is_active: 1
-  }
-];
-
 export function UpgradeModal({
   isOpen,
   onClose,
@@ -113,8 +41,9 @@ export function UpgradeModal({
 
   // Tab: 'plans' (Chọn Gói) | 'payment' (Thanh Toán VietQR) | 'activate' (Nhập Mã Bản Quyền)
   const [activeTab, setActiveTab] = useState(isDemo ? 'plans' : 'activate');
-  const [plans, setPlans] = useState(DEFAULT_PLANS);
-  const [selectedPlan, setSelectedPlan] = useState(DEFAULT_PLANS[1] || DEFAULT_PLANS[0]);
+  const [plans, setPlans] = useState([]);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [loadingPlans, setLoadingPlans] = useState(true);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [createdOrder, setCreatedOrder] = useState(null);
   const [submittingPayment, setSubmittingPayment] = useState(false);
@@ -125,6 +54,13 @@ export function UpgradeModal({
   const [successMsg, setSuccessMsg] = useState('');
   const [copiedStk, setCopiedStk] = useState(false);
   const [copiedSyntax, setCopiedSyntax] = useState(false);
+  const [bankConfig, setBankConfig] = useState({
+    bank_name: 'ACB - Ngân Hàng TMCP Á Châu',
+    bank_code: 'ACB',
+    bank_bin: '970416',
+    bank_account_number: '7909707',
+    bank_account_holder: 'PHAM MINH HIEU'
+  });
 
   const modalBodyRef = useRef(null);
 
@@ -141,27 +77,49 @@ export function UpgradeModal({
     scrollToTop();
   };
 
-  // Load danh mục gói cước từ cơ sở dữ liệu
+  // Nạp 100% danh mục gói cước & cấu hình thanh toán từ API máy chủ Cloudflare D1
   useEffect(() => {
     if (isOpen) {
-      api.getSuperAdminPlans()
-        .then((res) => {
-          if (res?.data && res.data.length > 0) {
-            const activePlans = res.data.filter((p) => p.is_active);
+      setLoadingPlans(true);
+      const fetchPlans = api.getPlans ? api.getPlans() : api.getSuperAdminPlans();
+
+      Promise.all([
+        fetchPlans.catch((err) => {
+          console.error('Lỗi khi tải gói cước từ API:', err);
+          return { data: [] };
+        }),
+        api.getSettings().catch(() => ({ data: { settings: {} } }))
+      ])
+        .then(([plansRes, settingsRes]) => {
+          if (plansRes?.data && Array.isArray(plansRes.data) && plansRes.data.length > 0) {
+            const activePlans = plansRes.data.filter((p) => p.is_active);
             if (activePlans.length > 0) {
-              // Đảm bảo gói TRIAL_2M nằm đầu tiên nếu có
               const sorted = [...activePlans].sort((a, b) => {
                 if (a.code === 'TRIAL_2M') return -1;
                 if (b.code === 'TRIAL_2M') return 1;
                 return (a.price || 0) - (b.price || 0);
               });
               setPlans(sorted);
-              const popular = sorted.find((p) => p.code === 'ANNUAL_1Y') || sorted.find((p) => p.code !== 'TRIAL_2M') || sorted[0];
+              const popular = sorted.find((p) => p.badge?.includes('Phổ biến') || p.code === 'ANNUAL_1Y') || sorted.find((p) => p.code !== 'TRIAL_2M') || sorted[0];
               setSelectedPlan(popular);
             }
           }
+
+          if (settingsRes?.data?.settings) {
+            const s = settingsRes.data.settings;
+            setBankConfig((prev) => ({
+              ...prev,
+              bank_name: s.bank_name || prev.bank_name,
+              bank_code: s.bank_code || prev.bank_code,
+              bank_bin: s.bank_bin || prev.bank_bin,
+              bank_account_number: s.bank_account_number || prev.bank_account_number,
+              bank_account_holder: s.bank_account_holder || prev.bank_account_holder
+            }));
+          }
         })
-        .catch(() => {});
+        .finally(() => {
+          setLoadingPlans(false);
+        });
     }
   }, [isOpen]);
 
@@ -171,22 +129,9 @@ export function UpgradeModal({
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(val) || 0);
   };
 
-  const formatPlanDisplayName = (p) => {
-    if (!p) return 'Gói Dịch Vụ';
-    if (p.code === 'TRIAL_2M' || p.price === 0) return 'Gói Dùng Thử 2 Tháng (Trial 60N)';
-    if (p.code === 'ANNUAL_1Y' || (p.duration_months === 12 && p.price === 4800000)) return 'Gói Tiêu Chuẩn 1 Năm';
-    if (p.code === 'ANNUAL_2Y' || (p.duration_months === 24 && p.price === 8800000)) return 'Gói Tiết Kiệm 2 Năm';
-    if (p.code === 'LIFETIME' || p.duration_months >= 999) return 'Gói Vĩnh Viễn Trọn Đời';
-    if (p.name === 'Tháng' || p.name === 'Năm' || p.name === 'Vĩnh Viễn') {
-      return p.duration_months === 2 ? 'Gói Dùng Thử 2 Tháng' : p.duration_months === 12 ? 'Gói Tiêu Chuẩn 1 Năm' : p.duration_months === 24 ? 'Gói Tiết Kiệm 2 Năm' : 'Gói Vĩnh Viễn Trọn Đời';
-    }
-    return p.name || 'Gói Dịch Vụ';
-  };
-
-
   const handleCopyStk = () => {
     if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText('7909707');
+      navigator.clipboard.writeText(bankConfig.bank_account_number || '7909707');
       setCopiedStk(true);
       setTimeout(() => setCopiedStk(false), 2000);
     }
@@ -669,269 +614,423 @@ export function UpgradeModal({
                 </p>
               </div>
 
-              {/* Lưới các gói cước */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {plans.map((p) => {
-                  let featureList = [];
-                  try {
-                    featureList = typeof p.features === 'string' ? JSON.parse(p.features) : p.features || [];
-                  } catch {
-                    featureList = p.features ? [p.features] : [];
-                  }
-                  const isFree = p.price === 0 || p.code === 'TRIAL_2M';
-                  const isLifetime = p.code === 'LIFETIME' || p.duration_months >= 999;
-                  const isPopular = p.badge?.includes('Phổ biến') || p.code === 'ANNUAL_1Y';
-                  
-                  // Xác định xem đây có phải gói người dùng ĐANG SỬ DỤNG hay không
-                  const isCurrentPlan = (p.code === 'TRIAL_2M' && isFreeTrial) ||
-                    (p.code === licenseInfo?.plan_code && isPaidPlan);
+              {/* Lưới các gói cước nạp từ API */}
+              {loadingPlans ? (
+                <div className="py-16 flex flex-col items-center justify-center gap-3">
+                  <div className="w-9 h-9 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-xs font-bold text-slate-500">Đang tải danh sách gói cước trực tiếp từ máy chủ Cloudflare D1...</span>
+                </div>
+              ) : plans.length === 0 ? (
+                <div className="py-12 text-center text-xs font-medium text-slate-500 bg-slate-50 rounded-2xl border border-slate-200">
+                  Chưa có gói cước nào được kích hoạt trên hệ thống.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {plans.map((p) => {
+                    let featureList = [];
+                    try {
+                      featureList = typeof p.features === 'string' ? JSON.parse(p.features) : p.features || [];
+                    } catch {
+                      featureList = p.features ? [p.features] : [];
+                    }
+                    const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                    const isLifetime = p.code === 'LIFETIME' || p.duration_months >= 999;
+                    const isPopular = p.badge?.includes('Phổ biến') || p.code === 'ANNUAL_1Y';
 
-                  return (
-                    <div
-                      key={p.id || p.code}
-                      className={`relative rounded-3xl p-4 sm:p-5 flex flex-col justify-between transition-all duration-200 border shadow-soft hover:shadow-soft-lg ${
-                        isCurrentPlan && isPaidPlan
-                          ? 'bg-gradient-to-b from-emerald-50/80 via-white to-emerald-50/30 border-emerald-400 ring-2 ring-emerald-400/40'
-                          : isCurrentPlan && isFreeTrial
-                          ? 'bg-gradient-to-b from-amber-50/80 via-white to-orange-50/30 border-amber-400 ring-2 ring-amber-400/40'
-                          : isLifetime
-                          ? 'bg-gradient-to-b from-amber-50/50 via-white to-amber-50/20 border-amber-200'
-                          : isPopular
-                          ? 'bg-gradient-to-b from-indigo-50/50 via-white to-purple-50/20 border-indigo-200'
-                          : 'bg-white border-slate-200'
-                      }`}
-                    >
-                      <div className="space-y-3">
-                        {/* Status banner nếu là gói hiện tại */}
-                        {isCurrentPlan ? (
-                          <div className={`py-1.5 px-2.5 rounded-xl text-[10px] font-black uppercase text-center flex items-center justify-center gap-1.5 shadow-2xs ${
-                            isPaidPlan
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-amber-500 text-white'
-                          }`}>
-                            {isPaidPlan ? <CheckCircle2 size={13} /> : <Zap size={13} className="fill-white" />}
-                            <span>{isPaidPlan ? '⭐ BẠN ĐÃ MUA GÓI NÀY' : '⭐ BẠN ĐANG DÙNG GÓI NÀY (0Đ)'}</span>
-                          </div>
-                        ) : isFree ? (
-                          <div className="py-1 px-2 rounded-xl text-[10px] font-bold uppercase text-center bg-slate-100 text-slate-500">
-                            GÓI DÙNG THỬ 0Đ (HẠN CHẾ QUYỀN)
-                          </div>
-                        ) : (
-                          <div className="py-1 px-2 rounded-xl text-[10px] font-extrabold uppercase text-center bg-indigo-50 text-indigo-700 border border-indigo-100">
-                            GÓI MỞ KHÓA TOÀN BỘ (CHƯA MUA)
-                          </div>
-                        )}
+                    // Xác định xem đây có phải gói người dùng ĐANG SỬ DỤNG hay không
+                    const isCurrentPlan = (p.code === 'TRIAL_2M' && isFreeTrial) ||
+                      (p.code === licenseInfo?.plan_code && isPaidPlan);
 
-                        <div>
-                          <div className="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
-                            <span className="text-[9px] font-mono font-bold text-slate-400 uppercase">
-                              {p.code}
-                            </span>
-                            {p.badge && (
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 ${
-                                  isLifetime
-                                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                    : isPopular
-                                    ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
-                                    : isFree
-                                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                    : 'bg-slate-100 text-slate-700'
-                                }`}
-                              >
-                                {p.badge}
-                              </span>
-                            )}
-                          <h3 className="text-base font-black text-slate-900 leading-snug">{formatPlanDisplayName(p)}</h3>
-                        </div>
-
-
-                        <div className="pt-2 pb-2.5 border-b border-slate-100">
-                          <div className="flex items-baseline gap-1">
-                            <span className={`text-xl sm:text-2xl font-black ${isFree ? 'text-amber-600' : 'text-slate-900'}`}>
-                              {isFree ? '0 VNĐ' : formatCurrency(p.price)}
-                            </span>
-                            <span className="text-[11px] text-slate-500 font-medium">
-                              / {isLifetime ? 'Trọn đời' : isFree ? '60 ngày' : `${p.duration_months} tháng`}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-slate-400 mt-0.5">
-                            {isFree
-                              ? 'Tặng miễn phí 60 ngày trải nghiệm'
-                              : isLifetime
-                              ? 'Sở hữu vĩnh viễn, không phí duy trì'
-                              : `Sử dụng trong ${p.duration_months} tháng`}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1.5 py-1">
-                          <div className="text-[11px] font-bold text-slate-700">Chi tiết quyền lợi &amp; hạn chế:</div>
-                          {featureList.slice(0, 6).map((feat, idx) => {
-                            const isLimitation = isFree && (feat.includes('Giới hạn') || feat.includes('Cố định') || feat.includes('Khóa') || feat.includes('Chưa'));
-                            return (
-                              <div key={idx} className="flex items-start gap-1.5 text-[11px]">
-                                {isLimitation ? (
-                                  <AlertTriangle size={12} className="text-amber-600 shrink-0 mt-0.5" />
-                                ) : (
-                                  <CheckCircle2 size={12} className="text-emerald-500 shrink-0 mt-0.5" />
-                                )}
-                                <span className={`leading-snug ${isLimitation ? 'text-amber-900 font-semibold' : 'text-slate-600'}`}>
-                                  {feat}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="pt-3 border-t border-slate-100 mt-3">
-                        {isCurrentPlan ? (
-                          isFree ? (
-                            <div className="w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 bg-amber-100 text-amber-950 border border-amber-300 select-none">
-                              <CheckCircle2 size={14} className="text-amber-700" />
-                              <span>✓ Đang Dùng Thử 0đ</span>
+                    return (
+                      <div
+                        key={p.id || p.code}
+                        className={`relative rounded-3xl p-4 sm:p-5 flex flex-col justify-between transition-all duration-200 border shadow-soft hover:shadow-soft-lg ${
+                          isCurrentPlan && isPaidPlan
+                            ? 'bg-gradient-to-b from-emerald-50/80 via-white to-emerald-50/30 border-emerald-400 ring-2 ring-emerald-400/40'
+                            : isCurrentPlan && isFreeTrial
+                            ? 'bg-gradient-to-b from-amber-50/80 via-white to-orange-50/30 border-amber-400 ring-2 ring-amber-400/40'
+                            : isLifetime
+                            ? 'bg-gradient-to-b from-amber-50/50 via-white to-amber-50/20 border-amber-200'
+                            : isPopular
+                            ? 'bg-gradient-to-b from-indigo-50/50 via-white to-purple-50/20 border-indigo-200'
+                            : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        <div className="space-y-3">
+                          {/* Status banner nếu là gói hiện tại */}
+                          {isCurrentPlan ? (
+                            <div className={`py-1.5 px-2.5 rounded-xl text-[10px] font-black uppercase text-center flex items-center justify-center gap-1.5 shadow-2xs ${
+                              isPaidPlan
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-amber-500 text-white'
+                            }`}>
+                              {isPaidPlan ? <CheckCircle2 size={13} /> : <Zap size={13} className="fill-white" />}
+                              <span>{isPaidPlan ? '⭐ BẠN ĐÃ MUA GÓI NÀY' : '⭐ BẠN ĐANG DÙNG GÓI NÀY (0Đ)'}</span>
+                            </div>
+                          ) : isFree ? (
+                            <div className="py-1 px-2 rounded-xl text-[10px] font-bold uppercase text-center bg-slate-100 text-slate-500">
+                              GÓI DÙNG THỬ 0Đ (HẠN CHẾ QUYỀN)
                             </div>
                           ) : (
-                            <div className="space-y-1.5">
-                              <div className="w-full py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 bg-emerald-100 text-emerald-950 border border-emerald-300 select-none">
-                                <CheckCircle2 size={14} className="text-emerald-700" />
-                                <span>Gói Đã Mua (Đang Sử Dụng)</span>
-                              </div>
-                              {!isLifetime && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleSelectPlan(p)}
-                                  className="w-full py-1.5 px-2 rounded-lg text-[11px] font-bold text-indigo-700 hover:bg-indigo-50 border border-indigo-200 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                            <div className="py-1 px-2 rounded-xl text-[10px] font-extrabold uppercase text-center bg-indigo-50 text-indigo-700 border border-indigo-100">
+                              GÓI MỞ KHÓA TOÀN BỘ (CHƯA MUA)
+                            </div>
+                          )}
+
+                          <div>
+                            <div className="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
+                              <span className="text-[9px] font-mono font-bold text-slate-400 uppercase">
+                                {p.code}
+                              </span>
+                              {p.badge && (
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 ${
+                                    isLifetime
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                      : isPopular
+                                      ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
+                                      : isFree
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                      : 'bg-slate-100 text-slate-700'
+                                  }`}
                                 >
-                                  <span>+ Mua Gia Hạn Thêm</span>
-                                </button>
+                                  {p.badge}
+                                </span>
                               )}
                             </div>
-                          )
-                        ) : isFree ? (
-                          <div className="w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-100 text-slate-400 border border-slate-200 select-none cursor-not-allowed">
-                            <span>{isExpiredDemo ? 'Đã Hết Hạn Dùng Thử' : 'Đã Nâng Cấp Gói'}</span>
+                            <h3 className="text-base font-black text-slate-900 leading-snug">{p.name}</h3>
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleSelectPlan(p)}
-                            className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer ${
-                              isLifetime
-                                ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white'
-                                : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white'
-                            }`}
-                          >
-                            <span>Chọn Mua Gói Này →</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
 
-              {/* BẢNG SO SÁNH QUYỀN LỢI CHI TIẾT */}
-              <div className="mt-8 rounded-3xl bg-white border border-slate-200 shadow-soft overflow-hidden">
-                <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <h5 className="text-base font-black flex items-center gap-2">
-                      <Sparkles size={18} className="text-amber-400" />
-                      Bảng So Sánh Chi Tiết: Gói Dùng Thử vs Các Gói Trả Phí
-                    </h5>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      Xem rõ các tính năng bị giới hạn ở Gói Dùng Thử và những đặc quyền khi mở khóa Gói Trả Phí
-                    </p>
+                          <div className="pt-2 pb-2.5 border-b border-slate-100">
+                            <div className="flex items-baseline gap-1">
+                              <span className={`text-xl sm:text-2xl font-black ${isFree ? 'text-amber-600' : 'text-slate-900'}`}>
+                                {isFree ? '0 VNĐ' : formatCurrency(p.price)}
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-medium">
+                                / {isLifetime ? 'Trọn đời' : isFree ? '60 ngày' : `${p.duration_months} tháng`}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              {isFree
+                                ? 'Tặng miễn phí 60 ngày trải nghiệm'
+                                : isLifetime
+                                ? 'Sở hữu vĩnh viễn, không phí duy trì'
+                                : `Sử dụng trong ${p.duration_months} tháng`}
+                            </p>
+                          </div>
+
+                          <div className="space-y-1.5 py-1">
+                            <div className="text-[11px] font-bold text-slate-700">Chi tiết quyền lợi &amp; hạn chế:</div>
+                            {featureList.slice(0, 6).map((feat, idx) => {
+                              const isLimitation = isFree && (feat.includes('Giới hạn') || feat.includes('Cố định') || feat.includes('Khóa') || feat.includes('Chưa'));
+                              return (
+                                <div key={idx} className="flex items-start gap-1.5 text-[11px]">
+                                  {isLimitation ? (
+                                    <AlertTriangle size={12} className="text-amber-600 shrink-0 mt-0.5" />
+                                  ) : (
+                                    <CheckCircle2 size={12} className="text-emerald-500 shrink-0 mt-0.5" />
+                                  )}
+                                  <span className={`leading-snug ${isLimitation ? 'text-amber-900 font-semibold' : 'text-slate-600'}`}>
+                                    {feat}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-100 mt-3">
+                          {isCurrentPlan ? (
+                            isFree ? (
+                              <div className="w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 bg-amber-100 text-amber-950 border border-amber-300 select-none">
+                                <CheckCircle2 size={14} className="text-amber-700" />
+                                <span>✓ Đang Dùng Thử 0đ</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-1.5">
+                                <div className="w-full py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 bg-emerald-100 text-emerald-950 border border-emerald-300 select-none">
+                                  <CheckCircle2 size={14} className="text-emerald-700" />
+                                  <span>Gói Đã Mua (Đang Sử Dụng)</span>
+                                </div>
+                                {!isLifetime && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectPlan(p)}
+                                    className="w-full py-1.5 px-2 rounded-lg text-[11px] font-bold text-indigo-700 hover:bg-indigo-50 border border-indigo-200 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                  >
+                                    <span>+ Mua Gia Hạn Thêm</span>
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          ) : isFree ? (
+                            <div className="w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-100 text-slate-400 border border-slate-200 select-none cursor-not-allowed">
+                              <span>{isExpiredDemo ? 'Đã Hết Hạn Dùng Thử' : 'Đã Nâng Cấp Gói'}</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSelectPlan(p)}
+                              className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer ${
+                                isLifetime
+                                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white'
+                                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white'
+                              }`}
+                            >
+                              <span>Chọn Mua Gói Này →</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* BẢNG SO SÁNH QUYỀN LỢI CHI TIẾT - 100% DYNAMIC MAP OVER PLANS TỪ API */}
+              {plans.length > 0 && (
+                <div className="mt-8 rounded-3xl bg-white border border-slate-200 shadow-soft overflow-hidden">
+                  <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h5 className="text-base font-black flex items-center gap-2">
+                        <Sparkles size={18} className="text-amber-400" />
+                        Bảng So Sánh Chi Tiết Các Gói Dịch Vụ
+                      </h5>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        Dữ liệu đối chiếu hạn mức và quyền lợi tải thời gian thực từ API máy chủ Cloudflare D1
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100/90 text-slate-700 font-black border-b border-slate-200">
+                          <th className="p-3 sm:p-3.5 min-w-[200px]">Tính Năng / Đặc Quyền</th>
+                          {plans.map((p) => {
+                            const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                            const isLifetime = p.code === 'LIFETIME' || p.duration_months >= 999;
+                            const isCurrent = (p.code === 'TRIAL_2M' && isFreeTrial) || (p.code === licenseInfo?.plan_code && isPaidPlan);
+                            return (
+                              <th
+                                key={p.id || p.code}
+                                className={`p-3 sm:p-3.5 text-center min-w-[150px] ${
+                                  isCurrent
+                                    ? 'bg-indigo-100/80 text-indigo-950 border-x border-indigo-200'
+                                    : isFree
+                                    ? 'bg-amber-50/70 text-amber-900 border-x border-slate-200'
+                                    : isLifetime
+                                    ? 'bg-emerald-50/70 text-emerald-950 border-l border-slate-200'
+                                    : 'text-slate-900'
+                                }`}
+                              >
+                                <div className="font-black text-xs">{p.name}</div>
+                                {p.badge && (
+                                  <div className="text-[10px] font-bold text-slate-500 mt-0.5">
+                                    {p.badge}
+                                  </div>
+                                )}
+                              </th>
+                            );
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-600">
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">Chi phí đầu tư</td>
+                          {plans.map((p) => {
+                            const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                            const isLifetime = p.code === 'LIFETIME' || p.duration_months >= 999;
+                            return (
+                              <td
+                                key={p.id || p.code}
+                                className={`p-3 text-center font-black ${
+                                  isFree
+                                    ? 'text-amber-700 bg-amber-50/30 border-x border-slate-100'
+                                    : isLifetime
+                                    ? 'text-emerald-700 bg-emerald-50/30'
+                                    : 'text-slate-900'
+                                }`}
+                              >
+                                {isFree ? '0 VNĐ (Miễn phí)' : formatCurrency(p.price)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">Thời hạn sử dụng</td>
+                          {plans.map((p) => (
+                            <td key={p.id || p.code} className="p-3 text-center font-medium text-slate-700">
+                              {p.duration_months >= 999 ? 'Vĩnh viễn (Trọn đời)' : `${p.duration_months} tháng`}
+                            </td>
+                          ))}
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">Hạn mức Tài sản &amp; Thiết bị</td>
+                          {plans.map((p) => {
+                            const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                            return (
+                              <td
+                                key={p.id || p.code}
+                                className={`p-3 text-center font-bold ${
+                                  isFree ? 'text-rose-600 bg-amber-50/30 border-x border-slate-100' : 'text-emerald-600'
+                                }`}
+                              >
+                                {isFree ? 'Tối đa 20 tài sản' : 'Không giới hạn (∞)'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">Hạn mức Tài khoản Nhân sự</td>
+                          {plans.map((p) => {
+                            const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                            return (
+                              <td
+                                key={p.id || p.code}
+                                className={`p-3 text-center font-bold ${
+                                  isFree ? 'text-rose-600 bg-amber-50/30 border-x border-slate-100' : 'text-emerald-600'
+                                }`}
+                              >
+                                {isFree ? 'Tối đa 3 tài khoản' : 'Không giới hạn (∞)'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">Hợp đồng &amp; Biên bản bàn giao</td>
+                          {plans.map((p) => {
+                            const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                            return (
+                              <td
+                                key={p.id || p.code}
+                                className={`p-3 text-center font-bold ${
+                                  isFree ? 'text-rose-600 bg-amber-50/30 border-x border-slate-100' : 'text-emerald-600'
+                                }`}
+                              >
+                                {isFree ? 'Tối đa 5 HĐ & 5 BBBG' : 'Không giới hạn (∞)'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">Phòng ban quản trị</td>
+                          {plans.map((p) => {
+                            const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                            return (
+                              <td
+                                key={p.id || p.code}
+                                className={`p-3 text-center font-bold ${
+                                  isFree ? 'text-rose-600 bg-amber-50/30 border-x border-slate-100' : 'text-emerald-600'
+                                }`}
+                              >
+                                {isFree ? 'Cố định 1 phòng ban' : 'Không giới hạn'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">Tự động gửi Email 6:00 AM</td>
+                          {plans.map((p) => {
+                            const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                            return (
+                              <td
+                                key={p.id || p.code}
+                                className={`p-3 text-center font-bold ${
+                                  isFree ? 'text-slate-400 bg-amber-50/30 border-x border-slate-100' : 'text-emerald-600'
+                                }`}
+                              >
+                                {isFree ? '❌ Bị khóa' : '✅ Mở khóa'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">Tích hợp Telegram Bot cảnh báo</td>
+                          {plans.map((p) => {
+                            const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                            return (
+                              <td
+                                key={p.id || p.code}
+                                className={`p-3 text-center font-bold ${
+                                  isFree ? 'text-slate-400 bg-amber-50/30 border-x border-slate-100' : 'text-emerald-600'
+                                }`}
+                              >
+                                {isFree ? '❌ Bị khóa' : '✅ Mở khóa'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">In Biên bản A4 chuẩn đóng mộc dấu đỏ</td>
+                          {plans.map((p) => {
+                            const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                            return (
+                              <td
+                                key={p.id || p.code}
+                                className={`p-3 text-center font-bold ${
+                                  isFree ? 'text-amber-700 bg-amber-50/30 border-x border-slate-100' : 'text-emerald-600'
+                                }`}
+                              >
+                                {isFree ? 'Có watermark thử nghiệm' : '✅ Chuẩn mộc dấu đỏ'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">Hỗ trợ kỹ thuật &amp; Hóa đơn VAT</td>
+                          {plans.map((p) => {
+                            const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                            const isLifetime = p.code === 'LIFETIME' || p.duration_months >= 999;
+                            return (
+                              <td
+                                key={p.id || p.code}
+                                className={`p-3 text-center font-medium ${
+                                  isFree
+                                    ? 'text-slate-500 bg-amber-50/30 border-x border-slate-100'
+                                    : isLifetime
+                                    ? 'text-emerald-700 font-bold bg-emerald-50/20'
+                                    : 'text-slate-800 font-bold'
+                                }`}
+                              >
+                                {isFree ? 'Hỗ trợ cộng đồng' : isLifetime ? 'Hỗ trợ VIP 1-1 + VAT' : 'Hỗ trợ 24/7 + VAT'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="p-3 font-bold text-slate-800">Thao tác</td>
+                          {plans.map((p) => {
+                            const isFree = p.price === 0 || p.code === 'TRIAL_2M';
+                            const isCurrent = (p.code === 'TRIAL_2M' && isFreeTrial) || (p.code === licenseInfo?.plan_code && isPaidPlan);
+                            return (
+                              <td key={p.id || p.code} className="p-3 text-center">
+                                {isCurrent ? (
+                                  <span className="inline-block py-1 px-2.5 rounded-lg text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                    Đang Dùng
+                                  </span>
+                                ) : isFree ? (
+                                  <span className="inline-block py-1 px-2.5 rounded-lg text-[10px] font-bold text-slate-400">
+                                    Miễn Phí
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectPlan(p)}
+                                    className="py-1 px-2.5 rounded-lg text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-2xs transition-all cursor-pointer"
+                                  >
+                                    Chọn Mua
+                                  </button>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-100/90 text-slate-700 font-black border-b border-slate-200">
-                        <th className="p-3 sm:p-3.5 w-2/5">Tính Năng / Hạn Mức</th>
-                        <th className="p-3 sm:p-3.5 text-center bg-amber-50/70 text-amber-900 border-x border-slate-200">
-                          🎁 Dùng Thử 2T (0đ)
-                        </th>
-                        <th className="p-3 sm:p-3.5 text-center text-indigo-950">
-                          Gói 1 Năm
-                        </th>
-                        <th className="p-3 sm:p-3.5 text-center text-blue-950">
-                          Gói 2 Năm
-                        </th>
-                        <th className="p-3 sm:p-3.5 text-center bg-emerald-50/70 text-emerald-950 border-l border-slate-200">
-                          👑 Vĩnh Viễn (VIP)
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-600">
-                      <tr>
-                        <td className="p-3 font-bold text-slate-800">Chi phí đầu tư</td>
-                        <td className="p-3 text-center font-black text-amber-700 bg-amber-50/30 border-x border-slate-100">0 VNĐ (Miễn phí)</td>
-                        <td className="p-3 text-center font-bold text-slate-900">4.800.000đ</td>
-                        <td className="p-3 text-center font-bold text-slate-900">8.800.000đ</td>
-                        <td className="p-3 text-center font-black text-emerald-700 bg-emerald-50/30 border-l border-slate-100">12.500.000đ (Trọn đời)</td>
-                      </tr>
-                      <tr>
-                        <td className="p-3 font-bold text-slate-800">Hạn mức Tài sản &amp; Thiết bị</td>
-                        <td className="p-3 text-center font-black text-rose-600 bg-amber-50/30 border-x border-slate-100">Tối đa 20 tài sản</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">Không giới hạn (∞)</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">Không giới hạn (∞)</td>
-                        <td className="p-3 text-center font-black text-emerald-700 bg-emerald-50/30 border-l border-slate-100">Không giới hạn (∞)</td>
-                      </tr>
-                      <tr>
-                        <td className="p-3 font-bold text-slate-800">Hạn mức Tài khoản Nhân sự</td>
-                        <td className="p-3 text-center font-black text-rose-600 bg-amber-50/30 border-x border-slate-100">Tối đa 3 tài khoản</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">Không giới hạn (∞)</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">Không giới hạn (∞)</td>
-                        <td className="p-3 text-center font-black text-emerald-700 bg-emerald-50/30 border-l border-slate-100">Không giới hạn (∞)</td>
-                      </tr>
-                      <tr>
-                        <td className="p-3 font-bold text-slate-800">Hợp đồng &amp; Biên bản bàn giao</td>
-                        <td className="p-3 text-center font-black text-rose-600 bg-amber-50/30 border-x border-slate-100">Tối đa 5 HĐ &amp; 5 BBBG</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">Không giới hạn (∞)</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">Không giới hạn (∞)</td>
-                        <td className="p-3 text-center font-black text-emerald-700 bg-emerald-50/30 border-l border-slate-100">Không giới hạn (∞)</td>
-                      </tr>
-                      <tr>
-                        <td className="p-3 font-bold text-slate-800">Phòng ban quản trị</td>
-                        <td className="p-3 text-center font-bold text-rose-600 bg-amber-50/30 border-x border-slate-100">Cố định 1 phòng ban</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">Không giới hạn</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">Không giới hạn</td>
-                        <td className="p-3 text-center font-black text-emerald-700 bg-emerald-50/30 border-l border-slate-100">Không giới hạn</td>
-                      </tr>
-                      <tr>
-                        <td className="p-3 font-bold text-slate-800">Tự động gửi Email 6:00 AM &amp; Giao việc</td>
-                        <td className="p-3 text-center font-bold text-slate-400 bg-amber-50/30 border-x border-slate-100">❌ Bị khóa</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">✅ Mở khóa</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">✅ Mở khóa</td>
-                        <td className="p-3 text-center font-black text-emerald-700 bg-emerald-50/30 border-l border-slate-100">✅ Mở khóa VIP</td>
-                      </tr>
-                      <tr>
-                        <td className="p-3 font-bold text-slate-800">Tích hợp Telegram Bot cảnh báo</td>
-                        <td className="p-3 text-center font-bold text-slate-400 bg-amber-50/30 border-x border-slate-100">❌ Bị khóa</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">✅ Mở khóa</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">✅ Mở khóa</td>
-                        <td className="p-3 text-center font-black text-emerald-700 bg-emerald-50/30 border-l border-slate-100">✅ Mở khóa VIP</td>
-                      </tr>
-                      <tr>
-                        <td className="p-3 font-bold text-slate-800">In Biên bản A4 chuẩn đóng mộc dấu đỏ</td>
-                        <td className="p-3 text-center font-semibold text-amber-700 bg-amber-50/30 border-x border-slate-100">Có watermark thử nghiệm</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">✅ Chuẩn mộc dấu đỏ</td>
-                        <td className="p-3 text-center font-bold text-emerald-600">✅ Chuẩn mộc dấu đỏ</td>
-                        <td className="p-3 text-center font-black text-emerald-700 bg-emerald-50/30 border-l border-slate-100">✅ Chuẩn mộc dấu đỏ</td>
-                      </tr>
-                      <tr>
-                        <td className="p-3 font-bold text-slate-800">Hỗ trợ kỹ thuật &amp; Hóa đơn VAT</td>
-                        <td className="p-3 text-center font-medium text-slate-500 bg-amber-50/30 border-x border-slate-100">Hỗ trợ cộng đồng</td>
-                        <td className="p-3 text-center font-bold text-slate-800">Hỗ trợ 24/7 + VAT</td>
-                        <td className="p-3 text-center font-bold text-slate-800">Ưu tiên 24/7 + VAT</td>
-                        <td className="p-3 text-center font-black text-emerald-700 bg-emerald-50/30 border-l border-slate-100">Hỗ trợ VIP 1-1 + VAT</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -949,16 +1048,16 @@ export function UpgradeModal({
                         Gói Dịch Vụ Bạn Đã Chọn Mua:
                       </div>
                       <div className="text-base font-black text-slate-900 mt-0.5">
-                        {selectedPlan?.name || 'Gói Tiêu Chuẩn 1 Năm'}
+                        {selectedPlan?.name || 'Gói Dịch Vụ'}
                       </div>
                       <div className="text-xs text-slate-500 mt-0.5">
-                        Thời hạn: {selectedPlan?.duration_months >= 999 ? 'Trọn đời (Vĩnh viễn)' : `${selectedPlan?.duration_months} tháng kể từ ngày kích hoạt`}
+                        Thời hạn: {selectedPlan?.duration_months >= 999 ? 'Trọn đời (Vĩnh viễn)' : `${selectedPlan?.duration_months || 12} tháng kể từ ngày kích hoạt`}
                       </div>
                     </div>
 
                     <div className="text-right">
                       <div className="text-2xl font-black text-indigo-700">
-                        {formatCurrency(selectedPlan?.price || 4800000)}
+                        {formatCurrency(selectedPlan?.price || 0)}
                       </div>
                       <button
                         type="button"
@@ -980,7 +1079,7 @@ export function UpgradeModal({
                         </div>
                         <div>
                           <h4 className="font-bold text-sm text-slate-800 dark:text-white">
-                            Thông Tin Chuyển Khoản Ngân Hàng ACB
+                            Thông Tin Chuyển Khoản Ngân Hàng ({bankConfig.bank_code || 'ACB'})
                           </h4>
                           <p className="text-[11px] text-slate-500">
                             Quét mã VietQR để chuyển tiền nhanh 24/7 không cần gõ STK
@@ -999,11 +1098,15 @@ export function UpgradeModal({
                       <div className="md:col-span-4 flex flex-col items-center justify-center p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80">
                         <div className="p-2.5 bg-white rounded-2xl shadow-sm border border-slate-200/80">
                           <img
-                            src="/payment-qr.png"
-                            alt="Mã VietQR ACB PHAM MINH HIEU"
+                            src={`https://img.vietqr.io/image/${bankConfig.bank_bin || '970416'}-${bankConfig.bank_account_number || '7909707'}-compact2.png?amount=${selectedPlan?.price || 0}&addInfo=${encodeURIComponent(transferSyntax)}&accountName=${encodeURIComponent(bankConfig.bank_account_holder || 'PHAM MINH HIEU')}`}
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = '/payment-qr.png';
+                            }}
+                            alt={`Mã VietQR ${bankConfig.bank_code} ${bankConfig.bank_account_holder}`}
                             className="w-44 h-44 aspect-square object-contain rounded-xl hover:scale-105 transition-transform duration-200 cursor-pointer"
                             title="Nhấn để xem ảnh phóng to"
-                            onClick={() => window.open('/payment-qr.png', '_blank')}
+                            onClick={() => window.open(`https://img.vietqr.io/image/${bankConfig.bank_bin || '970416'}-${bankConfig.bank_account_number || '7909707'}-compact2.png?amount=${selectedPlan?.price || 0}&addInfo=${encodeURIComponent(transferSyntax)}&accountName=${encodeURIComponent(bankConfig.bank_account_holder || 'PHAM MINH HIEU')}`, '_blank')}
                           />
                         </div>
                         <div className="mt-3 text-center">
@@ -1024,11 +1127,11 @@ export function UpgradeModal({
                               Ngân hàng thụ hưởng
                             </div>
                             <div className="text-sm font-bold text-slate-800 mt-0.5">
-                              ACB - Ngân Hàng TMCP Á Châu
+                              {bankConfig.bank_name}
                             </div>
                           </div>
                           <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-100 text-blue-700">
-                            ACB
+                            {bankConfig.bank_code}
                           </span>
                         </div>
 
@@ -1038,7 +1141,7 @@ export function UpgradeModal({
                               Số tài khoản
                             </div>
                             <div className="text-xl font-black text-indigo-600 mt-0.5 tracking-wider">
-                              7909707
+                              {bankConfig.bank_account_number}
                             </div>
                           </div>
                           <button
@@ -1058,7 +1161,7 @@ export function UpgradeModal({
                               Chủ tài khoản
                             </div>
                             <div className="text-sm font-extrabold text-slate-900 mt-0.5 tracking-wide">
-                              PHAM MINH HIEU
+                              {bankConfig.bank_account_holder}
                             </div>
                           </div>
                         </div>
