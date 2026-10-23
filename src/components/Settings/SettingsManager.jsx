@@ -3136,10 +3136,10 @@ export function SettingsManager({
 
                     <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">4. Quyền Quản Trị</span>
-                      <p className={`text-sm font-black mt-1 ${licenseInfo?.isDemo ? 'text-rose-600' : 'text-emerald-700'}`}>
-                        {licenseInfo?.isDemo ? 'Bị Giới Hạn' : 'Toàn Bộ 100%'}
+                      <p className={`text-sm font-black mt-1 ${isPaidPlan ? 'text-emerald-700' : isFreeTrial ? 'text-amber-700' : 'text-rose-600'}`}>
+                        {isPaidPlan ? 'Mở Khóa Toàn Bộ (Full)' : isFreeTrial ? 'Dùng Thử Có Hạn Chế' : 'Bị Khóa (Hết Hạn)'}
                       </p>
-                      <span className="text-[10px] text-slate-500 block mt-0.5 truncate">{licenseInfo?.isDemo ? 'Max 5 tài sản' : 'Đầy đủ mọi tính năng'}</span>
+                      <span className="text-[10px] text-slate-500 block mt-0.5 truncate">{isPaidPlan ? 'Toàn quyền không giới hạn' : isFreeTrial ? 'Giới hạn 20 tài sản, 3 nhân sự' : 'Tối đa 5 tài sản (Demo)'}</span>
                     </div>
                   </div>
                 </div>
@@ -3148,53 +3148,80 @@ export function SettingsManager({
 
             {/* Quota Limits Cards */}
             <div>
-              <h4 className="text-sm font-bold text-slate-800 mb-3">Hạn Mức & Định Lượng Tài Nguyên</h4>
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h4 className="text-sm font-bold text-slate-800">Hạn Mức &amp; Định Lượng Tài Nguyên Hệ Thống</h4>
+                <span className="text-xs text-slate-500">
+                  {licenseInfo?.plan_code === 'TRIAL_2M' || licenseInfo?.isTrial 
+                    ? '⚠️ Bản Dùng Thử 2 Tháng (0đ): Hạn chế theo hạn ngạch trải nghiệm' 
+                    : !licenseInfo?.isDemo && !licenseInfo?.isExpired
+                    ? '✅ Bản Quyền Chính Thức: Mở khóa toàn diện không giới hạn'
+                    : '⚠️ Bản dùng thử đã hết hạn: Đang ở chế độ giới hạn nghiêm ngặt'}
+                </span>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
                   {
                     label: 'Tài sản & Thiết bị',
-                    current: licenseInfo?.limits?.assets?.current ?? '...',
-                    max: licenseInfo?.limits?.assets?.max ?? (licenseInfo?.isDemo ? 5 : '∞'),
+                    current: licenseInfo?.limits?.assets?.current ?? 0,
+                    max: (!licenseInfo?.isTrial && !licenseInfo?.isDemo && !licenseInfo?.isExpired && licenseInfo?.plan_code !== 'TRIAL_2M')
+                      ? '∞' 
+                      : (licenseInfo?.limits?.assets?.max ?? (licenseInfo?.isTrial ? 20 : 5)),
+                    trialMax: 20,
                     desc: 'Máy tính, laptop, màn hình...'
                   },
                   {
                     label: 'Nhân sự & Người dùng',
-                    current: licenseInfo?.limits?.users?.current ?? '...',
-                    max: licenseInfo?.limits?.users?.max ?? (licenseInfo?.isDemo ? 4 : '∞'),
+                    current: licenseInfo?.limits?.users?.current ?? 0,
+                    max: (!licenseInfo?.isTrial && !licenseInfo?.isDemo && !licenseInfo?.isExpired && licenseInfo?.plan_code !== 'TRIAL_2M')
+                      ? '∞' 
+                      : (licenseInfo?.limits?.users?.max ?? (licenseInfo?.isTrial ? 3 : 2)),
+                    trialMax: 3,
                     desc: 'Tài khoản nhân viên công ty'
                   },
                   {
                     label: 'Hợp đồng & Biên bản',
-                    current: licenseInfo?.limits?.contracts?.current ?? '...',
-                    max: licenseInfo?.limits?.contracts?.max ?? (licenseInfo?.isDemo ? 3 : '∞'),
+                    current: licenseInfo?.limits?.contracts?.current ?? 0,
+                    max: (!licenseInfo?.isTrial && !licenseInfo?.isDemo && !licenseInfo?.isExpired && licenseInfo?.plan_code !== 'TRIAL_2M')
+                      ? '∞' 
+                      : (licenseInfo?.limits?.contracts?.max ?? (licenseInfo?.isTrial ? 5 : 2)),
+                    trialMax: 5,
                     desc: 'Hợp đồng & biên bản giao nhận'
                   },
                   {
                     label: 'Giao dịch Thu / Chi',
-                    current: licenseInfo?.limits?.finance?.current ?? '...',
-                    max: licenseInfo?.limits?.finance?.max ?? (licenseInfo?.isDemo ? 5 : '∞'),
+                    current: licenseInfo?.limits?.finance?.current ?? 0,
+                    max: (!licenseInfo?.isTrial && !licenseInfo?.isDemo && !licenseInfo?.isExpired && licenseInfo?.plan_code !== 'TRIAL_2M')
+                      ? '∞' 
+                      : (licenseInfo?.limits?.finance?.max ?? (licenseInfo?.isTrial ? 10 : 5)),
+                    trialMax: 10,
                     desc: 'Phiếu thu, chi và hóa đơn'
                   }
                 ].map((item, idx) => {
-                  const isMax = licenseInfo?.isDemo && Number(item.current) >= Number(item.max);
+                  const isPaid = !licenseInfo?.isTrial && !licenseInfo?.isDemo && !licenseInfo?.isExpired && licenseInfo?.plan_code !== 'TRIAL_2M';
+                  const isMax = !isPaid && item.max !== '∞' && Number(item.current) >= Number(item.max);
                   return (
                     <div 
                       key={idx}
                       className={`p-4 rounded-2xl bg-white border shadow-soft transition-all ${
-                        isMax ? 'border-rose-300 ring-1 ring-rose-200' : 'border-pastel-200/90'
+                        isMax ? 'border-rose-300 ring-1 ring-rose-200' : 'border-slate-200'
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-slate-600">{item.label}</span>
-                        {licenseInfo?.isDemo ? (
+                        {isPaid ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                            Vô hạn (∞)
+                          </span>
+                        ) : licenseInfo?.isTrial || licenseInfo?.plan_code === 'TRIAL_2M' ? (
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            isMax ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'
+                            isMax ? 'bg-rose-100 text-rose-700 font-extrabold' : 'bg-amber-100 text-amber-900'
                           }`}>
-                            {isMax ? 'Đã chạm trần' : 'Demo'}
+                            {isMax ? 'Đã chạm trần' : 'Dùng thử'}
                           </span>
                         ) : (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                            Vô hạn
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                            Hết hạn
                           </span>
                         )}
                       </div>

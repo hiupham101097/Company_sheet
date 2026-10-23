@@ -1655,14 +1655,17 @@ app.get('/api/assets', async (c) => {
 app.post('/api/assets', async (c) => {
   try {
     const { companyId } = await getTenantContext(c);
-    const license = await getLicenseStatus(c.env.DB);
-    if (license.isDemo) {
+    const license = await getLicenseStatus(c.env.DB, companyId);
+    if (!license.isPaid) {
+      const maxAllowed = license.limits?.maxAssets || 20;
       const count = (await c.env.DB.prepare('SELECT count(*) as count FROM assets WHERE company_id = ?').bind(companyId).first())?.count || 0;
-      if (count >= 5) {
+      if (count >= maxAllowed) {
         return c.json({
           success: false,
           code: 'LICENSE_LIMIT_REACHED',
-          message: 'Bản Dùng Thử (Demo) giới hạn tối đa 5 tài sản. Vui lòng kích hoạt Bản Quyền Doanh Nghiệp (Enterprise) để thêm tài sản không giới hạn!'
+          message: license.isTrial
+            ? `Bản Dùng Thử 2 Tháng (0đ) giới hạn tối đa ${maxAllowed} tài sản. Bạn đã dùng hết ${count}/${maxAllowed} tài sản. Vui lòng nâng cấp lên Gói Bản Quyền Chính Thức để quản lý tài sản không giới hạn!`
+            : `Gói dùng thử đã hết hạn (giới hạn tối đa ${maxAllowed} tài sản). Vui lòng thanh toán kích hoạt bản quyền để tiếp tục thêm tài sản!`
         }, 403);
       }
     }
@@ -2059,14 +2062,17 @@ app.post('/api/contracts', async (c) => {
   try {
     await initContractColumns(c.env.DB);
     const { companyId } = await getTenantContext(c);
-    const license = await getLicenseStatus(c.env.DB);
-    if (license.isDemo) {
+    const license = await getLicenseStatus(c.env.DB, companyId);
+    if (!license.isPaid) {
+      const maxAllowed = license.limits?.maxContracts || 5;
       const count = (await c.env.DB.prepare('SELECT count(*) as count FROM contracts WHERE company_id = ?').bind(companyId).first())?.count || 0;
-      if (count >= 3) {
+      if (count >= maxAllowed) {
         return c.json({
           success: false,
           code: 'LICENSE_LIMIT_REACHED',
-          message: 'Bản Dùng Thử (Demo) giới hạn tối đa 3 hợp đồng. Vui lòng kích hoạt Bản Quyền Doanh Nghiệp để lưu trữ không giới hạn!'
+          message: license.isTrial
+            ? `Bản Dùng Thử 2 Tháng (0đ) giới hạn tối đa ${maxAllowed} hợp đồng. Bạn đã tạo đủ ${count}/${maxAllowed} hợp đồng. Vui lòng nâng cấp lên Gói Bản Quyền Chính Thức để quản lý hợp đồng không giới hạn!`
+            : `Gói dùng thử đã hết hạn (giới hạn tối đa ${maxAllowed} hợp đồng). Vui lòng thanh toán nâng cấp bản quyền để tiếp tục lưu trữ hợp đồng!`
         }, 403);
       }
     }
@@ -2243,6 +2249,21 @@ app.get('/api/contracts/handover/list', async (c) => {
 app.post('/api/contracts/handover/create', async (c) => {
   try {
     const { companyId } = await getTenantContext(c);
+    const license = await getLicenseStatus(c.env.DB, companyId);
+    if (!license.isPaid) {
+      const maxAllowed = license.limits?.maxHandovers || 5;
+      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM handover_protocols WHERE company_id = ?').bind(companyId).first())?.count || 0;
+      if (count >= maxAllowed) {
+        return c.json({
+          success: false,
+          code: 'LICENSE_LIMIT_REACHED',
+          message: license.isTrial
+            ? `Bản Dùng Thử 2 Tháng (0đ) giới hạn tối đa ${maxAllowed} biên bản bàn giao. Bạn đã tạo đủ ${count}/${maxAllowed} biên bản. Vui lòng nâng cấp lên Gói Bản Quyền Chính Thức để quản lý biên bản không giới hạn!`
+            : `Gói dùng thử đã hết hạn (giới hạn tối đa ${maxAllowed} biên bản). Vui lòng thanh toán bản quyền để tiếp tục tạo biên bản bàn giao!`
+        }, 403);
+      }
+    }
+
     const body = await c.req.json();
     const id = `bb_${Date.now()}`;
     const code = body.code || `BBBG-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
@@ -2952,6 +2973,21 @@ app.post('/api/users', async (c) => {
 
     const { companyId } = await getTenantContext(c);
 
+    const license = await getLicenseStatus(c.env.DB, companyId);
+    if (!license.isPaid) {
+      const maxAllowed = license.limits?.maxUsers || 3;
+      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM users WHERE company_id = ?').bind(companyId).first())?.count || 0;
+      if (count >= maxAllowed) {
+        return c.json({
+          success: false,
+          code: 'LICENSE_LIMIT_REACHED',
+          message: license.isTrial
+            ? `Bản Dùng Thử 2 Tháng (0đ) giới hạn tối đa ${maxAllowed} tài khoản nhân sự. Bạn đã tạo đủ ${count}/${maxAllowed} tài khoản. Vui lòng nâng cấp lên Gói Bản Quyền Chính Thức để tạo nhân sự không giới hạn!`
+            : `Gói cước dùng thử đã hết hạn (giới hạn tối đa ${maxAllowed} nhân sự). Vui lòng thanh toán nâng cấp gói để tiếp tục thêm nhân viên!`
+        }, 403);
+      }
+    }
+
     const body = await c.req.json();
     const id = `usr_${Date.now()}`;
     await c.env.DB.prepare(`
@@ -3312,24 +3348,106 @@ async function initSettingsTable(db) {
   }
 }
 
-// Helper: Query license status from DB
-async function getLicenseStatus(db) {
+// Helper: Query license status from DB for a specific company tenant
+async function getLicenseStatus(db, companyId) {
   try {
-    const res = await db.prepare('SELECT key, value FROM system_settings WHERE key IN ("license_tier", "license_key", "license_status", "license_activated_at", "company_name")').all();
-    const map = {};
-    (res.results || []).forEach((r) => { map[r.key] = r.value; });
+    let tenant = null;
+    if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      tenant = await db
+        .prepare('SELECT id, company_name, plan_code, license_status, start_date, expire_date FROM company_tenants WHERE id = ?')
+        .bind(companyId)
+        .first()
+        .catch(() => null);
+    }
+
+    const planCode = tenant?.plan_code || 'TRIAL_2M';
+    let licenseStatus = tenant?.license_status || 'ACTIVE';
+    const expireDate = tenant?.expire_date || null;
+    const companyName = tenant?.company_name || 'Doanh Nghiệp';
+
+    let isExpired = false;
+    let daysRemaining = null;
+
+    if (planCode === 'LIFETIME') {
+      isExpired = false;
+      daysRemaining = null;
+    } else if (expireDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const exp = new Date(expireDate);
+      exp.setHours(0, 0, 0, 0);
+      const diffMs = exp.getTime() - today.getTime();
+      daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (daysRemaining < 0 || licenseStatus === 'EXPIRED') {
+        isExpired = true;
+        licenseStatus = 'EXPIRED';
+      }
+    }
+
+    const isPaid = !isExpired && (planCode === 'ANNUAL_1Y' || planCode === 'ANNUAL_2Y' || planCode === 'LIFETIME');
+    const isTrial = !isExpired && planCode === 'TRIAL_2M';
+    const isDemo = isExpired || planCode === 'DEMO';
+
+    const maxAssets = isPaid ? Infinity : (isTrial ? 20 : 5);
+    const maxUsers = isPaid ? Infinity : (isTrial ? 3 : 2);
+    const maxContracts = isPaid ? Infinity : (isTrial ? 5 : 2);
+    const maxHandovers = isPaid ? Infinity : (isTrial ? 5 : 2);
+    const maxFinance = isPaid ? Infinity : (isTrial ? 10 : 5);
+    const maxDepartments = isPaid ? Infinity : (isTrial ? 1 : 1);
+
     return {
-      tier: 'ENTERPRISE',
-      isDemo: false,
-      key: map.license_key || 'OMNIASSETS-ENTERPRISE-UNLIMITED',
-      status: 'ACTIVE',
-      activatedAt: map.license_activated_at || new Date().toISOString(),
-      organization: map.company_name || 'Doanh Nghiệp',
-      company_name: map.company_name || '',
-      companyName: map.company_name || ''
+      tier: isPaid ? 'ENTERPRISE' : (isTrial ? 'TRIAL' : 'DEMO'),
+      isTrial,
+      isPaid,
+      isDemo,
+      isExpired,
+      plan_code: planCode,
+      status: licenseStatus,
+      expire_date: expireDate,
+      days_remaining: daysRemaining,
+      company_name: companyName,
+      companyName: companyName,
+      limits: {
+        maxAssets,
+        maxUsers,
+        maxContracts,
+        maxHandovers,
+        maxFinance,
+        maxDepartments,
+        allowAutomatedEmails: isPaid,
+        allowTelegram: isPaid,
+        allowCustomStamp: isPaid,
+        unwatermarkedPrint: isPaid,
+        allowAdvancedBackup: isPaid
+      }
     };
-  } catch {
-    return { tier: 'ENTERPRISE', isDemo: false, key: 'OMNIASSETS-ENTERPRISE-UNLIMITED', status: 'ACTIVE', activatedAt: null, organization: 'Doanh Nghiệp', company_name: '', companyName: '' };
+  } catch (err) {
+    return {
+      tier: 'TRIAL',
+      isTrial: true,
+      isPaid: false,
+      isDemo: false,
+      isExpired: false,
+      plan_code: 'TRIAL_2M',
+      status: 'ACTIVE',
+      expire_date: null,
+      days_remaining: 60,
+      company_name: 'Doanh Nghiệp',
+      companyName: 'Doanh Nghiệp',
+      limits: {
+        maxAssets: 20,
+        maxUsers: 3,
+        maxContracts: 5,
+        maxHandovers: 5,
+        maxFinance: 10,
+        maxDepartments: 1,
+        allowAutomatedEmails: false,
+        allowTelegram: false,
+        allowCustomStamp: false,
+        unwatermarkedPrint: false,
+        allowAdvancedBackup: false
+      }
+    };
   }
 }
 
@@ -3545,21 +3663,25 @@ app.get('/api/license/status', async (c) => {
     let tier = 'TRIAL';
     let isDemo = isExpired || planCode === 'DEMO';
 
+    const isPaid = !isDemo && !isExpired && (planCode === 'ANNUAL_1Y' || planCode === 'ANNUAL_2Y' || planCode === 'LIFETIME');
+    isTrial = !isDemo && !isExpired && planCode === 'TRIAL_2M';
+
     if (planCode === 'TRIAL_2M') {
       planName = 'Gói Dùng Thử 2 Tháng (Trial 60 Ngày)';
-      badge = 'Dùng Thử 60 Ngày';
+      badge = 'Dùng Thử 0đ (Hạn Chế Quyền)';
       tier = 'TRIAL';
-      isTrial = true;
     } else if (planCode === 'ANNUAL_1Y') {
       planName = 'Gói Tiêu Chuẩn 1 Năm';
       badge = 'Gói 1 Năm';
       tier = 'ANNUAL';
-      isTrial = false;
+    } else if (planCode === 'ANNUAL_2Y') {
+      planName = 'Gói Tiết Kiệm 2 Năm';
+      badge = 'Gói 2 Năm';
+      tier = 'ANNUAL';
     } else if (planCode === 'LIFETIME') {
       planName = 'Gói Vĩnh Viễn Trọn Đời';
       badge = 'Vĩnh Viễn (∞)';
       tier = 'ENTERPRISE';
-      isTrial = false;
       isDemo = false;
     } else {
       const planRow = await c.env.DB
@@ -3571,7 +3693,6 @@ app.get('/api/license/status', async (c) => {
         planName = planRow.name;
         badge = planRow.badge || planCode;
       }
-      isTrial = false;
     }
 
     // Lấy key đã lưu (nếu có)
@@ -3581,14 +3702,19 @@ app.get('/api/license/status', async (c) => {
       .first()
       .catch(() => null);
 
-    const [assetsCount, usersCount, contractsCount, financeCount] = await Promise.all([
+    const [assetsCount, usersCount, contractsCount, financeCount, deptsCount] = await Promise.all([
       c.env.DB.prepare('SELECT count(*) as count FROM assets WHERE company_id = ?').bind(companyId).first().catch(() => ({ count: 0 })),
       c.env.DB.prepare('SELECT count(*) as count FROM users WHERE company_id = ?').bind(companyId).first().catch(() => ({ count: 0 })),
       c.env.DB.prepare('SELECT count(*) as count FROM contracts WHERE company_id = ?').bind(companyId).first().catch(() => ({ count: 0 })),
       c.env.DB.prepare('SELECT count(*) as count FROM finance WHERE company_id = ?').bind(companyId).first().catch(() => ({ count: 0 })),
+      c.env.DB.prepare('SELECT count(*) as count FROM categories WHERE company_id = ? AND type = "DEPARTMENT"').bind(companyId).first().catch(() => ({ count: 0 }))
     ]);
 
-    const isUnlimited = !isDemo && (planCode === 'TRIAL_2M' || planCode === 'ANNUAL_1Y' || planCode === 'LIFETIME');
+    const maxAssets = isPaid ? 'UNLIMITED' : (isTrial ? 20 : 5);
+    const maxUsers = isPaid ? 'UNLIMITED' : (isTrial ? 3 : 2);
+    const maxContracts = isPaid ? 'UNLIMITED' : (isTrial ? 5 : 2);
+    const maxFinance = isPaid ? 'UNLIMITED' : (isTrial ? 10 : 5);
+    const maxDepartments = isPaid ? 'UNLIMITED' : 1;
 
     return c.json({
       success: true,
@@ -3596,6 +3722,7 @@ app.get('/api/license/status', async (c) => {
         tier,
         isDemo,
         isTrial,
+        isPaid,
         isExpired,
         status: licenseStatus,
         plan_code: planCode,
@@ -3610,12 +3737,17 @@ app.get('/api/license/status', async (c) => {
         organization: companyName,
         key: keyRecord?.value || (planCode === 'TRIAL_2M' ? 'TRIAL-60-DAYS' : planCode === 'LIFETIME' ? 'OMNI-LIFETIME' : ''),
         limits: {
-          assets: { current: assetsCount?.count || 0, max: isUnlimited ? 'UNLIMITED' : 5 },
-          users: { current: usersCount?.count || 0, max: isUnlimited ? 'UNLIMITED' : 4 },
-          contracts: { current: contractsCount?.count || 0, max: isUnlimited ? 'UNLIMITED' : 3 },
-          finance: { current: financeCount?.count || 0, max: isUnlimited ? 'UNLIMITED' : 5 },
-          excelExport: isUnlimited,
-          unwatermarkedPrint: isUnlimited
+          assets: { current: assetsCount?.count || 0, max: maxAssets },
+          users: { current: usersCount?.count || 0, max: maxUsers },
+          contracts: { current: contractsCount?.count || 0, max: maxContracts },
+          finance: { current: financeCount?.count || 0, max: maxFinance },
+          departments: { current: deptsCount?.count || 1, max: maxDepartments },
+          excelExport: !isDemo,
+          unwatermarkedPrint: isPaid,
+          allowAutomatedEmails: isPaid,
+          allowTelegram: isPaid,
+          allowCustomStamp: isPaid,
+          allowAdvancedBackup: isPaid
         }
       }
     });
@@ -5298,9 +5430,92 @@ app.delete('/api/super-admin/companies/:id', async (c) => {
   }
 });
 
+async function initPricingPlansTable(db) {
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS pricing_plans (
+        id TEXT PRIMARY KEY,
+        code TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        duration_months INTEGER DEFAULT 1,
+        price REAL DEFAULT 0,
+        features TEXT,
+        badge TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run().catch(() => {});
+
+    // Đảm bảo có Gói Dùng Thử 2 Tháng (TRIAL_2M)
+    const trialPlan = await db.prepare('SELECT id FROM pricing_plans WHERE code = "TRIAL_2M"').first().catch(() => null);
+    if (!trialPlan) {
+      await db.prepare(`
+        INSERT OR IGNORE INTO pricing_plans (id, code, name, duration_months, price, features, badge, is_active, created_at)
+        VALUES ('plan_trial_2m', 'TRIAL_2M', 'Gói Dùng Thử 2 Tháng (60 Ngày)', 2, 0, ?, 'Dùng Thử 0đ (Hạn Chế Quyền)', 1, datetime('now'))
+      `).bind(JSON.stringify([
+        'Trải nghiệm dùng thử toàn diện 60 ngày',
+        'Giới hạn tối đa 20 tài sản thiết bị',
+        'Giới hạn tối đa 3 tài khoản nhân sự (1 Quản trị + 2 Nhân viên)',
+        'Giới hạn tối đa 5 hợp đồng & 5 biên bản bàn giao',
+        'Cố định 1 phòng ban vận hành',
+        'Xuất Excel cơ bản, in ấn có watermark thử nghiệm',
+        'Khóa tự động gửi Email & Telegram'
+      ])).run().catch(() => {});
+    }
+
+    const annual1y = await db.prepare('SELECT id FROM pricing_plans WHERE code = "ANNUAL_1Y"').first().catch(() => null);
+    if (!annual1y) {
+      await db.prepare(`
+        INSERT OR IGNORE INTO pricing_plans (id, code, name, duration_months, price, features, badge, is_active, created_at)
+        VALUES ('plan_annual_1y', 'ANNUAL_1Y', 'Gói Tiêu Chuẩn 1 Năm', 12, 4800000, ?, 'Phổ biến nhất', 1, datetime('now'))
+      `).bind(JSON.stringify([
+        'Không giới hạn số lượng tài sản thiết bị (Unlimited)',
+        'Không giới hạn tài khoản nhân viên & toàn bộ phòng ban',
+        'Không giới hạn hợp đồng & biên bản bàn giao',
+        'In biên bản A4 chuẩn đóng mộc dấu sắc nét, không watermark',
+        'Xuất dữ liệu Excel / CSV toàn diện',
+        'Tự động gửi email 6:00 AM & thông báo giao việc',
+        'Trợ lý AI OMNI-Bot Gemini 24/7',
+        'Lưu trữ Cloudflare D1 độ tin cậy cao'
+      ])).run().catch(() => {});
+    }
+
+    const annual2y = await db.prepare('SELECT id FROM pricing_plans WHERE code = "ANNUAL_2Y"').first().catch(() => null);
+    if (!annual2y) {
+      await db.prepare(`
+        INSERT OR IGNORE INTO pricing_plans (id, code, name, duration_months, price, features, badge, is_active, created_at)
+        VALUES ('plan_annual_2y', 'ANNUAL_2Y', 'Gói Tiết Kiệm 2 Năm', 24, 8800000, ?, 'Tiết kiệm 800.000đ', 1, datetime('now'))
+      `).bind(JSON.stringify([
+        'Toàn bộ đặc quyền của gói 1 Năm',
+        'Thời hạn sử dụng 24 tháng liên tục',
+        'Tiết kiệm 800.000đ so với gia hạn từng năm',
+        'Ưu tiên hỗ trợ kỹ thuật và sao lưu dữ liệu riêng',
+        'Bảo hành & nâng cấp tính năng tự động miễn phí'
+      ])).run().catch(() => {});
+    }
+
+    const lifetime = await db.prepare('SELECT id FROM pricing_plans WHERE code = "LIFETIME"').first().catch(() => null);
+    if (!lifetime) {
+      await db.prepare(`
+        INSERT OR IGNORE INTO pricing_plans (id, code, name, duration_months, price, features, badge, is_active, created_at)
+        VALUES ('plan_lifetime', 'LIFETIME', 'Gói Vĩnh Viễn Trọn Đời', 999, 12500000, ?, 'Khuyên Dùng • VIP', 1, datetime('now'))
+      `).bind(JSON.stringify([
+        'Sở hữu vĩnh viễn trọn đời (Lifetime License)',
+        'Không bao giờ phát sinh chi phí duy trì hàng năm',
+        'Mở khóa toàn bộ 100% tính năng và bản cập nhật mới',
+        'Kênh hỗ trợ VIP 1-1 riêng với đội ngũ kỹ thuật',
+        'Xuất hóa đơn VAT điện tử doanh nghiệp đầy đủ'
+      ])).run().catch(() => {});
+    }
+  } catch (err) {
+    console.error('Error initPricingPlansTable:', err);
+  }
+}
+
 // 6. Quản lý danh sách Gói Cước (Pricing Plans)
 app.get('/api/super-admin/plans', async (c) => {
   try {
+    await initPricingPlansTable(c.env.DB);
     const plans = await c.env.DB.prepare('SELECT * FROM pricing_plans ORDER BY price ASC').all();
     return c.json({
       success: true,
