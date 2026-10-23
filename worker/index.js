@@ -1109,12 +1109,22 @@ app.post('/api/auth/login', async (c) => {
       return c.json({ success: false, message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Quản trị viên hệ thống.' }, 403);
     }
 
-    // Default company_id if missing
-    if (!user.company_id) {
-      user.company_id = user.role === 'SUPER_ADMIN' ? 'SYSTEM' : 'comp_1';
-    }
+    // Đảm bảo tuyệt đối: Tài khoản adminManager@gmail.com luôn là Quản Trị Nền Tảng Tối Cao (SUPER_ADMIN)
+    if (cleanAccount === 'adminmanager@gmail.com' || user.role === 'SUPER_ADMIN') {
+      user.role = 'SUPER_ADMIN';
+      user.company_id = 'SYSTEM';
+      user.company_name = 'Hệ Thống Quản Trị Nền Tảng (Master)';
+      // Tự động đồng bộ chuẩn hóa role trong bảng users nếu trước đó bị gán nhầm ADMIN
+      c.env.DB.prepare("UPDATE users SET role = 'SUPER_ADMIN', company_id = 'SYSTEM' WHERE lower(email) = ?")
+        .bind(cleanAccount)
+        .run()
+        .catch(() => {});
+    } else {
+      // Default company_id if missing for regular enterprise users
+      if (!user.company_id) {
+        user.company_id = 'comp_1';
+      }
 
-    if (user.company_id && user.company_id !== 'SYSTEM') {
       const compTenant = await c.env.DB
         .prepare('SELECT company_name, plan_code, license_status FROM company_tenants WHERE id = ?')
         .bind(user.company_id)
@@ -1123,8 +1133,6 @@ app.post('/api/auth/login', async (c) => {
       user.company_name = compTenant?.company_name || 'OMNI ASSETS';
       user.plan_code = compTenant?.plan_code || 'TRIAL_2M';
       user.license_status = compTenant?.license_status || 'ACTIVE';
-    } else {
-      user.company_name = 'Hệ Thống Quản Trị Nền Tảng (Master)';
     }
 
     return c.json({

@@ -41,7 +41,12 @@ import {
   Phone,
   Inbox,
   XCircle,
-  Filter
+  Filter,
+  Settings,
+  Database,
+  Shield,
+  Server,
+  Cpu
 } from 'lucide-react';
 import { Modal } from '../Common/Modal';
 import { Badge } from '../Common/Badge';
@@ -119,6 +124,22 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
   const [replyResult, setReplyResult] = useState(null);
   const [ticketSearchTerm, setTicketSearchTerm] = useState('');
   const [ticketFilterStatus, setTicketFilterStatus] = useState('ALL'); // 'ALL' | 'PENDING' | 'REPLIED'
+
+  // Super Admin Core Platform & Infrastructure Settings States
+  const [coreSettings, setCoreSettings] = useState({
+    mail_provider: 'resend',
+    mail_api_key: '',
+    mail_sender_name: 'OMNIASSETS Platform',
+    mail_sender_email: 'notifications@omniassets.ryug.id.vn',
+    mail_support_inbox: 'support@omniassets.ryug.id.vn',
+    mail_reply_to: 'support@omniassets.ryug.id.vn'
+  });
+  const [loadingCoreSettings, setLoadingCoreSettings] = useState(false);
+  const [savingCoreSettings, setSavingCoreSettings] = useState(false);
+  const [coreSettingsStatus, setCoreSettingsStatus] = useState(null);
+  const [testEmailLoading, setTestEmailLoading] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState(null);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   // Forms
   const [companyForm, setCompanyForm] = useState({
@@ -223,7 +244,66 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
     if (activeTab === 'support-desk') {
       fetchSupportTickets();
     }
+    if (activeTab === 'settings') {
+      loadCoreSettings();
+    }
   }, [activeTab]);
+
+  const loadCoreSettings = async () => {
+    try {
+      setLoadingCoreSettings(true);
+      const res = await api.getSettings();
+      if (res?.success && res.data?.settings) {
+        setCoreSettings(prev => ({
+          ...prev,
+          ...res.data.settings
+        }));
+      }
+    } catch (err) {
+      console.error('Lỗi tải cấu hình cốt lõi:', err);
+    } finally {
+      setLoadingCoreSettings(false);
+    }
+  };
+
+  const handleSaveCoreSettings = async (e) => {
+    if (e) e.preventDefault();
+    try {
+      setSavingCoreSettings(true);
+      setCoreSettingsStatus(null);
+      const res = await api.updateSettings(coreSettings);
+      if (res?.success) {
+        setCoreSettingsStatus({ type: 'success', text: 'Đã lưu cấu hình hạ tầng nền tảng & Resend Gateway thành công!' });
+        setTimeout(() => setCoreSettingsStatus(null), 3000);
+      } else {
+        setCoreSettingsStatus({ type: 'error', text: res?.message || 'Lỗi khi lưu cấu hình' });
+      }
+    } catch (err) {
+      setCoreSettingsStatus({ type: 'error', text: err.message || 'Lỗi kết nối máy chủ' });
+    } finally {
+      setSavingCoreSettings(false);
+    }
+  };
+
+  const handleTestResendEmail = async () => {
+    try {
+      setTestEmailLoading(true);
+      setTestEmailResult(null);
+      const res = await api.sendTestEmail({
+        email: currentUser?.email || 'adminManager@gmail.com',
+        senderType: 'notifications'
+      });
+      if (res?.success) {
+        setTestEmailResult({ type: 'success', text: `Đã gửi thư thử nghiệm thành công đến ${currentUser?.email || 'adminManager@gmail.com'} qua Resend API!` });
+      } else {
+        setTestEmailResult({ type: 'error', text: res?.message || 'Gửi thư thất bại' });
+      }
+    } catch (err) {
+      setTestEmailResult({ type: 'error', text: err.message || 'Lỗi khi gửi thư thử nghiệm' });
+    } finally {
+      setTestEmailLoading(false);
+    }
+  };
 
   const handleReplyTicket = async (e) => {
     if (e) e.preventDefault();
@@ -1129,6 +1209,18 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
               {pendingOrders.length} chờ duyệt
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+            activeTab === 'settings'
+              ? 'bg-purple-600 text-white shadow-soft'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Settings size={15} />
+          <span>Cài Đặt Cốt Lõi Hệ Thống</span>
         </button>
       </div>
 
@@ -3037,6 +3129,224 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* TAB 7: CÀI ĐẶT CỐT LÕI HỆ THỐNG & HẠ TẦNG NỀN TẢNG   */}
+      {/* ==================================================== */}
+      {activeTab === 'settings' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header Card */}
+          <div className="bg-gradient-to-r from-purple-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-lg border border-purple-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-purple-300 shrink-0">
+                <Settings size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                    Master Infrastructure Core
+                  </span>
+                  <span className="text-xs text-purple-200">
+                    Chỉ dành riêng cho Super Admin
+                  </span>
+                </div>
+                <h3 className="text-xl font-black mt-1">
+                  Cài Đặt Cốt Lõi Hệ Thống &amp; Cổng Email Nền Tảng
+                </h3>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={loadCoreSettings}
+                disabled={loadingCoreSettings}
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={loadingCoreSettings ? 'animate-spin' : ''} />
+                <span>Tải Lại</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Alert Message */}
+          {coreSettingsStatus && (
+            <div className={`p-4 rounded-2xl flex items-center gap-3 text-xs font-bold border ${
+              coreSettingsStatus.type === 'success'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : 'bg-rose-50 text-rose-800 border-rose-200'
+            }`}>
+              {coreSettingsStatus.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+              <span>{coreSettingsStatus.text}</span>
+            </div>
+          )}
+
+          {/* Form Cấu Hình Cổng Email Master */}
+          <form onSubmit={handleSaveCoreSettings} className="space-y-6">
+            <div className="bg-white p-6 rounded-3xl border border-pastel-200/80 shadow-soft space-y-5">
+              <div className="flex items-center justify-between border-b border-pastel-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Mail size={18} className="text-purple-600" />
+                  <h4 className="text-sm font-bold text-slate-800">
+                    1. Cổng Email Toàn Hệ Thống (Resend Master Gateway)
+                  </h4>
+                </div>
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Domain: omniassets.ryug.id.vn (DKIM/SPF Verified)
+                </span>
+              </div>
+
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Hạ tầng Resend API được quản trị tập trung tại đây. Mọi tính năng phát thông báo gói cước (Tab 6) và trả lời Ticket hỗ trợ khách hàng (Tab 5) đều sử dụng cổng Master này.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Nhà Cung Cấp Email Nền Tảng *
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value="Resend Mail API (Official Gateway)"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Resend API Key *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      value={coreSettings.mail_api_key || ''}
+                      onChange={(e) => setCoreSettings({ ...coreSettings, mail_api_key: e.target.value })}
+                      placeholder="re_xxxxxxxxxxxxxxxxxxxx"
+                      className="w-full pl-3.5 pr-10 py-2.5 text-xs rounded-xl bg-slate-50 border border-pastel-200 font-mono focus:ring-2 focus:ring-purple-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showApiKey ? <Lock size={14} /> : <Unlock size={14} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Hòm Thư Phát Thông Báo (Gói Cước &amp; Khuyến Mãi)
+                  </label>
+                  <input
+                    type="text"
+                    value={coreSettings.mail_sender_email || 'notifications@omniassets.ryug.id.vn'}
+                    onChange={(e) => setCoreSettings({ ...coreSettings, mail_sender_email: e.target.value })}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-pastel-200 font-mono text-purple-700 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Hòm Thư Tiếp Nhận Hỗ Trợ Khách Hàng (Support Desk)
+                  </label>
+                  <input
+                    type="text"
+                    value={coreSettings.mail_support_inbox || 'support@omniassets.ryug.id.vn'}
+                    onChange={(e) => setCoreSettings({ ...coreSettings, mail_support_inbox: e.target.value })}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-pastel-200 font-mono text-emerald-700 font-bold"
+                  />
+                </div>
+              </div>
+
+              {testEmailResult && (
+                <div className={`p-3 rounded-xl text-xs font-semibold border ${
+                  testEmailResult.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'
+                }`}>
+                  {testEmailResult.text}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-pastel-100">
+                <button
+                  type="button"
+                  onClick={handleTestResendEmail}
+                  disabled={testEmailLoading}
+                  className="px-4 py-2.5 rounded-xl border border-purple-300 text-purple-700 hover:bg-purple-50 text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Send size={13} className={testEmailLoading ? 'animate-spin' : ''} />
+                  <span>{testEmailLoading ? 'Đang gửi test...' : 'Gửi Email Thử Nghiệm'}</span>
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={savingCoreSettings}
+                  className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-soft transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <CheckCircle2 size={14} />
+                  <span>{savingCoreSettings ? 'Đang lưu...' : 'Lưu Cấu Hình Cổng Mail'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Hạ Tầng Cloudflare D1 & Worker */}
+            <div className="bg-white p-6 rounded-3xl border border-pastel-200/80 shadow-soft space-y-4">
+              <div className="flex items-center gap-2 border-b border-pastel-100 pb-3">
+                <Database size={18} className="text-indigo-600" />
+                <h4 className="text-sm font-bold text-slate-800">
+                  2. Hạ Tầng Cơ Sở Dữ Liệu Cloudflare D1 &amp; Worker
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="text-[10px] text-slate-400 uppercase font-bold">D1 Database Binding</div>
+                  <div className="text-xs font-mono font-bold text-indigo-700 mt-1">company_assets_db</div>
+                  <div className="text-[10px] text-emerald-600 font-bold mt-1">● Đang kết nối trực tiếp</div>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="text-[10px] text-slate-400 uppercase font-bold">Tự Động Quét Nhắc Hạn (Cron)</div>
+                  <div className="text-xs font-mono font-bold text-purple-700 mt-1">0 23 * * * (6:00 AM VN)</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Quét hạn việc &amp; gửi email mỗi sáng</div>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="text-[10px] text-slate-400 uppercase font-bold">Mô Hình Dữ Liệu Multi-Tenant</div>
+                  <div className="text-xs font-bold text-slate-800 mt-1">Cách ly 100% qua company_id</div>
+                  <div className="text-[10px] text-emerald-600 font-bold mt-1">● Bảo mật độc lập giữa các công ty</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tài Khoản Quản Trị Tối Cao */}
+            <div className="bg-white p-6 rounded-3xl border border-pastel-200/80 shadow-soft space-y-3">
+              <div className="flex items-center gap-2 border-b border-pastel-100 pb-3">
+                <Shield size={18} className="text-purple-600" />
+                <h4 className="text-sm font-bold text-slate-800">
+                  3. Tài Khoản Quản Trị Nền Tảng Tối Cao (Master Account)
+                </h4>
+              </div>
+
+              <div className="p-4 bg-purple-50/50 rounded-2xl border border-purple-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-800">Tài khoản Master:</span>
+                    <strong className="font-mono text-purple-700 text-sm">adminManager@gmail.com</strong>
+                  </div>
+                  <p className="text-slate-500 mt-1 leading-relaxed">
+                    Vai trò: <strong>SUPER_ADMIN</strong>. Quản trị hệ thống, duyệt doanh nghiệp, tạo key, quản trị gói cước, theo dõi doanh thu và cấu hình Resend. Hoàn toàn không tham gia vào các nghiệp vụ nội bộ (như chấm công, bàn giao tài sản, biên bản) của từng doanh nghiệp cụ thể.
+                  </p>
+                </div>
+                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-purple-600 text-white shrink-0">
+                  SUPER_ADMIN
+                </span>
+              </div>
+            </div>
+          </form>
         </div>
       )}
 

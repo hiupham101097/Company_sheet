@@ -97,8 +97,14 @@ export function Login({ onLoginSuccess }) {
     try {
       const res = await api.login({ email, password });
       if (res.success && res.data?.user) {
-        localStorage.setItem('currentUser', JSON.stringify(res.data.user));
-        if (onLoginSuccess) onLoginSuccess(res.data.user);
+        const u = { ...res.data.user };
+        if (u.email?.toLowerCase() === 'adminmanager@gmail.com') {
+          u.role = 'SUPER_ADMIN';
+          u.company_id = 'SYSTEM';
+          u.company_name = 'Hệ Thống Quản Trị Nền Tảng (Master)';
+        }
+        localStorage.setItem('currentUser', JSON.stringify(u));
+        if (onLoginSuccess) onLoginSuccess(u);
       } else {
         setError(res.message || 'Đăng nhập không thành công');
       }

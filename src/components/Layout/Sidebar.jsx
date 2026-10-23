@@ -330,7 +330,7 @@ export function Sidebar({
         </div>
 
         {/* User Personal Profile Quick Button */}
-        <div className="p-3 border-t border-pastel-100 bg-surface-subtle/30 space-y-2">
+        <div className="p-3 border-t border-pastel-100 bg-surface-subtle/30">
           <button
             onClick={() => {
               if (onOpenProfile) onOpenProfile();
@@ -346,36 +346,6 @@ export function Sidebar({
               <p className="text-[10px] text-slate-400 truncate">Hồ sơ & Đổi mật khẩu</p>
             </div>
           </button>
-
-          {/* Quick Settings & System Info at bottom */}
-          {(userRole === 'ADMIN' || userRole === 'MANAGER') && (
-            <button
-              onClick={() => handleSelectTab('settings')}
-              className={`w-full p-2.5 rounded-xl border flex items-center gap-3 transition-all text-left ${
-                currentTab === 'settings'
-                  ? 'bg-pastel-500 text-white border-pastel-500 shadow-soft'
-                  : 'bg-white border-pastel-200/90 text-slate-700 hover:bg-pastel-50/70 hover:border-pastel-300 shadow-xs'
-              }`}
-            >
-              <div
-                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                  currentTab === 'settings' ? 'bg-white/20 text-white' : 'bg-pastel-100 text-pastel-700'
-                }`}
-              >
-                <Settings size={16} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold leading-tight truncate">Cài Đặt Hệ Thống</p>
-                <p
-                  className={`text-[10px] truncate ${
-                    currentTab === 'settings' ? 'text-pastel-100' : 'text-slate-400'
-                  }`}
-                >
-                  Chấm công & Trang web
-                </p>
-              </div>
-            </button>
-          )}
         </div>
       </aside>
     </>

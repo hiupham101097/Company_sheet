@@ -24,7 +24,13 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('currentUser');
-      return saved ? JSON.parse(saved) : null;
+      const u = saved ? JSON.parse(saved) : null;
+      if (u && (u.email?.toLowerCase() === 'adminmanager@gmail.com' || u.role === 'SUPER_ADMIN')) {
+        u.role = 'SUPER_ADMIN';
+        u.company_id = 'SYSTEM';
+        u.company_name = 'Hệ Thống Quản Trị Nền Tảng (Master)';
+      }
+      return u;
     } catch {
       return null;
     }
@@ -34,8 +40,9 @@ export default function App() {
     try {
       const saved = localStorage.getItem('currentUser');
       const u = saved ? JSON.parse(saved) : null;
-      if (u?.role === 'SUPER_ADMIN') {
-        const fromPath = getTabFromPath(window.location.pathname, u?.role);
+      const isSuper = u && (u.email?.toLowerCase() === 'adminmanager@gmail.com' || u.role === 'SUPER_ADMIN');
+      if (isSuper) {
+        const fromPath = getTabFromPath(window.location.pathname, 'SUPER_ADMIN');
         return ['overview', 'companies', 'keys', 'plans', 'support-desk', 'announcements', 'revenue', 'settings'].includes(fromPath) ? fromPath : 'overview';
       }
 
@@ -72,9 +79,13 @@ export default function App() {
   const [users, setUsers] = useState([]);
   const [companySettings, setCompanySettings] = useState({});
 
-  // Tải dữ liệu toàn bộ hệ thống từ Cloudflare D1
+  // Tải dữ liệu toàn bộ hệ thống từ Cloudflare D1 (Dành riêng cho Doanh Nghiệp)
   const loadAllData = async () => {
     if (!currentUser) return;
+    if (currentUser?.role === 'SUPER_ADMIN') {
+      // Tài khoản Quản trị nền tảng (Master) quản lý hệ thống tổng thể, không tải dữ liệu vận hành cá thể của doanh nghiệp
+      return;
+    }
     try {
       setLoading(true);
       const [
@@ -229,24 +240,11 @@ export default function App() {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
           {currentUser?.role === 'SUPER_ADMIN' ? (
-            currentTab === 'settings' ? (
-              <SettingsManager
-                users={users}
-                currentUser={currentUser}
-                userRole={currentUser?.role || 'SUPER_ADMIN'}
-                companySettings={companySettings}
-                onRefresh={loadAllData}
-                licenseInfo={licenseInfo}
-                onOpenUpgrade={handleOpenUpgrade}
-                onNavigate={setCurrentTab}
-              />
-            ) : (
-              <SuperAdminPortal
-                currentUser={currentUser}
-                activeTab={['overview', 'companies', 'keys', 'plans', 'support-desk', 'announcements', 'revenue'].includes(currentTab) ? currentTab : 'overview'}
-                onNavigateTab={setCurrentTab}
-              />
-            )
+            <SuperAdminPortal
+              currentUser={currentUser}
+              activeTab={['overview', 'companies', 'keys', 'plans', 'support-desk', 'announcements', 'revenue', 'settings'].includes(currentTab) ? currentTab : 'overview'}
+              onNavigateTab={setCurrentTab}
+            />
           ) : loading && !summaryData ? (
             <div className="h-96 flex flex-col items-center justify-center gap-3 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-pastel-500" />
