@@ -180,20 +180,20 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
     try {
       setLoading(true);
       const [overRes, compRes, planRes, ordRes, keyRes, ticketRes] = await Promise.all([
-        api.getSuperAdminOverview(),
-        api.getSuperAdminCompanies(),
-        api.getSuperAdminPlans(),
-        api.getSuperAdminOrders(),
-        api.getSuperAdminKeys(),
+        api.getSuperAdminOverview().catch(() => ({ data: null })),
+        api.getSuperAdminCompanies().catch(() => ({ data: [] })),
+        api.getSuperAdminPlans().catch(() => ({ data: [] })),
+        api.getSuperAdminOrders().catch(() => ({ data: [] })),
+        api.getSuperAdminKeys().catch(() => ({ data: [] })),
         api.getSuperAdminSupportTickets().catch(() => ({ data: [] }))
       ]);
 
       setOverview(overRes?.data || null);
-      setCompanies(compRes?.data || []);
-      setPlans(planRes?.data || []);
-      setOrders(ordRes?.data || []);
-      setKeys(keyRes?.data || []);
-      setSupportTickets(ticketRes?.data || []);
+      setCompanies(Array.isArray(compRes?.data) ? compRes.data : []);
+      setPlans(Array.isArray(planRes?.data) ? planRes.data : []);
+      setOrders(Array.isArray(ordRes?.data) ? ordRes.data : []);
+      setKeys(Array.isArray(keyRes?.data) ? keyRes.data : []);
+      setSupportTickets(Array.isArray(ticketRes?.data) ? ticketRes.data : []);
     } catch (err) {
       console.error('Lỗi tải dữ liệu Quản trị Tổng:', err);
     } finally {
@@ -634,6 +634,30 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
     }
   };
 
+  // Lưu đơn hàng mới (Ghi nhận thu tiền bản quyền)
+  const handleSaveOrder = async (e) => {
+    if (e) e.preventDefault();
+    if (!orderForm.company_name?.trim()) {
+      alert('Vui lòng nhập tên doanh nghiệp!');
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await api.createSuperAdminOrder(orderForm);
+      if (res?.success) {
+        alert('Ghi nhận đơn hàng & thu tiền thành công!');
+        setIsOrderModalOpen(false);
+        fetchData();
+      } else {
+        alert(res?.message || 'Lỗi khi ghi nhận đơn hàng');
+      }
+    } catch (err) {
+      alert(err.message || 'Lỗi khi tạo đơn hàng');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Mở thư thông báo nền tảng cho đơn hàng
   const handleOpenAnnouncementForOrder = (ord) => {
     const comp = companies.find(c => c.id === ord.company_id || c.company_name === ord.company_name);
@@ -845,8 +869,13 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
     }
   };
 
+  // Danh sách mảng an toàn
+  const safeCompanies = Array.isArray(companies) ? companies : [];
+  const safeKeys = Array.isArray(keys) ? keys : [];
+  const safeOrders = Array.isArray(orders) ? orders : [];
+
   // Lọc danh sách công ty
-  const filteredCompanies = companies.filter((c) => {
+  const filteredCompanies = safeCompanies.filter((c) => {
     const matchSearch =
       c.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.admin_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -860,7 +889,7 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
   });
 
   // Lọc danh sách keys
-  const filteredKeys = keys.filter((k) => {
+  const filteredKeys = safeKeys.filter((k) => {
     const matchSearch =
       k.license_key?.toLowerCase().includes(searchKey.toLowerCase()) ||
       k.company_name?.toLowerCase().includes(searchKey.toLowerCase()) ||
@@ -871,13 +900,13 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
     return matchSearch && matchStatus;
   });
 
-  const pendingOrders = orders.filter((o) => o.payment_status === 'PENDING');
-  const paidOrders = orders.filter((o) => o.payment_status === 'PAID');
-  const cancelledOrders = orders.filter((o) => o.payment_status === 'CANCELLED');
+  const pendingOrders = safeOrders.filter((o) => o.payment_status === 'PENDING');
+  const paidOrders = safeOrders.filter((o) => o.payment_status === 'PAID');
+  const cancelledOrders = safeOrders.filter((o) => o.payment_status === 'CANCELLED');
   const totalPaidRevenue = paidOrders.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
 
   // Lọc danh sách đơn hàng
-  const filteredOrders = orders.filter((ord) => {
+  const filteredOrders = safeOrders.filter((ord) => {
     if (orderFilterStatus !== 'ALL' && ord.payment_status !== orderFilterStatus) return false;
     if (orderSearchTerm.trim()) {
       const term = orderSearchTerm.trim().toLowerCase();
@@ -890,20 +919,20 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
     return true;
   });
 
-  const calculatedTotalUsers = companies.reduce((acc, c) => acc + (Number(c.user_count) || 0), 0);
+  const calculatedTotalUsers = safeCompanies.reduce((acc, c) => acc + (Number(c.user_count) || 0), 0);
   const stats = {
-    totalCompanies: companies.length,
-    activeCompanies: companies.filter((c) => c.license_status === 'ACTIVE').length,
-    trialCompanies: companies.filter((c) => c.plan_code === 'TRIAL_2M').length,
-    expiredCompanies: companies.filter((c) => c.license_status === 'EXPIRED').length,
-    lockedCompanies: companies.filter((c) => c.license_status === 'LOCKED').length,
-    totalRevenue: totalPaidRevenue || companies.reduce((acc, c) => acc + (Number(c.revenue) || 0), 0),
-    totalOrders: orders.length,
+    totalCompanies: safeCompanies.length,
+    activeCompanies: safeCompanies.filter((c) => c.license_status === 'ACTIVE').length,
+    trialCompanies: safeCompanies.filter((c) => c.plan_code === 'TRIAL_2M').length,
+    expiredCompanies: safeCompanies.filter((c) => c.license_status === 'EXPIRED').length,
+    lockedCompanies: safeCompanies.filter((c) => c.license_status === 'LOCKED').length,
+    totalRevenue: totalPaidRevenue || safeCompanies.reduce((acc, c) => acc + (Number(c.revenue) || 0), 0),
+    totalOrders: safeOrders.length,
     pendingOrdersCount: pendingOrders.length,
     totalUsers: overview?.stats?.totalUsers || calculatedTotalUsers,
-    totalKeys: keys.length,
-    activeKeys: keys.filter((k) => k.status === 'ACTIVE').length,
-    usedKeys: keys.filter((k) => k.status === 'USED').length
+    totalKeys: safeKeys.length,
+    activeKeys: safeKeys.filter((k) => k.status === 'ACTIVE').length,
+    usedKeys: safeKeys.filter((k) => k.status === 'USED').length
   };
 
   return (
@@ -1264,14 +1293,14 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-pastel-100 text-xs">
-                  {companies.length === 0 ? (
+                  {safeCompanies.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-slate-400">
                         Chưa có dữ liệu doanh nghiệp.
                       </td>
                     </tr>
                   ) : (
-                    companies
+                    safeCompanies
                       .slice()
                       .sort((a, b) => (Number(b.user_count) || 0) - (Number(a.user_count) || 0))
                       .map((comp, idx) => (
