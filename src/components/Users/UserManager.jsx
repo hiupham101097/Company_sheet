@@ -15,11 +15,14 @@ import {
 import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
 import { api } from '../../services/api';
+import { hasPermission } from '../../utils/permissionHelper';
 
 export function UserManager({ 
   users = [], 
   onRefresh, 
   userRole = 'ADMIN',
+  currentUser,
+  companySettings,
   licenseInfo,
   onOpenUpgrade
 }) {
@@ -36,6 +39,11 @@ export function UserManager({
     phone: '',
   });
 
+  const canView = hasPermission(currentUser, companySettings, 'users_view') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canCreate = hasPermission(currentUser, companySettings, 'users_create') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canEdit = hasPermission(currentUser, companySettings, 'users_edit') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canLock = hasPermission(currentUser, companySettings, 'users_lock') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+
   useEffect(() => {
     api.getCategories('DEPARTMENT')
       .then((res) => {
@@ -48,15 +56,15 @@ export function UserManager({
       .catch((err) => console.error('Error fetching departments:', err));
   }, []);
 
-  if (userRole !== 'ADMIN') {
+  if (!canView) {
     return (
       <div className="bg-white p-12 rounded-3xl border border-pastel-200/80 shadow-soft text-center space-y-3">
         <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
           <Shield size={24} />
         </div>
-        <h3 className="text-base font-bold text-slate-800">Khu Vực Dành Riêng Cho Quản Trị Viên</h3>
+        <h3 className="text-base font-bold text-slate-800">Quyền Hạn Bị Giới Hạn</h3>
         <p className="text-xs text-slate-500 max-w-md mx-auto">
-          Chỉ tài khoản Quản trị viên tối cao (ADMIN) mới có quyền truy cập, tiếp nhận nhân sự mới và phân quyền hệ thống.
+          Tài khoản của bạn chưa được cấp quyền xem danh sách hồ sơ nhân sự (users_view). Vui lòng liên hệ Quản trị viên để được cấp quyền.
         </p>
       </div>
     );
@@ -69,18 +77,12 @@ export function UserManager({
   };
 
   const handleOpenAddModal = () => {
-    if (licenseInfo?.isDemo && users.length >= 4) {
-      if (onOpenUpgrade) {
-        onOpenUpgrade('Phiên bản Dùng Thử (Demo) giới hạn tối đa 4 nhân viên. Vui lòng kích hoạt Bản Quyền Enterprise để mở rộng quy mô nhân sự không giới hạn!');
-      }
-      return;
-    }
     setEditingUser(null);
     setFormData({
       name: '',
       email: '',
       role: 'STAFF',
-      department: departments[0]?.name || 'Phòng Kỹ Thuật & IT',
+      department: departments[0]?.name || '',
       phone: '',
     });
     setIsModalOpen(true);
@@ -92,7 +94,7 @@ export function UserManager({
       name: user.name || '',
       email: user.email || '',
       role: user.role || 'STAFF',
-      department: user.department || departments[0]?.name || 'Phòng Kỹ Thuật & IT',
+      department: user.department || departments[0]?.name || '',
       phone: user.phone || '',
     });
     setIsModalOpen(true);
@@ -163,21 +165,18 @@ export function UserManager({
             <p className="text-xs sm:text-sm text-slate-500">
               Phân bổ nhân viên theo từng phòng ban, phân quyền tài khoản ({users.length} thành viên).
             </p>
-            {licenseInfo?.isDemo && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold border border-amber-200">
-                Demo: {users.length}/4 nhân sự
-              </span>
-            )}
           </div>
         </div>
 
-        <button
-          onClick={handleOpenAddModal}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all shrink-0"
-        >
-          <Plus size={16} />
-          <span>Thêm Nhân Viên Mới</span>
-        </button>
+        {canCreate && (
+          <button
+            onClick={handleOpenAddModal}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all shrink-0"
+          >
+            <Plus size={16} />
+            <span>Thêm Nhân Viên Mới</span>
+          </button>
+        )}
       </div>
 
       {/* Filter by Department and Search */}
@@ -294,14 +293,16 @@ export function UserManager({
                     </div>
 
                     <div className="flex items-center gap-0.5 shrink-0 ml-1">
-                      <button
-                        onClick={() => handleOpenEditModal(user)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
-                        title="Chỉnh sửa thông tin & đổi phòng ban"
-                      >
-                        <Edit2 size={15} />
-                      </button>
-                      {user.id !== 'usr_admin' && user.id !== 'usr_1' && (
+                      {canEdit && (
+                        <button
+                          onClick={() => handleOpenEditModal(user)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-pastel-700 hover:bg-pastel-50 transition-colors"
+                          title="Chỉnh sửa thông tin & đổi phòng ban"
+                        >
+                          <Edit2 size={15} />
+                        </button>
+                      )}
+                      {canLock && user.id !== 'usr_admin' && user.id !== 'usr_1' && (
                         <button
                           onClick={() => handleDeleteUser(user)}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
@@ -418,7 +419,7 @@ export function UserManager({
               >
                 <option value="STAFF">Nhân viên chuyên môn (STAFF)</option>
                 <option value="MANAGER">Trưởng phòng / Quản lý (MANAGER)</option>
-                <option value="ADMIN">Quản trị viên tối cao (ADMIN)</option>
+                <option value="ADMIN">Quản trị viên Doanh nghiệp (ADMIN)</option>
               </select>
             </div>
           </div>

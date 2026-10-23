@@ -69,6 +69,7 @@ export default function App() {
   const [attendanceList, setAttendanceList] = useState([]);
   const [attendanceSummary, setAttendanceSummary] = useState(null);
   const [users, setUsers] = useState([]);
+  const [companySettings, setCompanySettings] = useState({});
 
   // Tải dữ liệu toàn bộ hệ thống từ Cloudflare D1
   const loadAllData = async () => {
@@ -86,7 +87,8 @@ export default function App() {
         attRes,
         attSumRes,
         usrRes,
-        licRes
+        licRes,
+        setRes
       ] = await Promise.all([
         api.getDashboardSummary(),
         api.getMonthlySummary(),
@@ -98,7 +100,8 @@ export default function App() {
         api.getAttendance(),
         api.getAttendanceSummary(),
         api.getUsers(),
-        api.getLicenseStatus().catch(() => ({ success: false, data: { isDemo: true, tier: 'DEMO' } }))
+        api.getLicenseStatus().catch(() => ({ success: false, data: { isDemo: true, tier: 'DEMO' } })),
+        api.getSettings().catch(() => ({ success: false, data: { settings: {} } }))
       ]);
 
       setSummaryData(sumRes.data);
@@ -121,6 +124,9 @@ export default function App() {
       setAttendanceList(attRes.data || []);
       setAttendanceSummary(attSumRes.data);
       setUsers(usrRes.data || []);
+      if (setRes?.data?.settings) {
+        setCompanySettings(setRes.data.settings);
+      }
       if (licRes && licRes.data) {
         setLicenseInfo(licRes.data);
       }
@@ -190,6 +196,8 @@ export default function App() {
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         userRole={currentUser?.role || 'STAFF'}
+        currentUser={currentUser}
+        companySettings={companySettings}
         overdueCount={overdueCount}
         isOpen={isMobileSidebarOpen}
         onClose={() => setIsMobileSidebarOpen(false)}
@@ -219,11 +227,24 @@ export default function App() {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
           {currentUser?.role === 'SUPER_ADMIN' ? (
-            <SuperAdminPortal
-              currentUser={currentUser}
-              activeTab={['overview', 'companies', 'keys', 'plans', 'revenue'].includes(currentTab) ? currentTab : 'overview'}
-              onNavigateTab={setCurrentTab}
-            />
+            currentTab === 'settings' ? (
+              <SettingsManager
+                users={users}
+                currentUser={currentUser}
+                userRole={currentUser?.role || 'SUPER_ADMIN'}
+                companySettings={companySettings}
+                onRefresh={loadAllData}
+                licenseInfo={licenseInfo}
+                onOpenUpgrade={handleOpenUpgrade}
+                onNavigate={setCurrentTab}
+              />
+            ) : (
+              <SuperAdminPortal
+                currentUser={currentUser}
+                activeTab={['overview', 'companies', 'keys', 'plans', 'support-desk', 'announcements', 'revenue'].includes(currentTab) ? currentTab : 'overview'}
+                onNavigateTab={setCurrentTab}
+              />
+            )
           ) : loading && !summaryData ? (
             <div className="h-96 flex flex-col items-center justify-center gap-3 text-slate-400">
               <Loader2 className="w-8 h-8 animate-spin text-pastel-500" />
@@ -247,6 +268,8 @@ export default function App() {
                   assets={assets}
                   users={users}
                   userRole={effectiveRole}
+                  currentUser={currentUser}
+                  companySettings={companySettings}
                   onRefresh={loadAllData}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
@@ -258,6 +281,8 @@ export default function App() {
                   financeList={financeList}
                   monthlyData={monthlyData}
                   userRole={effectiveRole}
+                  currentUser={currentUser}
+                  companySettings={companySettings}
                   onRefresh={loadAllData}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
@@ -269,6 +294,9 @@ export default function App() {
                   tasks={tasks}
                   users={users}
                   currentUserId={currentUser?.id}
+                  currentUser={currentUser}
+                  userRole={effectiveRole}
+                  companySettings={companySettings}
                   onRefresh={loadAllData}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
@@ -281,6 +309,9 @@ export default function App() {
                   handovers={handovers}
                   assets={assets}
                   users={users}
+                  currentUser={currentUser}
+                  userRole={effectiveRole}
+                  companySettings={companySettings}
                   onRefresh={loadAllData}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
@@ -292,6 +323,9 @@ export default function App() {
                   attendanceList={attendanceList}
                   users={users}
                   summary={attendanceSummary}
+                  currentUser={currentUser}
+                  userRole={effectiveRole}
+                  companySettings={companySettings}
                   onRefresh={loadAllData}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
@@ -302,6 +336,8 @@ export default function App() {
                 <UserManager
                   users={users}
                   userRole={effectiveRole}
+                  currentUser={currentUser}
+                  companySettings={companySettings}
                   onRefresh={loadAllData}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
@@ -312,6 +348,8 @@ export default function App() {
                 <CategoryManager
                   userRole={effectiveRole}
                   users={users}
+                  currentUser={currentUser}
+                  companySettings={companySettings}
                   onNavigate={setCurrentTab}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
@@ -320,10 +358,14 @@ export default function App() {
 
               {currentTab === 'settings' && (
                 <SettingsManager
+                  users={users}
+                  currentUser={currentUser}
                   userRole={effectiveRole}
+                  companySettings={companySettings}
                   onRefresh={loadAllData}
                   licenseInfo={licenseInfo}
                   onOpenUpgrade={handleOpenUpgrade}
+                  onNavigate={setCurrentTab}
                 />
               )}
             </>
@@ -331,19 +373,23 @@ export default function App() {
         </main>
       </div>
 
-      {/* Floating AI Mascot Assistant */}
-      <AIAssistantWidget
-        activeTab={currentTab}
-        userRole={currentUser?.role || 'STAFF'}
-        currentUser={currentUser}
-        onNavigate={setCurrentTab}
-      />
+      {/* Floating AI Mascot Assistant - Chỉ hiển thị cho Doanh nghiệp (Admin, Manager, Staff). Quản trị nền tảng (SUPER_ADMIN) không cần AI */}
+      {currentUser?.role !== 'SUPER_ADMIN' && (
+        <AIAssistantWidget
+          activeTab={currentTab}
+          userRole={currentUser?.role || 'STAFF'}
+          currentUser={currentUser}
+          onNavigate={setCurrentTab}
+        />
+      )}
 
       {/* Upgrade / License Modal */}
       <UpgradeModal
         isOpen={isUpgradeModalOpen}
         onClose={() => setIsUpgradeModalOpen(false)}
         licenseInfo={licenseInfo}
+        currentUser={currentUser}
+        companyName={companyName}
         triggerReason={upgradeTriggerReason}
         onLicenseUpdated={(newInfo) => {
           setLicenseInfo(newInfo);

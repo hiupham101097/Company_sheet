@@ -25,6 +25,15 @@ import {
 import { api } from '../../services/api';
 import { formatDateVN } from '../../utils/formatters';
 import { getBrandDisplayName, getShortBrandName } from '../../utils/brandHelper';
+import {
+  isDesktopNotificationSupported,
+  getNotificationPermission,
+  isDesktopNotificationEnabled,
+  setDesktopNotificationEnabled,
+  requestDesktopNotificationPermission,
+  sendDesktopNotification,
+  checkAndNotifyUrgentReminders
+} from '../../utils/desktopNotification';
 
 export function Navbar({
   urgentReminders = [],
@@ -49,6 +58,15 @@ export function Navbar({
 
   const settingsRef = useRef(null);
   const notificationRef = useRef(null);
+
+  // Tự động kiểm tra và đẩy việc khẩn cấp / quá hạn ra khay máy tính nếu được cho phép
+  useEffect(() => {
+    if (urgentReminders && urgentReminders.length > 0) {
+      checkAndNotifyUrgentReminders(urgentReminders, (item) => {
+        setSelectedReminder(item);
+      });
+    }
+  }, [urgentReminders]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -227,23 +245,70 @@ export function Navbar({
             <Crown size={14} className="text-purple-600 shrink-0" />
             <span className="text-[11px] font-bold">Quản Trị Nền Tảng</span>
           </div>
-        ) : licenseInfo?.isDemo ? (
+        ) : licenseInfo?.isTrial || licenseInfo?.plan_code === 'TRIAL_2M' ? (
           <button
-            onClick={() => onOpenUpgrade && onOpenUpgrade('Khám phá và nâng cấp Bản Quyền Enterprise để mở khóa toàn bộ hệ thống')}
-            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95"
-            title="Đang dùng bản Demo - Bấm để nâng cấp Enterprise"
+            type="button"
+            onClick={onOpenUpgrade}
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-900 border border-amber-300 text-xs font-bold shadow-xs transition select-none cursor-pointer"
+            title={`Bạn đang dùng bản dùng thử miễn phí 60 ngày (Chưa Mua Gói). Hạn dùng đến: ${licenseInfo?.expire_date || '60 ngày'}. Bấm để xem thông tin hoặc mua bản quyền.`}
           >
-            <Crown size={13} className="text-amber-200 shrink-0" />
-            <span className="text-[11px]">Demo</span>
+            <Zap size={13} className="text-amber-500 fill-amber-500 shrink-0" />
+            <span className="text-[11px] font-bold">Dùng Thử 0đ</span>
+            {licenseInfo?.days_remaining !== undefined && licenseInfo?.days_remaining !== null && (
+              <span className="text-[10px] bg-amber-200/90 text-amber-900 px-1.5 py-0.5 rounded-md font-extrabold">
+                {licenseInfo.days_remaining > 0 ? `Còn ${licenseInfo.days_remaining}n` : 'Hết hạn'}
+              </span>
+            )}
+          </button>
+        ) : licenseInfo?.plan_code === 'ANNUAL_1Y' ? (
+          <button
+            type="button"
+            onClick={onOpenUpgrade}
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-bold shadow-xs transition select-none cursor-pointer"
+            title={`ĐÃ MUA BẢN QUYỀN GÓI 1 NĂM - Hạn dùng đến: ${licenseInfo?.expire_date || 'N/A'}`}
+          >
+            <ShieldCheck size={13} className="text-indigo-600 shrink-0" />
+            <span className="text-[11px] font-bold">Đã Mua (1 Năm)</span>
+            {licenseInfo?.days_remaining !== undefined && licenseInfo?.days_remaining !== null && (
+              <span className="text-[10px] bg-indigo-200/90 text-indigo-900 px-1.5 py-0.5 rounded-md font-extrabold">
+                {licenseInfo.days_remaining > 0 ? `Còn ${licenseInfo.days_remaining}n` : 'Hết hạn'}
+              </span>
+            )}
+          </button>
+        ) : licenseInfo?.plan_code === 'ANNUAL_2Y' ? (
+          <button
+            type="button"
+            onClick={onOpenUpgrade}
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 text-xs font-bold shadow-xs transition select-none cursor-pointer"
+            title={`ĐÃ MUA BẢN QUYỀN GÓI 2 NĂM - Hạn dùng đến: ${licenseInfo?.expire_date || 'N/A'}`}
+          >
+            <ShieldCheck size={13} className="text-blue-600 shrink-0" />
+            <span className="text-[11px] font-bold">Đã Mua (2 Năm)</span>
+            {licenseInfo?.days_remaining !== undefined && licenseInfo?.days_remaining !== null && (
+              <span className="text-[10px] bg-blue-200/90 text-blue-900 px-1.5 py-0.5 rounded-md font-extrabold">
+                {licenseInfo.days_remaining > 0 ? `Còn ${licenseInfo.days_remaining}n` : 'Hết hạn'}
+              </span>
+            )}
+          </button>
+        ) : licenseInfo?.isExpired || licenseInfo?.isDemo ? (
+          <button
+            type="button"
+            onClick={onOpenUpgrade}
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 text-xs font-bold shadow-xs transition select-none cursor-pointer"
+            title="Gói cước đã hết hạn (Chưa thanh toán gia hạn) - Bấm để mua gói ngay"
+          >
+            <AlertTriangle size={13} className="text-rose-500 shrink-0" />
+            <span className="text-[11px] font-bold">Hết Hạn (Chưa Mua)</span>
           </button>
         ) : (
           <button
-            onClick={() => onOpenUpgrade && onOpenUpgrade()}
-            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold shadow-xs transition-all"
-            title="Bản Quyền Enterprise Vĩnh Viễn"
+            type="button"
+            onClick={onOpenUpgrade}
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold shadow-xs transition select-none cursor-pointer"
+            title="ĐÃ MUA BẢN QUYỀN VĨNH VIỄN TRỌN ĐỜI"
           >
             <Crown size={13} className="text-amber-500 shrink-0" />
-            <span className="hidden sm:inline text-[11px]">Enterprise</span>
+            <span className="text-[11px] font-bold">Đã Mua (Vĩnh Viễn)</span>
           </button>
         )}
 
@@ -340,8 +405,14 @@ export function Navbar({
                     <div className="text-xs font-bold text-slate-800 group-hover:text-amber-600 transition">
                       Bản Quyền & Gói Cước
                     </div>
-                    <div className="text-[10px] text-slate-400">
-                      {licenseInfo?.isDemo ? 'Bản Dùng thử (Demo) • Nâng cấp' : 'Enterprise Vĩnh Viễn Đã Kích Hoạt'}
+                    <div className="text-[10px] text-slate-500 font-medium">
+                      {licenseInfo?.isTrial 
+                        ? `Gói Dùng Thử 2 Tháng${licenseInfo?.days_remaining !== null && licenseInfo?.days_remaining !== undefined ? ` (Còn ${licenseInfo.days_remaining} ngày)` : ''}`
+                        : licenseInfo?.plan_code === 'ANNUAL_1Y'
+                        ? `Gói Tiêu Chuẩn 1 Năm${licenseInfo?.days_remaining !== null && licenseInfo?.days_remaining !== undefined ? ` (Còn ${licenseInfo.days_remaining} ngày)` : ''}`
+                        : licenseInfo?.isExpired || licenseInfo?.isDemo
+                        ? 'Bản Dùng Thử Hết Hạn • Gia Hạn'
+                        : 'Doanh Nghiệp Vĩnh Viễn (∞)'}
                     </div>
                   </div>
                   <ChevronRight size={14} className="text-slate-300 group-hover:text-amber-600 shrink-0" />
@@ -481,6 +552,22 @@ export function Navbar({
                   ))
                 )}
               </div>
+
+              {urgentReminders.length > 0 && onNavigate && (
+                <div className="p-2.5 border-t border-slate-100 bg-slate-50/70 text-center rounded-b-2xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNavigate('tasks');
+                      setShowNotifications(false);
+                    }}
+                    className="text-xs font-bold text-pastel-700 hover:text-pastel-900 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Xem tất cả công việc & nhắc hạn</span>
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -653,9 +740,9 @@ export function Navbar({
             </div>
             <div className="hidden lg:block text-left">
               <p className="text-xs font-bold text-slate-800 leading-tight group-hover:text-purple-700 transition">
-                {currentUser?.name || 'Nguyễn Văn An'}
+                {currentUser?.name || 'Thành viên'}
               </p>
-              <p className="text-[10px] text-pastel-600 font-semibold">{currentUser?.department || 'Ban Giám Đốc'}</p>
+              <p className="text-[10px] text-pastel-600 font-semibold">{currentUser?.department || (currentUser?.role === 'ADMIN' ? 'Ban Quản Trị' : 'Chưa phân bổ')}</p>
             </div>
           </div>
           <button

@@ -38,7 +38,7 @@ export function Dashboard({ summaryData, monthlyData, onNavigate }) {
       { 'Chỉ số': 'Tổng số lượng tài sản', 'Giá trị': stats.totalAssets || 0 },
       { 'Chỉ số': 'Tài sản đang cấp phát sử dụng', 'Giá trị': stats.inUseAssets || 0 },
       { 'Chỉ số': 'Tổng giá trị tài sản', 'Giá trị': formatVND(stats.totalAssetValue) },
-      { 'Chỉ số': 'Doanh thu lũy kế', 'Giá trị': formatVND(stats.totalRevenue) },
+      { 'Chỉ số': 'Doanh thu', 'Giá trị': formatVND(stats.totalRevenue) },
       { 'Chỉ số': 'Chi phí vận hành', 'Giá trị': formatVND(stats.totalExpense) },
       { 'Chỉ số': 'Lợi nhuận ròng', 'Giá trị': formatVND(stats.netProfit) },
       { 'Chỉ số': 'Công việc đang chờ xử lý', 'Giá trị': stats.pendingTasksCount || 0 },
@@ -54,6 +54,43 @@ export function Dashboard({ summaryData, monthlyData, onNavigate }) {
     month: '2-digit',
     year: 'numeric'
   }).format(new Date());
+
+  // Tính toán tỷ lệ tăng trưởng so với tháng trước từ số liệu thực tế
+  const getRevenueGrowth = () => {
+    const list = monthlyData?.monthlyData || [];
+    const totalRev = Number(stats.totalRevenue) || 0;
+
+    // Nếu tài khoản mới hoàn toàn hoặc chưa có doanh thu
+    if (totalRev === 0) {
+      return { type: 'empty', label: 'Chưa có dữ liệu phát sinh' };
+    }
+
+    if (!list || list.length === 0) return null;
+
+    const currentMonthNum = new Date().getMonth() + 1; // 1 - 12
+    const currentIdx = list.findIndex((item) => item.month === `T${currentMonthNum}`);
+
+    const curr = currentIdx >= 0 ? Number(list[currentIdx]?.revenue) || 0 : 0;
+    const prev = currentIdx > 0 ? Number(list[currentIdx - 1]?.revenue) || 0 : 0;
+
+    if (prev === 0 && curr > 0) {
+      return { type: 'new', label: 'Khởi tạo tháng này' };
+    }
+
+    if (prev > 0) {
+      const diff = curr - prev;
+      const rate = Math.round((diff / prev) * 100);
+      return {
+        type: rate >= 0 ? 'up' : 'down',
+        percent: Math.abs(rate),
+        label: `${rate >= 0 ? '+' : '-'}${Math.abs(rate)}% so với tháng trước`
+      };
+    }
+
+    return null;
+  };
+
+  const revenueGrowth = getRevenueGrowth();
 
   return (
     <div className="space-y-6">
@@ -117,7 +154,7 @@ export function Dashboard({ summaryData, monthlyData, onNavigate }) {
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Doanh thu lũy kế
+              Doanh thu
             </span>
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
               <TrendingUp size={20} />
@@ -125,9 +162,31 @@ export function Dashboard({ summaryData, monthlyData, onNavigate }) {
           </div>
           <div className="mt-3">
             <h3 className="text-2xl font-bold text-slate-800 tracking-tight">{formatVND(stats.totalRevenue)}</h3>
-            <div className="flex items-center gap-1.5 mt-1">
-              <Badge variant="success">+18.4%</Badge>
-              <span className="text-xs text-slate-400">so với tháng trước</span>
+            <div className="flex items-center gap-1.5 mt-1 min-h-[20px]">
+              {revenueGrowth?.type === 'up' && (
+                <>
+                  <Badge variant="success">+{revenueGrowth.percent}%</Badge>
+                  <span className="text-xs text-slate-400">so với tháng trước</span>
+                </>
+              )}
+              {revenueGrowth?.type === 'down' && (
+                <>
+                  <Badge variant="danger">-{revenueGrowth.percent}%</Badge>
+                  <span className="text-xs text-slate-400">so với tháng trước</span>
+                </>
+              )}
+              {revenueGrowth?.type === 'new' && (
+                <>
+                  <Badge variant="success">Khởi tạo</Badge>
+                  <span className="text-xs text-slate-400">Tháng phát sinh đầu tiên</span>
+                </>
+              )}
+              {(!revenueGrowth || revenueGrowth.type === 'empty') && (
+                <span className="text-xs text-slate-400 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                  Chưa có dữ liệu phát sinh
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-slate-400 mt-2">
               Lợi nhuận ròng: <span className="font-semibold text-emerald-600">{formatVND(stats.netProfit)}</span>
@@ -144,9 +203,8 @@ export function Dashboard({ summaryData, monthlyData, onNavigate }) {
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               Công việc & Nhắc hạn
             </span>
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform ${
-              stats.overdueTasksCount > 0 ? 'bg-rose-50 text-rose-600' : 'bg-pastel-100 text-pastel-600'
-            }`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform ${stats.overdueTasksCount > 0 ? 'bg-rose-50 text-rose-600' : 'bg-pastel-100 text-pastel-600'
+              }`}>
               <AlertCircle size={20} />
             </div>
           </div>

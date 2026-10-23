@@ -23,12 +23,15 @@ import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
 import { formatDateVN, formatMoneyVN } from '../../utils/formatters';
+import { hasPermission } from '../../utils/permissionHelper';
 
 export function FinanceManager({
   financeList = [],
   monthlyData,
   onRefresh,
   userRole = 'ADMIN',
+  currentUser,
+  companySettings,
   licenseInfo,
   onOpenUpgrade
 }) {
@@ -44,6 +47,10 @@ export function FinanceManager({
     invoice_number: ''
   });
 
+  const canView = hasPermission(currentUser, companySettings, 'finance_view') || userRole !== 'STAFF';
+  const canCreate = hasPermission(currentUser, companySettings, 'finance_create') || userRole === 'ADMIN' || userRole === 'MANAGER';
+  const canExport = hasPermission(currentUser, companySettings, 'finance_export') || userRole === 'ADMIN' || userRole === 'MANAGER';
+
   useEffect(() => {
     api.getCategories('FINANCE_CATEGORY')
       .then((res) => {
@@ -56,7 +63,7 @@ export function FinanceManager({
       .catch((err) => console.error('Error fetching finance categories:', err));
   }, []);
 
-  if (userRole === 'STAFF') {
+  if (!canView) {
     return (
       <div className="bg-white p-12 rounded-3xl border border-pastel-200/80 shadow-soft text-center space-y-3">
         <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
@@ -64,7 +71,7 @@ export function FinanceManager({
         </div>
         <h3 className="text-base font-bold text-slate-800">Quyền Hạn Bị Giới Hạn</h3>
         <p className="text-xs text-slate-500 max-w-md mx-auto">
-          Tài khoản Nhân viên (STAFF) không có quyền xem dữ liệu tài chính & doanh thu của doanh nghiệp. Vui lòng liên hệ Quản trị viên nếu cần cấp quyền.
+          Tài khoản của bạn chưa được cấp quyền truy cập dữ liệu Tài chính & Doanh thu doanh nghiệp (finance_view). Vui lòng liên hệ Quản lý hoặc Quản trị viên để được cấp quyền.
         </p>
       </div>
     );
@@ -170,23 +177,27 @@ export function FinanceManager({
         </div>
 
         <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
-          <button
-            onClick={handleExportExcel}
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all w-full sm:w-auto"
-          >
-            <FileSpreadsheet size={16} className="text-pastel-600 shrink-0" />
-            <span>Xuất Excel</span>
-            {licenseInfo?.isDemo && (
-              <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-bold">Khóa</span>
-            )}
-          </button>
-          <button
-            onClick={handleOpenAddModal}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all w-full sm:w-auto"
-          >
-            <Plus size={16} className="shrink-0" />
-            <span>Thêm Thu / Chi</span>
-          </button>
+          {canExport && (
+            <button
+              onClick={handleExportExcel}
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all w-full sm:w-auto cursor-pointer"
+            >
+              <FileSpreadsheet size={16} className="text-pastel-600 shrink-0" />
+              <span>Xuất Excel</span>
+              {licenseInfo?.isDemo && (
+                <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-bold">Khóa</span>
+              )}
+            </button>
+          )}
+          {canCreate && (
+            <button
+              onClick={handleOpenAddModal}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all w-full sm:w-auto cursor-pointer"
+            >
+              <Plus size={16} className="shrink-0" />
+              <span>Thêm Thu / Chi</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -334,19 +345,19 @@ export function FinanceManager({
           )}
         </div>
 
-        {/* Desktop View: Full Table with forced horizontal scroll */}
+        {/* Desktop View: Full Table with responsive layout */}
         <div className="hidden md:block bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
           <div className="w-full overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '850px' }}>
+            <table className="w-full min-w-full text-left text-xs text-slate-600">
               <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
                 <tr>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Chứng Từ</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Loại</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap" style={{ minWidth: '200px' }}>Hạng Mục</th>
-                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Số Tiền</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap w-28">Số Chứng Từ</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap w-28">Ngày</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap w-20">Loại</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap">Hạng Mục</th>
+                  <th className="py-3.5 px-4 font-bold whitespace-nowrap text-right w-36">Số Tiền</th>
                   <th className="py-3.5 px-4 font-bold">Diễn Giải</th>
-                  <th className="py-3.5 px-4 font-bold text-right whitespace-nowrap">Thao Tác</th>
+                  <th className="py-3.5 px-4 font-bold text-center whitespace-nowrap w-20">Thao Tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
@@ -368,15 +379,15 @@ export function FinanceManager({
                           {item.type === 'REVENUE' ? '+ Thu' : '- Chi'}
                         </Badge>
                       </td>
-                      <td className="py-3.5 px-4 text-slate-800 font-semibold" style={{ minWidth: '200px' }}>{item.category}</td>
-                      <td className={`py-3.5 px-4 font-bold whitespace-nowrap ${item.type === 'REVENUE' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      <td className="py-3.5 px-4 text-slate-800 font-semibold">{item.category}</td>
+                      <td className={`py-3.5 px-4 font-bold whitespace-nowrap text-right ${item.type === 'REVENUE' ? 'text-emerald-600' : 'text-rose-600'}`}>
                         <span className="inline-block whitespace-nowrap">{item.type === 'REVENUE' ? '+' : '-'} {formatVND(item.amount)}</span>
                       </td>
                       <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">{item.description}</td>
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                           title="Xóa giao dịch"
                         >
                           <Trash2 size={15} />

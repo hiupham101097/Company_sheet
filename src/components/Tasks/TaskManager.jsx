@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CheckSquare,
   Plus,
@@ -15,12 +15,25 @@ import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
 import { formatDateVN } from '../../utils/formatters';
+import { hasPermission } from '../../utils/permissionHelper';
 
-export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId = 'usr_1' }) {
+export function TaskManager({ 
+  tasks = [], 
+  users = [], 
+  onRefresh, 
+  currentUserId = 'usr_1',
+  currentUser,
+  userRole = 'ADMIN',
+  companySettings
+}) {
+  const canView = hasPermission(currentUser, companySettings, 'tasks_view') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canCreate = hasPermission(currentUser, companySettings, 'tasks_create') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canDelete = hasPermission(currentUser, companySettings, 'tasks_delete') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
   const [filterTab, setFilterTab] = useState('ALL'); // ALL, MY_TASKS, UPCOMING, OVERDUE, COMPLETED
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [assignDept, setAssignDept] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [categoriesDept, setCategoriesDept] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -36,8 +49,18 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
     URGENT: { label: 'Khẩn cấp', variant: 'danger' }
   };
 
-  // Collect unique list of departments from users and tasks
+  useEffect(() => {
+    api.getCategories('DEPARTMENT')
+      .then((res) => {
+        const list = res?.data || [];
+        setCategoriesDept(list.map(c => c.name).filter(Boolean));
+      })
+      .catch((err) => console.error('Error fetching categories in TaskManager:', err));
+  }, []);
+
+  // Collect unique list of departments dynamically from API Categories, users, and tasks
   const allDepartments = Array.from(new Set([
+    ...categoriesDept,
     ...users.map((u) => u.department).filter(Boolean),
     ...tasks.map((t) => t.assigned_user_department).filter(Boolean)
   ]));
@@ -110,6 +133,18 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
   const overdueCount = tasks.filter((t) => t.urgency === 'OVERDUE' && t.status !== 'COMPLETED').length;
   const upcomingCount = tasks.filter((t) => t.urgency === 'UPCOMING' && t.status !== 'COMPLETED').length;
 
+  if (!canView) {
+    return (
+      <div className="bg-white p-8 rounded-3xl border border-pastel-200/90 shadow-soft text-center py-16">
+        <CheckSquare size={48} className="mx-auto text-slate-300 mb-3" />
+        <h3 className="text-base font-bold text-slate-700">Không Có Quyền Truy Cập</h3>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+          Bộ phận của bạn không được phân quyền xem hoặc quản lý công việc và phân công nhiệm vụ.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -131,16 +166,18 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
             <FileSpreadsheet size={16} className="text-pastel-600" />
             <span>Xuất Excel</span>
           </button>
-          <button
-            onClick={() => {
-              setAssignDept('ALL');
-              setIsModalOpen(true);
-            }}
-            className="justify-center inline-flex items-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
-          >
-            <Plus size={16} />
-            <span>Giao Việc Mới</span>
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => {
+                setAssignDept('ALL');
+                setIsModalOpen(true);
+              }}
+              className="justify-center inline-flex items-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
+            >
+              <Plus size={16} />
+              <span>Giao Việc Mới</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -320,13 +357,15 @@ export function TaskManager({ tasks = [], users = [], onRefresh, currentUserId =
                       {isUpcoming && <span className="font-bold font-sans">(Sắp tới)</span>}
                     </div>
 
-                    <button
-                      onClick={() => handleDelete(task.id)}
-                      className="p-1 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                      title="Xóa công việc"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={() => handleDelete(task.id)}
+                        className="p-1 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        title="Xóa công việc"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

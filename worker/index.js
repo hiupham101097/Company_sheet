@@ -6,6 +6,64 @@ const app = new Hono();
 app.use('/api/*', cors({ origin: '*' }));
 
 // ========================================================
+// SECURITY SHIELD: RATE LIMITING & ANTI-BOT SCANNER & HEADERS
+// ========================================================
+const ipRateLimit = new Map();
+const BLOCKED_BOT_AGENTS = [
+  'sqlmap', 'nikto', 'w3af', 'acunetix', 'masscan', 'nmap', 'zgrab',
+  'python-requests', 'aiohttp', 'scrapy', 'urllib', 'curl', 'wget', 'go-http-client'
+];
+
+app.use('/api/*', async (c, next) => {
+  // 1. Chặn công cụ quét lỗ hổng và bot cào dữ liệu tự động
+  const userAgent = (c.req.header('user-agent') || '').toLowerCase();
+  const isMaliciousBot = BLOCKED_BOT_AGENTS.some((bot) => userAgent.includes(bot));
+  if (isMaliciousBot) {
+    return c.json({
+      success: false,
+      code: 'BOT_ACCESS_DENIED',
+      message: 'Truy cập bị từ chối: Phát hiện yêu cầu tự động không hợp lệ.'
+    }, 403);
+  }
+
+  // 2. Rate Limiting per IP (Tối đa 80 request/phút/IP để chống cào hoặc spam)
+  const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || '127.0.0.1';
+  if (clientIp !== '127.0.0.1' && clientIp !== 'localhost') {
+    const now = Date.now();
+    const record = ipRateLimit.get(clientIp) || { count: 0, resetAt: now + 60000 };
+    if (now > record.resetAt) {
+      record.count = 1;
+      record.resetAt = now + 60000;
+    } else {
+      record.count += 1;
+    }
+    ipRateLimit.set(clientIp, record);
+
+    // Dọn dẹp cache IP cũ để tránh chiếm bộ nhớ
+    if (ipRateLimit.size > 2000) {
+      for (const [key, val] of ipRateLimit.entries()) {
+        if (now > val.resetAt) ipRateLimit.delete(key);
+      }
+    }
+
+    if (record.count > 80) {
+      return c.json({
+        success: false,
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Tần suất thao tác quá nhanh. Vui lòng thử lại sau 1 phút để bảo vệ hệ thống!'
+      }, 429);
+    }
+  }
+
+  // 3. Thực thi route và gắn Security Headers chuẩn OWASP
+  await next();
+  c.res.headers.set('X-Content-Type-Options', 'nosniff');
+  c.res.headers.set('X-Frame-Options', 'SAMEORIGIN');
+  c.res.headers.set('X-XSS-Protection', '1; mode=block');
+  c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+});
+
+// ========================================================
 // SEO & SOCIAL SHARE (ZALO, FACEBOOK, TWITTER, TELEGRAM)
 // ========================================================
 const SEO_SLUG_MAP = {
@@ -188,6 +246,841 @@ async function getTenantContext(c) {
   };
 }
 
+// ==========================================
+// ==========================================
+// 7 DEDICATED SENDER MAILBOXES & ROUTING SPECIFICATION
+// ==========================================
+const SENDER_MAILBOXES = {
+  notifications: {
+    key: 'notifications',
+    email: 'notifications@omniassets.ryug.id.vn',
+    label: 'Thông báo chung từ hệ thống',
+    owner: 'SUPER_ADMIN',
+    replyTo: 'hieupham101097@gmail.com',
+    defaultSenderName: 'OMNI ASSETS (Hệ Thống)'
+  },
+  support: {
+    key: 'support',
+    email: 'support@omniassets.ryug.id.vn',
+    label: 'Thư hỗ trợ khách hàng',
+    owner: 'SUPER_ADMIN',
+    replyTo: 'hieupham101097@gmail.com',
+    defaultSenderName: 'OMNI ASSETS Support'
+  },
+  attendance: {
+    key: 'attendance',
+    email: 'attendance@omniassets.ryug.id.vn',
+    label: 'Chấm công, đi trễ, thiếu công',
+    owner: 'TENANT',
+    subLabel: 'Chấm Công'
+  },
+  tasks: {
+    key: 'tasks',
+    email: 'tasks@omniassets.ryug.id.vn',
+    label: 'Giao việc, nhắc hạn, quá hạn',
+    owner: 'TENANT',
+    subLabel: 'Quản Lý Công Việc'
+  },
+  assets: {
+    key: 'assets',
+    email: 'assets@omniassets.ryug.id.vn',
+    label: 'Kê khai, kiểm kê và bàn giao tài sản',
+    owner: 'TENANT',
+    subLabel: 'Quản Lý Tài Sản'
+  },
+  contracts: {
+    key: 'contracts',
+    email: 'contracts@omniassets.ryug.id.vn',
+    label: 'Hợp đồng sắp hết hạn',
+    owner: 'TENANT',
+    subLabel: 'Quản Lý Hợp Đồng'
+  },
+  reports: {
+    key: 'reports',
+    email: 'reports@omniassets.ryug.id.vn',
+    label: 'Báo cáo định kỳ',
+    owner: 'TENANT',
+    subLabel: 'Báo Cáo Định Kỳ'
+  }
+};
+
+async function getEmailConfig(db, companyId) {
+  let mailProvider = 'resend';
+  let mailApiKey = (typeof env !== 'undefined' && env?.RESEND_API_KEY) || '';
+  let mailSenderName = 'OMNIASSETS';
+  let mailSenderEmail = 'support@omniassets.ryug.id.vn';
+  let mailReplyTo = 'hieupham101097@gmail.com';
+  let mailSupportInbox = 'hieupham101097@gmail.com';
+  let mailReportRecipients = '';
+  let mailNotifyNewUser = 'true';
+  let mailNotifyReminders = 'true';
+  let mailNotifyTimesheet = 'true';
+  let compName = 'OMNI ASSETS & LOGISTICS';
+  let compEmail = '';
+
+  try {
+    const sysSettings = await db.prepare("SELECT key, value FROM system_settings WHERE key LIKE 'mail_%'").all().catch(() => ({ results: [] }));
+    (sysSettings.results || []).forEach(r => {
+      if (r.key === 'mail_provider' && r.value) mailProvider = r.value;
+      if (r.key === 'mail_api_key' && r.value) mailApiKey = r.value;
+      if (r.key === 'mail_sender_name' && r.value) mailSenderName = r.value;
+      if (r.key === 'mail_sender_email' && r.value) mailSenderEmail = r.value;
+      if (r.key === 'mail_reply_to' && r.value) mailReplyTo = r.value;
+      if (r.key === 'mail_support_inbox' && r.value) mailSupportInbox = r.value;
+      if (r.key === 'mail_report_recipients' && r.value) mailReportRecipients = r.value;
+      if (r.key === 'mail_notify_new_user' && r.value) mailNotifyNewUser = r.value;
+      if (r.key === 'mail_notify_reminders' && r.value) mailNotifyReminders = r.value;
+      if (r.key === 'mail_notify_timesheet' && r.value) mailNotifyTimesheet = r.value;
+    });
+
+    if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
+      const compTenant = await db.prepare('SELECT company_name, admin_email FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null);
+      if (compTenant) {
+        if (compTenant.company_name) compName = compTenant.company_name;
+        if (compTenant.admin_email) compEmail = compTenant.admin_email;
+      }
+
+      const compSettings = await db.prepare("SELECT key, value FROM company_settings WHERE company_id = ? AND (key LIKE 'mail_%' OR key = 'company_email' OR key = 'company_name')").bind(companyId).all().catch(() => ({ results: [] }));
+      (compSettings.results || []).forEach(r => {
+        if (r.key === 'company_name' && r.value) compName = r.value;
+        if (r.key === 'company_email' && r.value) compEmail = r.value;
+        if (r.key === 'mail_provider' && r.value) mailProvider = r.value;
+        if (r.key === 'mail_api_key' && r.value) mailApiKey = r.value;
+        if (r.key === 'mail_sender_name' && r.value) mailSenderName = r.value;
+        if (r.key === 'mail_sender_email' && r.value) mailSenderEmail = r.value;
+        if (r.key === 'mail_reply_to' && r.value) {
+          mailReplyTo = r.value;
+          compEmail = r.value;
+        }
+        if (r.key === 'mail_report_recipients' && r.value) mailReportRecipients = r.value;
+        if (r.key === 'mail_notify_new_user' && r.value) mailNotifyNewUser = r.value;
+        if (r.key === 'mail_notify_reminders' && r.value) mailNotifyReminders = r.value;
+        if (r.key === 'mail_notify_timesheet' && r.value) mailNotifyTimesheet = r.value;
+      });
+    }
+  } catch (err) {
+    console.error('Error getEmailConfig:', err);
+  }
+
+  return {
+    provider: (mailProvider || 'resend').toLowerCase().trim(),
+    apiKey: mailApiKey.trim(),
+    senderName: mailSenderName ? mailSenderName.trim() : 'OMNIASSETS',
+    senderEmail: mailSenderEmail ? mailSenderEmail.trim() : 'support@omniassets.ryug.id.vn',
+    replyTo: mailReplyTo ? mailReplyTo.trim() : 'hieupham101097@gmail.com',
+    supportInbox: mailSupportInbox ? mailSupportInbox.trim() : 'hieupham101097@gmail.com',
+    reportRecipients: mailReportRecipients ? mailReportRecipients.trim() : '',
+    notifyNewUser: mailNotifyNewUser !== 'false',
+    notifyReminders: mailNotifyReminders !== 'false',
+    notifyTimesheet: mailNotifyTimesheet !== 'false',
+    companyName: compName,
+    companyEmail: compEmail || mailReplyTo
+  };
+}
+
+async function sendEmail({ db, companyId, to, subject, html, text, replyTo, senderType = 'notifications', senderName }) {
+  const config = await getEmailConfig(db, companyId);
+  const toList = (Array.isArray(to) ? to : [to]).map(e => (typeof e === 'string' ? e.trim() : '')).filter(Boolean);
+
+  if (toList.length === 0) {
+    throw new Error('Chưa cung cấp địa chỉ email người nhận hợp lệ');
+  }
+
+  if (!config.apiKey) {
+    throw new Error('Chưa cấu hình API Key dịch vụ gửi mail');
+  }
+
+  // Lookup designated mailbox from the 7 standard templates
+  const mailbox = SENDER_MAILBOXES[senderType] || SENDER_MAILBOXES.notifications;
+  const isPlatform = mailbox.owner === 'SUPER_ADMIN' || !companyId || companyId === 'SYSTEM';
+
+  // Determine From Address & Sender Name
+  let finalSenderEmail = mailbox.email || 'support@omniassets.ryug.id.vn';
+  let finalSenderName = senderName || '';
+
+  if (!finalSenderName) {
+    if (mailbox.owner === 'SUPER_ADMIN') {
+      finalSenderName = mailbox.defaultSenderName || config.senderName || 'OMNI ASSETS';
+    } else {
+      // Enterprise mailbox: "[Company Name] (Sublabel)"
+      const prefix = config.companyName || 'OMNI ASSETS';
+      finalSenderName = `${prefix} (${mailbox.subLabel || 'Hệ Thống'})`;
+    }
+  }
+
+  // Dual Routing Rule:
+  // - notifications@ & support@ (SuperAdmin/Platform): Reply-To routes to hieupham101097@gmail.com
+  // - attendance@, tasks@, assets@, contracts@, reports@ (Enterprise): Reply-To routes to enterprise companyEmail
+  let effectiveReplyTo = replyTo;
+  if (!effectiveReplyTo) {
+    if (isPlatform || mailbox.key === 'notifications' || mailbox.key === 'support') {
+      effectiveReplyTo = 'hieupham101097@gmail.com';
+    } else {
+      // Enterprise mailbox: strictly use enterprise's email, never SuperAdmin
+      effectiveReplyTo = config.companyEmail || config.replyTo;
+      if (!effectiveReplyTo || effectiveReplyTo === 'hieupham101097@gmail.com') {
+        effectiveReplyTo = `contact@${mailbox.email.split('@')[1]}`;
+      }
+    }
+  }
+
+  if (config.provider === 'brevo') {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': config.apiKey,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: {
+          name: finalSenderName,
+          email: finalSenderEmail
+        },
+        replyTo: { email: effectiveReplyTo },
+        to: toList.map(e => ({ email: e })),
+        subject: subject,
+        htmlContent: html,
+        textContent: text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      })
+    });
+
+    const resData = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(resData.message || resData.error || `Lỗi Brevo API (${res.status})`);
+    }
+    return { success: true, provider: 'brevo', messageId: resData.messageId, mailbox: mailbox.key, from: finalSenderEmail, replyTo: effectiveReplyTo };
+  } else {
+    // Resend REST API
+    const fromAddress = `${finalSenderName} <${finalSenderEmail}>`;
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: fromAddress,
+        to: toList,
+        reply_to: effectiveReplyTo,
+        subject: subject,
+        html: html,
+        text: text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      })
+    });
+
+    const resData = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errMsg = resData.message || resData.error?.message || `Lỗi Resend API (${res.status})`;
+      throw new Error(errMsg);
+    }
+    return { success: true, provider: 'resend', id: resData.id, mailbox: mailbox.key, from: finalSenderEmail, replyTo: effectiveReplyTo };
+  }
+}
+
+function wrapEmailHtml({ title, preheader = '', contentHtml, ctaText = null, ctaUrl = null, footerNote = '' }) {
+  return `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f8fafc;
+      font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      line-height: 1.6;
+    }
+    .wrapper {
+      width: 100%;
+      background-color: #f8fafc;
+      padding: 30px 12px;
+      box-sizing: border-box;
+    }
+    .container {
+      max-width: 580px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 4px 12px -2px rgba(0, 0, 0, 0.02);
+      border: 1px solid #e2e8f0;
+    }
+    .header {
+      background: linear-gradient(135deg, #064e3b 0%, #065f46 45%, #047857 100%);
+      padding: 36px 28px 30px 28px;
+      text-align: center;
+      color: #ffffff;
+    }
+    .logo-badge {
+      display: inline-block;
+      width: 44px;
+      height: 44px;
+      line-height: 44px;
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .header h1 {
+      margin: 0 0 4px 0;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+    }
+    .header p {
+      margin: 0;
+      font-size: 13px;
+      color: #a7f3d0;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+    }
+    .content {
+      padding: 32px 28px;
+      line-height: 1.7;
+      font-size: 14px;
+      color: #334155;
+    }
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin: 20px 0;
+    }
+    .badge {
+      display: inline-block;
+      padding: 5px 14px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .badge-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .badge-amber { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .badge-blue { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
+    .btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      color: #ffffff !important;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 12px 28px;
+      border-radius: 12px;
+      margin-top: 18px;
+      text-align: center;
+      box-shadow: 0 4px 14px rgba(5, 150, 105, 0.25);
+    }
+    .footer {
+      background: #f8fafc;
+      padding: 24px 28px;
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+      font-size: 12px;
+      color: #64748b;
+    }
+    .footer p { margin: 4px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    th { background: #f1f5f9; padding: 10px 14px; text-align: left; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+  </style>
+</head>
+<body>
+  <div style="display:none;font-size:1px;color:#333333;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+    ${preheader}
+  </div>
+  <div class="wrapper">
+    <div class="container">
+      <div class="header">
+        <div class="logo-badge">OA</div>
+        <h1>OMNI ASSETS</h1>
+        <p>${title}</p>
+      </div>
+      <div class="content">
+        ${contentHtml}
+        ${ctaText && ctaUrl ? `<div style="text-align: center; margin-top: 24px;"><a href="${ctaUrl}" class="btn">${ctaText} &rarr;</a></div>` : ''}
+      </div>
+      <div class="footer">
+        <p style="font-weight: 700; color: #334155;">Hệ Thống Quản Trị Vận Hành Doanh Nghiệp OMNI ASSETS</p>
+        <p>Hòm thư thông báo phát tự động từ hệ thống đám mây. Vui lòng không trả lời trực tiếp email này.</p>
+        ${footerNote ? `<p style="color: #94a3b8; margin-top: 8px;">${footerNote}</p>` : ''}
+        <p style="color: #94a3b8; font-size: 11px; margin-top: 10px;">
+          Bảo mật DKIM/SPF &bull; Hỗ trợ: <a href="mailto:support@omniassets.ryug.id.vn" style="color: #059669; text-decoration: none; font-weight: 600;">support@omniassets.ryug.id.vn</a>
+        </p>
+        <p style="color: #cbd5e1; font-size: 11px; margin-top: 4px;">&copy; ${new Date().getFullYear()} OMNI ASSETS. All rights reserved.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function getTestEmailHtml({ companyName, provider, recipientEmail }) {
+  const content = `
+    <div style="text-align: center; margin-bottom: 18px;">
+      <span class="badge badge-success">✓ KẾT NỐI EMAIL THÀNH CÔNG</span>
+    </div>
+    <p>Xin chào Quản trị viên,</p>
+    <p>Đây là email kiểm tra xác nhận cổng gửi mail của doanh nghiệp <strong>${companyName || 'OMNI ASSETS'}</strong> đã được cấu hình và vận hành thành công!</p>
+    <div class="card">
+      <table style="margin: 0;">
+        <tr><td style="width: 40%; font-weight: bold; border:none;">Dịch vụ Email:</td><td style="border:none; text-transform: uppercase; font-weight: bold; color: #059669;">${provider}</td></tr>
+        <tr><td style="font-weight: bold; border:none;">Email nhận test:</td><td style="border:none; font-family: monospace;">${recipientEmail}</td></tr>
+        <tr><td style="font-weight: bold; border:none;">Thời điểm gửi:</td><td style="border:none;">${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</td></tr>
+        <tr><td style="font-weight: bold; border:none;">Trạng thái:</td><td style="border:none; color: #16a34a; font-weight: bold;">Hoạt động hoàn hảo</td></tr>
+      </table>
+    </div>
+    <p style="font-size: 13px; color: #64748b;">
+      💡 <em>Lưu ý: Nếu sử dụng địa chỉ gửi mặc định <code>onboarding@resend.dev</code>, Resend chỉ cho phép gửi đến email đã tạo tài khoản Resend. Khi bạn thêm và xác thực domain riêng trong Resend (Domains &rarr; Add Domain), hệ thống có thể gửi đến mọi email nhân sự không hạn chế!</em>
+    </p>
+  `;
+  return wrapEmailHtml({
+    title: 'Kiểm Tra Cấu Hình Gửi Mail',
+    preheader: 'Cấu hình gửi email tự động của bạn đã sẵn sàng hoạt động',
+    contentHtml: content,
+    ctaText: 'Mở Trang Quản Trị Hệ Thống',
+    ctaUrl: 'https://company-sheet.hieupham101097.workers.dev'
+  });
+}
+
+function getWelcomeUserEmailHtml({ companyName, userName, userEmail, password, role, department, loginUrl }) {
+  const roleNameMap = {
+    'ADMIN': 'Quản Trị Viên (Admin)',
+    'MANAGER': 'Quản Lý (Manager)',
+    'STAFF': 'Nhân Viên (Staff)',
+    'SUPER_ADMIN': 'Quản Trị Tối Cao'
+  };
+  const roleDisplay = roleNameMap[role] || role;
+
+  const content = `
+    <p>Xin chào <strong>${userName}</strong>,</p>
+    <p>Chào mừng bạn gia nhập <strong>${companyName || 'OMNI ASSETS & LOGISTICS'}</strong>! Tài khoản truy cập hệ thống quản trị của bạn đã được khởi tạo thành công:</p>
+    
+    <div class="card" style="border-left: 4px solid #059669;">
+      <table style="margin: 0;">
+        <tr><td style="width: 35%; font-weight: bold; border:none;">Họ và tên:</td><td style="border:none; font-weight: 600;">${userName}</td></tr>
+        <tr><td style="font-weight: bold; border:none;">Tên đăng nhập (Email):</td><td style="border:none; font-family: monospace; font-weight: bold; color: #059669;">${userEmail}</td></tr>
+        <tr><td style="font-weight: bold; border:none;">Mật khẩu khởi tạo:</td><td style="border:none; font-family: monospace; font-weight: bold; color: #dc2626; background: #fef2f2; padding: 4px 8px; border-radius: 6px; display: inline-block;">${password || '123456'}</td></tr>
+        <tr><td style="font-weight: bold; border:none;">Phòng ban:</td><td style="border:none;">${department || 'Chưa gán'}</td></tr>
+        <tr><td style="font-weight: bold; border:none;">Vai trò:</td><td style="border:none;"><span class="badge badge-blue">${roleDisplay}</span></td></tr>
+      </table>
+    </div>
+
+    <p style="font-size: 13px; color: #475569;">
+      🔒 <strong>Bảo mật tài khoản:</strong> Sau khi đăng nhập lần đầu, bạn có thể đổi lại mật khẩu cá nhân tại mục Hồ Sơ (góc phải giao diện).
+    </p>
+  `;
+  return wrapEmailHtml({
+    title: 'Thông Tin Tài Khoản Nhân Sự Mới',
+    preheader: `Tài khoản đăng nhập hệ thống của ${userName}`,
+    contentHtml: content,
+    ctaText: 'Đăng Nhập Ngay Vào Hệ Thống',
+    ctaUrl: loginUrl || 'https://company-sheet.hieupham101097.workers.dev'
+  });
+}
+
+function getDailyRemindersEmailHtml({ companyName, date, overdueTasks = [], upcomingContracts = [], expiredContracts = [], dashboardUrl }) {
+  let sections = '';
+
+  if (overdueTasks.length > 0) {
+    sections += `
+      <div style="margin-top: 18px;">
+        <h3 style="color: #b91c1c; font-size: 14px; margin-bottom: 8px;">⚠️ Công Việc Quá Hạn Cần Xử Lý (${overdueTasks.length})</h3>
+        <table>
+          <thead><tr><th>Tên Công Việc</th><th>Người Phụ Trách</th><th>Hạn Chót</th></tr></thead>
+          <tbody>
+            ${overdueTasks.slice(0, 8).map(t => `
+              <tr>
+                <td style="font-weight: 600;">${t.title}</td>
+                <td>${t.assignee || 'Chưa phân công'}</td>
+                <td style="color: #b91c1c; font-weight: bold;">${t.due_date}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  if (upcomingContracts.length > 0 || expiredContracts.length > 0) {
+    sections += `
+      <div style="margin-top: 18px;">
+        <h3 style="color: #b45309; font-size: 14px; margin-bottom: 8px;">📑 Cảnh Báo Hạn Hợp Đồng &amp; Biên Bản</h3>
+        <table>
+          <thead><tr><th>Số HĐ / Đối Tác</th><th>Ngày Hết Hạn</th><th>Trạng Thái</th></tr></thead>
+          <tbody>
+            ${expiredContracts.slice(0, 5).map(c => `
+              <tr>
+                <td style="font-weight: 600;">${c.contract_number} ${c.partner_name ? `- ${c.partner_name}` : ''}</td>
+                <td style="color: #dc2626; font-weight: bold;">${c.end_date}</td>
+                <td><span class="badge" style="background:#fee2e2;color:#991b1b;">Đã hết hạn</span></td>
+              </tr>
+            `).join('')}
+            ${upcomingContracts.slice(0, 5).map(c => `
+              <tr>
+                <td style="font-weight: 600;">${c.contract_number} ${c.partner_name ? `- ${c.partner_name}` : ''}</td>
+                <td style="color: #d97706; font-weight: bold;">${c.end_date}</td>
+                <td><span class="badge badge-amber">Sắp hết hạn</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  if (!sections) {
+    sections = `
+      <div class="card" style="text-align: center; padding: 22px;">
+        <p style="color: #15803d; font-weight: bold; margin: 0; font-size: 15px;">🎉 Tuyệt vời! Hiện tại không có công việc hoặc hợp đồng nào bị quá hạn.</p>
+        <p style="color: #64748b; font-size: 13px; margin: 6px 0 0 0;">Mọi hoạt động vận hành của doanh nghiệp đang diễn ra đúng kế hoạch.</p>
+      </div>
+    `;
+  }
+
+  const content = `
+    <p>Xin chào Ban Quản Trị <strong>${companyName || 'OMNI ASSETS'}</strong>,</p>
+    <p>Hệ thống tự động tổng hợp tình trạng hạn mức vận hành ngày <strong>${date}</strong>:</p>
+    ${sections}
+  `;
+
+  return wrapEmailHtml({
+    title: `Báo Cáo Nhắc Hạn Vận Hành (${date})`,
+    preheader: `Báo cáo nhắc hạn công việc và hợp đồng ngày ${date}`,
+    contentHtml: content,
+    ctaText: 'Mở Bàn Điều Khiển Quản Trị',
+    ctaUrl: dashboardUrl || 'https://company-sheet.hieupham101097.workers.dev'
+  });
+}
+
+function getTimesheetEmailHtml({ companyName, userName, month, totalDaysWorked, totalHours, standardWorkDays, onTimeDays, lateDays, lateMinutes = 0, punctualityRate = 100, notes = '' }) {
+  const content = `
+    <p>Xin chào <strong>${userName}</strong>,</p>
+    <p>Phòng Nhân Sự &amp; Kế Toán <strong>${companyName || 'OMNI ASSETS & LOGISTICS'}</strong> gửi đến bạn phiếu tổng hợp chấm công tháng <strong>${month}</strong>:</p>
+
+    <div class="card" style="border: 2px solid #e0e7ff; background: #fafafa;">
+      <h3 style="margin-top: 0; margin-bottom: 12px; color: #4338ca; font-size: 14px;">📊 TỔNG HỢP CÔNG THÁNG ${month}</h3>
+      <table style="margin: 0;">
+        <tr>
+          <td style="width: 45%; font-weight: bold; border-top:none;">Tổng số ngày đi làm:</td>
+          <td style="font-weight: bold; color: #059669; font-size: 15px; border-top:none;">${totalDaysWorked} ngày</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Tổng số giờ làm việc:</td>
+          <td style="font-family: monospace; font-weight: bold; color: #1e293b;">${totalHours} giờ</td>
+        </tr>
+        <tr style="background: #f0fdf4;">
+          <td style="font-weight: bold; color: #166534;">Công chuẩn kế toán quy đổi (h/8):</td>
+          <td style="font-weight: 800; font-size: 16px; color: #15803d; font-family: monospace;">${standardWorkDays} công</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Số buổi đúng giờ:</td>
+          <td style="color: #059669; font-weight: bold;">${onTimeDays} buổi</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Số lần đi muộn:</td>
+          <td style="color: ${lateDays > 0 ? '#dc2626' : '#64748b'}; font-weight: bold;">
+            ${lateDays > 0 ? `${lateDays} lần (${lateMinutes} phút)` : '0 lần (Đúng giờ tuyệt đối)'}
+          </td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Tỷ lệ chuyên cần:</td>
+          <td style="font-weight: bold; color: ${punctualityRate >= 90 ? '#16a34a' : '#d97706'};">${punctualityRate}%</td>
+        </tr>
+      </table>
+    </div>
+
+    ${notes ? `
+      <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 14px; border-radius: 8px; font-size: 13px; color: #1e40af; margin-top: 14px;">
+        <strong>Ghi chú:</strong> ${notes}
+      </div>
+    ` : ''}
+
+    <p style="font-size: 12px; color: #64748b; margin-top: 18px;">
+      ℹ️ <em>Nếu cần đối soát lại ngày công, bạn vui lòng phản hồi lại Phòng Kế toán / Nhân sự trong vòng 48 giờ.</em>
+    </p>
+  `;
+
+  return wrapEmailHtml({
+    title: `Phiếu Báo Cáo Chấm Công Tháng ${month}`,
+    preheader: `Bảng tổng kết công tháng ${month} của ${userName}: ${standardWorkDays} ngày công`,
+    contentHtml: content,
+    ctaText: 'Xem Lịch Sử Điểm Danh',
+    ctaUrl: 'https://company-sheet.hieupham101097.workers.dev'
+  });
+}
+
+function getOtpEmailHtml({ companyName, otp, expiresInMinutes = 5 }) {
+  const digits = String(otp || '').trim().split('');
+  const digitsHtml = digits.map(d => `
+    <td style="width: 46px; height: 56px; background: #ffffff; border: 2px solid #10b981; border-radius: 12px; text-align: center; vertical-align: middle; font-size: 30px; font-weight: 800; color: #065f46; font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);">
+      ${d}
+    </td>
+  `).join('<td style="width: 8px;"></td>');
+
+  const content = `
+    <div style="text-align: center; margin-bottom: 24px;">
+      <span class="badge badge-amber" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; padding: 6px 18px; font-size: 11px; font-weight: 700; border-radius: 9999px; letter-spacing: 0.8px;">
+        MÃ XÁC THỰC BẢO MẬT (OTP)
+      </span>
+    </div>
+
+    <p style="font-size: 15px; font-weight: 700; color: #0f172a; margin: 0 0 12px 0;">
+      Kính gửi Quý Quản trị viên,
+    </p>
+    <p style="font-size: 14px; color: #334155; line-height: 1.65; margin: 0 0 12px 0;">
+      Hệ thống đã tiếp nhận yêu cầu đăng ký không gian làm việc số cho doanh nghiệp <strong>${companyName}</strong> trên nền tảng <strong>OMNI ASSETS</strong>.
+    </p>
+    <p style="font-size: 14px; color: #334155; line-height: 1.65; margin: 0 0 24px 0;">
+      Để hoàn tất thủ tục đăng ký và kích hoạt hệ thống, vui lòng nhập mã xác thực OTP 6 chữ số dưới đây vào màn hình kích hoạt:
+    </p>
+
+    <!-- OTP Digit Cards -->
+    <div style="text-align: center; margin: 28px 0;">
+      <table align="center" style="margin: 0 auto; border-collapse: separate; border-spacing: 0;">
+        <tr>
+          ${digitsHtml}
+        </tr>
+      </table>
+
+      <div style="display: inline-block; margin-top: 14px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 9999px; padding: 5px 16px;">
+        <span style="color: #065f46; font-size: 12px; font-weight: 600;">
+          ⏱️ Mã này có hiệu lực trong vòng <strong>${expiresInMinutes} phút</strong>
+        </span>
+      </div>
+    </div>
+
+    <!-- Security Warning Card -->
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #059669; border-radius: 12px; padding: 14px 18px; margin-top: 26px;">
+      <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: 700; color: #0f172a;">
+        🛡️ Khuyến Cáo An Toàn &amp; Bảo Mật:
+      </p>
+      <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #64748b; line-height: 1.6;">
+        <li>Tuyệt đối <strong>không chia sẻ</strong> mã OTP này cho bất kỳ ai, bao gồm cả nhân viên hỗ trợ hệ thống.</li>
+        <li>Ban Quản trị OMNI ASSETS <strong>không bao giờ</strong> chủ động gọi điện yêu cầu cung cấp mã OTP.</li>
+        <li>Nếu bạn không thực hiện yêu cầu đăng ký này, vui lòng bỏ qua thư hoặc liên hệ bộ phận an toàn thông tin tại <a href="mailto:support@omniassets.ryug.id.vn" style="color: #059669; font-weight: 600; text-decoration: none;">support@omniassets.ryug.id.vn</a>.</li>
+      </ul>
+    </div>
+  `;
+
+  return wrapEmailHtml({
+    title: 'Mã Xác Thực Đăng Ký Tài Khoản Doanh Nghiệp',
+    preheader: `Mã OTP xác nhận đăng ký tài khoản ${companyName}: ${otp}`,
+    contentHtml: content
+  });
+}
+
+function getBroadcastEmailHtml({ companyName, subject, content, urgency = 'NORMAL', dashboardUrl }) {
+  const urgencyBadges = {
+    'URGENT': '<span class="badge" style="background:#fee2e2;color:#991b1b;">🚨 THÔNG BÁO KHẨN CẤP / QUAN TRỌNG</span>',
+    'ANNOUNCEMENT': '<span class="badge badge-blue">📢 THÔNG BÁO CHUNG DOANH NGHIỆP</span>',
+    'NORMAL': '<span class="badge badge-success">✉️ THÔNG ĐIỆP NỘI BỘ</span>'
+  };
+  const badgeHtml = urgencyBadges[urgency] || urgencyBadges['NORMAL'];
+
+  const formattedContent = content
+    .split('\n')
+    .filter(p => p.trim() !== '')
+    .map(p => `<p style="margin: 8px 0; color: #334155; line-height: 1.65; font-size: 14px;">${p}</p>`)
+    .join('');
+
+  const bodyHtml = `
+    <div style="margin-bottom: 15px;">
+      ${badgeHtml}
+    </div>
+    <h2 style="font-size: 18px; font-weight: 800; color: #0f172a; margin: 0 0 16px 0; letter-spacing: -0.3px;">
+      ${subject}
+    </h2>
+    <div class="card" style="border-left: 4px solid #059669; padding: 20px 22px; background: #fafafa;">
+      ${formattedContent}
+    </div>
+    <p style="font-size: 12px; color: #64748b; margin-top: 20px;">
+      Thông báo này được gửi từ Ban Điều Hành / Quản Trị của <strong>${companyName}</strong> qua hệ thống OMNI ASSETS.
+    </p>
+  `;
+
+  return wrapEmailHtml({
+    title: `Thông Báo Từ ${companyName}`,
+    preheader: subject,
+    contentHtml: bodyHtml,
+    ctaText: 'Đăng Nhập Xem Chi Tiết',
+    ctaUrl: dashboardUrl || 'https://company-sheet.hieupham101097.workers.dev'
+  });
+}
+
+function getManagementNotificationEmailHtml({ companyName, subject, message, senderName, timestamp, managerNames = [], dashboardUrl }) {
+  const content = `
+    <div style="text-align: center; margin-bottom: 20px;">
+      <span class="badge" style="background:#e0e7ff; color:#3730a3; border: 1px solid #c7d2fe; padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 9999px; text-transform: uppercase;">
+        🛡️ THÔNG BÁO CẤP QUẢN TRỊ &amp; ĐIỀU HÀNH (ADMIN &amp; MANAGER)
+      </span>
+    </div>
+
+    <h2 style="font-size: 19px; font-weight: 800; color: #0f172a; margin: 0 0 12px 0; text-align: center; letter-spacing: -0.3px;">
+      ${subject || 'Cập Nhật Vận Hành & Phân Quyền Doanh Nghiệp'}
+    </h2>
+
+    <div class="card" style="border-left: 4px solid #4f46e5; background: #f8fafc; padding: 18px 20px;">
+      <p style="margin: 0 0 12px 0; color: #1e293b; font-size: 14px; line-height: 1.6; font-weight: 600;">
+        Kính gửi Quý Cán Bộ Quản Trị &amp; Quản Lý Doanh Nghiệp <strong>${companyName}</strong>,
+      </p>
+      <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin: 12px 0;">
+        <p style="margin: 0; color: #334155; line-height: 1.7; font-size: 14px; white-space: pre-wrap;">${message || 'Ban Quản Trị thông báo: Cập nhật phân quyền phòng ban và chính sách vận hành mới đã được áp dụng và đồng bộ thời gian thực lên hệ thống cơ sở dữ liệu.'}</p>
+      </div>
+
+      <table style="margin-top: 14px; margin-bottom: 0;">
+        <tr>
+          <td style="width: 35%; font-weight: bold; border:none; color: #64748b; font-size: 12px;">Đơn vị / Doanh nghiệp:</td>
+          <td style="border:none; font-weight: bold; color: #0f172a; font-size: 12px;">${companyName}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; border:none; color: #64748b; font-size: 12px;">Người gửi lệnh:</td>
+          <td style="border:none; font-weight: bold; color: #4338ca; font-size: 12px;">${senderName || 'Ban Quản Trị Doanh Nghiệp'}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; border:none; color: #64748b; font-size: 12px;">Thời điểm phát:</td>
+          <td style="border:none; color: #334155; font-size: 12px;">${timestamp || new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; border:none; color: #64748b; font-size: 12px;">Hòm thư phát:</td>
+          <td style="border:none; font-family: monospace; color: #0284c7; font-weight: bold; font-size: 12px;">tasks@omniassets.ryug.id.vn</td>
+        </tr>
+        ${managerNames.length > 0 ? `
+        <tr>
+          <td style="font-weight: bold; border:none; color: #64748b; font-size: 12px;">Danh sách cán bộ nhận:</td>
+          <td style="border:none; color: #475569; font-size: 12px;">${managerNames.join(', ')}</td>
+        </tr>` : ''}
+      </table>
+    </div>
+
+    <p style="font-size: 12px; color: #64748b; margin-top: 18px; line-height: 1.6;">
+      💡 <em>Thông báo nội bộ này được phát đến cấp Quản lý và Quản trị viên để nắm bắt kịp thời tình hình điều hành doanh nghiệp.</em>
+    </p>
+  `;
+
+  return wrapEmailHtml({
+    title: `[Điều Hành Nội Bộ] ${subject}`,
+    preheader: subject,
+    contentHtml: content,
+    ctaText: 'Mở Bàn Làm Việc Quản Trị',
+    ctaUrl: dashboardUrl || 'https://company-sheet.hieupham101097.workers.dev'
+  });
+}
+
+// Template email Super Admin phát thông báo gói dịch vụ & nền tảng (notifications@omniassets.ryug.id.vn)
+function getSuperAdminPlanAnnouncementEmailHtml({
+  subject,
+  message,
+  plans = [],
+  ctaText = 'Xem Bảng Giá & Nâng Cấp Gói',
+  ctaUrl = 'https://company-sheet.hieupham101097.workers.dev',
+  senderEmail = 'notifications@omniassets.ryug.id.vn',
+  recipientName = 'Quý Doanh Nghiệp'
+}) {
+  const content = `
+    <div style="text-align: center; margin-bottom: 24px;">
+      <span class="badge" style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); color: #6d28d9; border: 1px solid #ddd6fe; padding: 7px 18px; font-size: 12px; font-weight: 800; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block;">
+        🚀 THÔNG BÁO TỪ BAN ĐIỀU HÀNH NỀN TẢNG OMNIASSETS
+      </span>
+    </div>
+
+    <h2 style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 16px 0; text-align: center; letter-spacing: -0.5px;">
+      ${subject || 'Thông Báo Gói Dịch Vụ & Bản Quyền Hệ Thống OmniAssets'}
+    </h2>
+
+    <div class="card" style="border-left: 4px solid #7c3aed; background: #ffffff; padding: 22px 24px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+      <p style="margin: 0 0 14px 0; color: #1e293b; font-size: 15px; line-height: 1.6; font-weight: 600;">
+        Kính gửi Quý Cán Bộ Quản Trị &amp; Điều Hành <strong>${recipientName}</strong>,
+      </p>
+      
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin: 14px 0; color: #334155; line-height: 1.7; font-size: 14px; white-space: pre-wrap;">${message}</div>
+
+      ${plans && plans.length > 0 ? `
+      <div style="margin-top: 20px;">
+        <h4 style="font-size: 13px; font-weight: 800; text-transform: uppercase; color: #475569; margin: 0 0 10px 0; letter-spacing: 0.5px;">
+          Bảng Gói Cước Dịch Vụ Doanh Nghiệp (Official Pricing):
+        </h4>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+          <thead>
+            <tr style="background: #f1f5f9; text-align: left;">
+              <th style="padding: 10px 12px; font-size: 12px; font-weight: 700; color: #334155; border: 1px solid #e2e8f0;">Gói Dịch Vụ</th>
+              <th style="padding: 10px 12px; font-size: 12px; font-weight: 700; color: #334155; border: 1px solid #e2e8f0;">Thời Hạn</th>
+              <th style="padding: 10px 12px; font-size: 12px; font-weight: 700; color: #334155; border: 1px solid #e2e8f0;">Giá Cước</th>
+              <th style="padding: 10px 12px; font-size: 12px; font-weight: 700; color: #334155; border: 1px solid #e2e8f0;">Đặc Quyền</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${plans.map(p => `
+              <tr>
+                <td style="padding: 10px 12px; font-size: 12px; font-weight: 700; color: #6d28d9; border: 1px solid #e2e8f0;">
+                  ${p.name || p.code}
+                </td>
+                <td style="padding: 10px 12px; font-size: 12px; color: #475569; border: 1px solid #e2e8f0;">
+                  ${p.duration_months === 999 ? 'Trọn đời' : `${p.duration_months} tháng`}
+                </td>
+                <td style="padding: 10px 12px; font-size: 12px; font-weight: 800; color: #059669; border: 1px solid #e2e8f0;">
+                  ${p.price ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p.price) : 'Miễn phí'}
+                </td>
+                <td style="padding: 10px 12px; font-size: 11px; color: #64748b; border: 1px solid #e2e8f0;">
+                  ${p.badge || 'Đầy đủ module'}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>` : ''}
+
+      <table style="margin-top: 18px; width: 100%; border: none;">
+        <tr>
+          <td style="width: 35%; font-weight: bold; border:none; color: #64748b; font-size: 12px;">Đơn vị phát hành:</td>
+          <td style="border:none; font-weight: bold; color: #7c3aed; font-size: 12px;">OmniAssets Platform (Master Super Admin)</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; border:none; color: #64748b; font-size: 12px;">Quản Trị Viên Nền Tảng:</td>
+          <td style="border:none; font-weight: bold; color: #0f172a; font-size: 12px;">adminManager@gmail.com</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; border:none; color: #64748b; font-size: 12px;">Hòm thư phát thông báo:</td>
+          <td style="border:none; font-family: monospace; color: #7c3aed; font-weight: bold; font-size: 12px;">${senderEmail}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; border:none; color: #64748b; font-size: 12px;">Hỗ trợ &amp; tư vấn gói:</td>
+          <td style="border:none; font-family: monospace; color: #059669; font-weight: bold; font-size: 12px;">support@omniassets.ryug.id.vn</td>
+        </tr>
+      </table>
+    </div>
+
+    <p style="font-size: 11px; color: #94a3b8; margin-top: 16px; text-align: center; line-height: 1.6;">
+      Thông báo được phát chính thức từ Hệ Thống Quản Trị Nền Tảng OmniAssets đến Ban Quản Trị Doanh Nghiệp.
+    </p>
+  `;
+
+  return wrapEmailHtml({
+    title: `[OmniAssets Platform] ${subject}`,
+    preheader: subject,
+    contentHtml: content,
+    ctaText,
+    ctaUrl
+  });
+}
+
 // ========================
 // 1. AUTHENTICATION & LOGIN
 // ========================
@@ -245,6 +1138,68 @@ app.post('/api/auth/login', async (c) => {
   }
 });
 
+// Gửi mã OTP xác thực đăng ký doanh nghiệp
+app.post('/api/auth/send-registration-otp', async (c) => {
+  try {
+    await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS email_otps (
+        email TEXT PRIMARY KEY,
+        otp TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run().catch(() => {});
+
+    const body = await c.req.json().catch(() => ({}));
+    const email = (body.admin_email || body.email || '').trim().toLowerCase();
+    const companyName = (body.company_name || 'Doanh Nghiệp').trim();
+
+    if (!email || !email.includes('@')) {
+      return c.json({ success: false, message: 'Vui lòng nhập địa chỉ email hợp lệ' }, 400);
+    }
+
+    // Kiểm tra xem email đã được đăng ký chưa
+    const existing = await c.env.DB.prepare('SELECT id FROM users WHERE lower(email) = ?').bind(email).first().catch(() => null);
+    if (existing) {
+      return c.json({ success: false, message: `Email "${email}" đã tồn tại trên hệ thống. Vui lòng đăng nhập hoặc dùng email khác.` }, 400);
+    }
+
+    // Sinh mã OTP ngẫu nhiên 6 chữ số
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 phút
+
+    await c.env.DB.prepare(`
+      INSERT INTO email_otps (email, otp, expires_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(email) DO UPDATE SET otp = excluded.otp, expires_at = excluded.expires_at, created_at = CURRENT_TIMESTAMP
+    `).bind(email, otp, expiresAt).run();
+
+    const otpHtml = getOtpEmailHtml({
+      companyName,
+      otp,
+      expiresInMinutes: 5
+    });
+
+    await sendEmail({
+      db: c.env.DB,
+      companyId: 'SYSTEM',
+      senderType: 'notifications',
+      replyTo: 'hieupham101097@gmail.com',
+      to: email,
+      subject: `[OMNI ASSETS] Mã OTP xác thực đăng ký: ${otp}`,
+      html: otpHtml
+    });
+
+    return c.json({
+      success: true,
+      message: `Đã gửi mã xác thực OTP 6 số đến email ${email}. Vui lòng kiểm tra hộp thư!`,
+      data: { email }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: `Lỗi gửi mã OTP: ${err.message}` }, 500);
+  }
+});
+
 // Đăng ký Doanh nghiệp Mới & Tạo User Quản Trị Viên (Tenant Isolation)
 app.post('/api/auth/register-company', async (c) => {
   try {
@@ -260,7 +1215,8 @@ app.post('/api/auth/register-company', async (c) => {
       admin_email,
       admin_password,
       admin_phone,
-      admin_title
+      admin_title,
+      otp
     } = body;
 
     // Validate required fields
@@ -291,6 +1247,29 @@ app.post('/api/auth/register-company', async (c) => {
         message: `Email "${cleanEmail}" đã được sử dụng. Vui lòng chọn email khác hoặc đăng nhập.`
       }, 400);
     }
+
+    // Verify OTP
+    const otpInput = (otp || '').trim();
+    if (!otpInput) {
+      return c.json({ success: false, message: 'Vui lòng nhập mã OTP xác thực đã được gửi về email của bạn.' }, 400);
+    }
+
+    const otpRecord = await c.env.DB.prepare('SELECT * FROM email_otps WHERE email = ?').bind(cleanEmail).first().catch(() => null);
+    if (!otpRecord) {
+      return c.json({ success: false, message: 'Chưa có yêu cầu gửi mã OTP cho email này hoặc mã đã hết hạn. Vui lòng bấm gửi lại mã.' }, 400);
+    }
+
+    if (Date.now() > otpRecord.expires_at) {
+      await c.env.DB.prepare('DELETE FROM email_otps WHERE email = ?').bind(cleanEmail).run().catch(() => {});
+      return c.json({ success: false, message: 'Mã OTP đã hết hạn (quá 5 phút). Vui lòng yêu cầu gửi mã mới.' }, 400);
+    }
+
+    if (otpRecord.otp !== otpInput) {
+      return c.json({ success: false, message: 'Mã OTP xác thực không chính xác. Vui lòng kiểm tra lại.' }, 400);
+    }
+
+    // OTP verified! Clean up OTP record
+    await c.env.DB.prepare('DELETE FROM email_otps WHERE email = ?').bind(cleanEmail).run().catch(() => {});
 
     // Generate isolated Company Tenant
     const companyId = `comp_${Date.now()}`;
@@ -1972,17 +2951,6 @@ app.post('/api/users', async (c) => {
     }
 
     const { companyId } = await getTenantContext(c);
-    const license = await getLicenseStatus(c.env.DB);
-    if (license.isDemo) {
-      const count = (await c.env.DB.prepare('SELECT count(*) as count FROM users WHERE company_id = ?').bind(companyId).first())?.count || 0;
-      if (count >= 4) {
-        return c.json({
-          success: false,
-          code: 'LICENSE_LIMIT_REACHED',
-          message: 'Bản Dùng Thử (Demo) giới hạn tối đa 4 tài khoản nhân sự. Vui lòng kích hoạt Bản Quyền Doanh Nghiệp (Enterprise) để tiếp nhận nhân sự không giới hạn!'
-        }, 403);
-      }
-    }
 
     const body = await c.req.json();
     const id = `usr_${Date.now()}`;
@@ -2000,6 +2968,40 @@ app.post('/api/users', async (c) => {
       body.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(body.name)}`,
       companyId
     ).run();
+
+    // Tự động gửi email cấp tài khoản và mật khẩu khởi tạo nếu nhân sự có email
+    if (body.email && body.email.includes('@')) {
+      try {
+        const mailConfig = await getEmailConfig(c.env.DB, companyId);
+        if (mailConfig.notifyNewUser) {
+          const comp = await c.env.DB.prepare('SELECT company_name FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null);
+          const companyName = comp?.company_name || mailConfig.companyName || 'OMNI ASSETS & LOGISTICS';
+          const welcomeHtml = getWelcomeUserEmailHtml({
+            companyName,
+            userName: body.name || 'Nhân sự mới',
+            userEmail: body.email,
+            password: body.password || '123456',
+            role: body.role || 'STAFF',
+            department: body.department || 'Phòng Kế Hoạch',
+            loginUrl: 'https://company-sheet.hieupham101097.workers.dev'
+          });
+          const mailPromise = sendEmail({
+            db: c.env.DB,
+            companyId,
+            senderType: 'tasks',
+            to: body.email,
+            subject: `[${companyName}] Thông tin tài khoản đăng nhập của bạn`,
+            html: welcomeHtml
+          }).catch(e => console.error('[Welcome Email Error]', e.message));
+
+          if (c.executionCtx?.waitUntil) {
+            c.executionCtx.waitUntil(mailPromise);
+          }
+        }
+      } catch (mErr) {
+        console.error('[Welcome Mail Trigger Error]', mErr.message);
+      }
+    }
 
     return c.json({ success: true, message: 'Đã thêm nhân sự' });
   } catch (err) {
@@ -2284,6 +3286,14 @@ async function initSettingsTable(db) {
       ['system_announcement', 'Chào mừng bạn đến với hệ thống quản trị vận hành OMNI ASSETS!', 'GENERAL', 'Thông báo chung trên bảng tin', new Date().toISOString()],
       ['allow_user_registration', 'false', 'GENERAL', 'Cho phép nhân viên tự tạo tài khoản', new Date().toISOString()],
       ['gemini_api_key', '', 'GENERAL', 'Google Gemini AI API Key', new Date().toISOString()],
+      // EMAIL SERVICE (RESEND & BREVO)
+      ['mail_provider', 'resend', 'MAIL', 'Nhà cung cấp dịch vụ Email (resend hoặc brevo)', new Date().toISOString()],
+      ['mail_api_key', '', 'MAIL', 'Khóa API Key của dịch vụ gửi mail', new Date().toISOString()],
+      ['mail_sender_name', 'OMNI ASSETS & LOGISTICS', 'MAIL', 'Tên người gửi hiển thị trong hộp thư', new Date().toISOString()],
+      ['mail_sender_email', 'onboarding@resend.dev', 'MAIL', 'Địa chỉ email người gửi', new Date().toISOString()],
+      ['mail_notify_new_user', 'true', 'MAIL', 'Tự động gửi email cấp tài khoản & mật khẩu khi thêm nhân sự', new Date().toISOString()],
+      ['mail_notify_reminders', 'true', 'MAIL', 'Tự động gửi email thông báo nhắc hạn (hợp đồng, công việc) lúc 06:00 AM', new Date().toISOString()],
+      ['mail_notify_timesheet', 'true', 'MAIL', 'Kích hoạt tính năng gửi phiếu chấm công qua email', new Date().toISOString()],
       // LICENSE & PAYWALL
       ['license_tier', 'DEMO', 'LICENSE', 'Cấp độ bản quyền (DEMO hoặc ENTERPRISE)', new Date().toISOString()],
       ['license_key', '', 'LICENSE', 'Khóa bản quyền đã kích hoạt', new Date().toISOString()],
@@ -2308,20 +3318,18 @@ async function getLicenseStatus(db) {
     const res = await db.prepare('SELECT key, value FROM system_settings WHERE key IN ("license_tier", "license_key", "license_status", "license_activated_at", "company_name")').all();
     const map = {};
     (res.results || []).forEach((r) => { map[r.key] = r.value; });
-    const tier = map.license_tier || 'DEMO';
-    const isDemo = tier !== 'ENTERPRISE';
     return {
-      tier: isDemo ? 'DEMO' : 'ENTERPRISE',
-      isDemo,
-      key: map.license_key || '',
-      status: map.license_status || 'ACTIVE',
-      activatedAt: map.license_activated_at || null,
+      tier: 'ENTERPRISE',
+      isDemo: false,
+      key: map.license_key || 'OMNIASSETS-ENTERPRISE-UNLIMITED',
+      status: 'ACTIVE',
+      activatedAt: map.license_activated_at || new Date().toISOString(),
       organization: map.company_name || 'Doanh Nghiệp',
       company_name: map.company_name || '',
       companyName: map.company_name || ''
     };
   } catch {
-    return { tier: 'DEMO', isDemo: true, key: '', status: 'ACTIVE', activatedAt: null, organization: 'Doanh Nghiệp', company_name: '', companyName: '' };
+    return { tier: 'ENTERPRISE', isDemo: false, key: 'OMNIASSETS-ENTERPRISE-UNLIMITED', status: 'ACTIVE', activatedAt: null, organization: 'Doanh Nghiệp', company_name: '', companyName: '' };
   }
 }
 
@@ -2458,56 +3466,120 @@ app.put('/api/settings', async (c) => {
 // ========================
 app.get('/api/license/status', async (c) => {
   try {
-    const { companyId } = await getTenantContext(c);
-    let isDemo = true;
-    let tier = 'DEMO';
-    let planCode = 'TRIAL_2M';
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+
     let companyName = 'OMNI ASSETS';
-    let status = 'ACTIVE';
+    let planCode = 'TRIAL_2M';
+    let licenseStatus = 'ACTIVE';
+    let startDate = null;
     let expireDate = null;
+    let isTrial = true;
+    let isExpired = false;
+    let daysRemaining = null;
+
+    if (isSuperAdmin) {
+      return c.json({
+        success: true,
+        data: {
+          tier: 'SUPER_ADMIN',
+          isDemo: false,
+          isTrial: false,
+          status: 'ACTIVE',
+          plan_code: 'MASTER',
+          plan_name: 'Quản Trị Nền Tảng Tối Cao',
+          badge: 'Master Admin',
+          expire_date: null,
+          days_remaining: null,
+          company_name: 'Hệ Thống Quản Trị Nền Tảng',
+          companyName: 'Hệ Thống Quản Trị Nền Tảng',
+          organization: 'Hệ Thống Quản Trị Nền Tảng',
+          limits: {
+            assets: { current: 0, max: 'UNLIMITED' },
+            users: { current: 0, max: 'UNLIMITED' },
+            contracts: { current: 0, max: 'UNLIMITED' },
+            finance: { current: 0, max: 'UNLIMITED' },
+            excelExport: true,
+            unwatermarkedPrint: true
+          }
+        }
+      });
+    }
 
     if (companyId && companyId !== 'ALL' && companyId !== 'SYSTEM') {
       const tenant = await c.env.DB
-        .prepare('SELECT * FROM company_tenants WHERE id = ?')
+        .prepare('SELECT id, company_name, plan_code, license_status, start_date, expire_date FROM company_tenants WHERE id = ?')
         .bind(companyId)
         .first()
         .catch(() => null);
 
       if (tenant) {
-        companyName = tenant.company_name;
-        planCode = tenant.plan_code || 'TRIAL_2M';
-        status = tenant.license_status || 'ACTIVE';
-        expireDate = tenant.expire_date;
-
-        const today = new Date().toISOString().slice(0, 10);
-        const isExpired = expireDate && expireDate < today;
-
-        if (status === 'ACTIVE' && !isExpired) {
-          if (planCode === 'LIFETIME' || planCode === 'ANNUAL_1Y') {
-            tier = 'ENTERPRISE';
-            isDemo = false;
-          } else if (planCode === 'TRIAL_2M') {
-            tier = 'TRIAL';
-            isDemo = false; // Gói dùng thử 2 tháng được mở khóa toàn diện
-          }
-        } else {
-          tier = 'EXPIRED';
-          isDemo = true;
-        }
-      } else {
-        await initSettingsTable(c.env.DB);
-        const lic = await getLicenseStatus(c.env.DB);
-        isDemo = lic.isDemo;
-        tier = lic.tier;
-        companyName = lic.organization;
+        if (tenant.company_name) companyName = tenant.company_name;
+        if (tenant.plan_code) planCode = tenant.plan_code;
+        if (tenant.license_status) licenseStatus = tenant.license_status;
+        startDate = tenant.start_date || null;
+        expireDate = tenant.expire_date || null;
       }
-    } else {
-      await initSettingsTable(c.env.DB);
-      const lic = await getLicenseStatus(c.env.DB);
-      isDemo = lic.isDemo;
-      tier = lic.tier;
-      companyName = lic.organization;
     }
+
+    // Tính toán hạn dùng và số ngày còn lại
+    if (planCode === 'LIFETIME') {
+      daysRemaining = null;
+      expireDate = null;
+      isTrial = false;
+    } else if (expireDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const exp = new Date(expireDate);
+      exp.setHours(0, 0, 0, 0);
+      const diffMs = exp.getTime() - today.getTime();
+      daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (daysRemaining < 0 || licenseStatus === 'EXPIRED') {
+        isExpired = true;
+        licenseStatus = 'EXPIRED';
+      }
+    }
+
+    // Tên gói & nhãn hiển thị trực quan
+    let planName = 'Gói Dùng Thử 2 Tháng (Trial 60 Ngày)';
+    let badge = 'Dùng Thử 60 Ngày';
+    let tier = 'TRIAL';
+    let isDemo = isExpired || planCode === 'DEMO';
+
+    if (planCode === 'TRIAL_2M') {
+      planName = 'Gói Dùng Thử 2 Tháng (Trial 60 Ngày)';
+      badge = 'Dùng Thử 60 Ngày';
+      tier = 'TRIAL';
+      isTrial = true;
+    } else if (planCode === 'ANNUAL_1Y') {
+      planName = 'Gói Tiêu Chuẩn 1 Năm';
+      badge = 'Gói 1 Năm';
+      tier = 'ANNUAL';
+      isTrial = false;
+    } else if (planCode === 'LIFETIME') {
+      planName = 'Gói Vĩnh Viễn Trọn Đời';
+      badge = 'Vĩnh Viễn (∞)';
+      tier = 'ENTERPRISE';
+      isTrial = false;
+      isDemo = false;
+    } else {
+      const planRow = await c.env.DB
+        .prepare('SELECT name, badge FROM pricing_plans WHERE code = ?')
+        .bind(planCode)
+        .first()
+        .catch(() => null);
+      if (planRow) {
+        planName = planRow.name;
+        badge = planRow.badge || planCode;
+      }
+      isTrial = false;
+    }
+
+    // Lấy key đã lưu (nếu có)
+    const keyRecord = await c.env.DB
+      .prepare("SELECT value FROM company_settings WHERE company_id = ? AND key = 'license_key'")
+      .bind(companyId)
+      .first()
+      .catch(() => null);
 
     const [assetsCount, usersCount, contractsCount, financeCount] = await Promise.all([
       c.env.DB.prepare('SELECT count(*) as count FROM assets WHERE company_id = ?').bind(companyId).first().catch(() => ({ count: 0 })),
@@ -2516,24 +3588,34 @@ app.get('/api/license/status', async (c) => {
       c.env.DB.prepare('SELECT count(*) as count FROM finance WHERE company_id = ?').bind(companyId).first().catch(() => ({ count: 0 })),
     ]);
 
+    const isUnlimited = !isDemo && (planCode === 'TRIAL_2M' || planCode === 'ANNUAL_1Y' || planCode === 'LIFETIME');
+
     return c.json({
       success: true,
       data: {
         tier,
         isDemo,
-        status,
+        isTrial,
+        isExpired,
+        status: licenseStatus,
         plan_code: planCode,
+        plan_name: planName,
+        badge,
+        start_date: startDate,
         expire_date: expireDate,
+        days_remaining: daysRemaining,
+        company_id: companyId,
         company_name: companyName,
         companyName: companyName,
         organization: companyName,
+        key: keyRecord?.value || (planCode === 'TRIAL_2M' ? 'TRIAL-60-DAYS' : planCode === 'LIFETIME' ? 'OMNI-LIFETIME' : ''),
         limits: {
-          assets: { current: assetsCount?.count || 0, max: isDemo ? 5 : 'UNLIMITED' },
-          users: { current: usersCount?.count || 0, max: isDemo ? 4 : 'UNLIMITED' },
-          contracts: { current: contractsCount?.count || 0, max: isDemo ? 3 : 'UNLIMITED' },
-          finance: { current: financeCount?.count || 0, max: isDemo ? 5 : 'UNLIMITED' },
-          excelExport: !isDemo,
-          unwatermarkedPrint: !isDemo
+          assets: { current: assetsCount?.count || 0, max: isUnlimited ? 'UNLIMITED' : 5 },
+          users: { current: usersCount?.count || 0, max: isUnlimited ? 'UNLIMITED' : 4 },
+          contracts: { current: contractsCount?.count || 0, max: isUnlimited ? 'UNLIMITED' : 3 },
+          finance: { current: financeCount?.count || 0, max: isUnlimited ? 'UNLIMITED' : 5 },
+          excelExport: isUnlimited,
+          unwatermarkedPrint: isUnlimited
         }
       }
     });
@@ -2692,6 +3774,822 @@ app.post('/api/license/reset-demo', async (c) => {
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
   }
+});
+
+// ==========================================
+// 10.6 EMAIL SERVICE API ENDPOINTS
+// ==========================================
+
+// 1. Gửi email kiểm tra kết nối (Test Email)
+app.post('/api/mail/test', async (c) => {
+  try {
+    const { companyId } = await getTenantContext(c);
+    const body = await c.req.json().catch(() => ({}));
+    let targetEmail = (body.email || '').trim();
+
+    // Nếu không nhập email, tìm email quản trị viên hoặc company_email
+    if (!targetEmail) {
+      const compTenant = await c.env.DB.prepare('SELECT admin_email, company_name FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null);
+      targetEmail = compTenant?.admin_email;
+    }
+
+    if (!targetEmail || !targetEmail.includes('@')) {
+      return c.json({ success: false, message: 'Vui lòng cung cấp địa chỉ email hợp lệ để nhận thử nghiệm.' }, 400);
+    }
+
+    const config = await getEmailConfig(c.env.DB, companyId);
+    const compTenant = await c.env.DB.prepare('SELECT company_name FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null);
+    const companyName = compTenant?.company_name || config.senderName || 'OMNI ASSETS & LOGISTICS';
+
+    const testHtml = getTestEmailHtml({
+      companyName,
+      provider: config.provider,
+      recipientEmail: targetEmail
+    });
+
+    const sendRes = await sendEmail({
+      db: c.env.DB,
+      companyId,
+      senderType: 'support',
+      replyTo: 'hieupham101097@gmail.com',
+      to: targetEmail,
+      subject: `[OMNI ASSETS] Kiểm tra cấu hình gửi mail thành công (${config.provider.toUpperCase()})`,
+      html: testHtml
+    });
+
+    return c.json({
+      success: true,
+      message: `Đã gửi thành công email thử nghiệm đến ${targetEmail} qua ${config.provider.toUpperCase()} (Hòm thư: support@omniassets.ryug.id.vn)!`,
+      data: {
+        provider: config.provider,
+        recipient: targetEmail,
+        id: sendRes.id || sendRes.messageId,
+        mailbox: sendRes.mailbox,
+        from: sendRes.from,
+        replyTo: sendRes.replyTo
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: `Lỗi gửi mail: ${err.message}` }, 500);
+  }
+});
+
+// 2. Gửi phiếu chấm công tháng đến email nhân sự (Hòm thư: attendance@omniassets.ryug.id.vn)
+app.post('/api/mail/send-timesheet', async (c) => {
+  try {
+    const { companyId } = await getTenantContext(c);
+    const body = await c.req.json().catch(() => ({}));
+    const {
+      email,
+      user_name,
+      month,
+      totalDaysWorked = 0,
+      totalHours = 0,
+      standardWorkDays = 0,
+      onTimeDays = 0,
+      lateDays = 0,
+      lateMinutes = 0,
+      punctualityRate = 100,
+      notes = ''
+    } = body;
+
+    const targetEmail = (email || '').trim();
+    if (!targetEmail || !targetEmail.includes('@')) {
+      return c.json({ success: false, message: 'Nhân viên này chưa có địa chỉ email hợp lệ.' }, 400);
+    }
+
+    const compTenant = await c.env.DB.prepare('SELECT company_name FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null);
+    const companyName = compTenant?.company_name || 'OMNI ASSETS & LOGISTICS';
+
+    const timesheetHtml = getTimesheetEmailHtml({
+      companyName,
+      userName: user_name || 'Nhân viên',
+      month: month || new Date().toISOString().slice(0, 7),
+      totalDaysWorked,
+      totalHours,
+      standardWorkDays,
+      onTimeDays,
+      lateDays,
+      lateMinutes,
+      punctualityRate,
+      notes
+    });
+
+    const sendRes = await sendEmail({
+      db: c.env.DB,
+      companyId,
+      senderType: 'attendance',
+      to: targetEmail,
+      subject: `[${companyName}] Phiếu tổng hợp chấm công tháng ${month} - ${user_name}`,
+      html: timesheetHtml
+    });
+
+    return c.json({
+      success: true,
+      message: `Đã gửi phiếu chấm công tháng ${month} đến email ${targetEmail}!`,
+      data: sendRes
+    });
+  } catch (err) {
+    return c.json({ success: false, message: `Lỗi gửi email phiếu công: ${err.message}` }, 500);
+  }
+});
+
+// 3. Gửi bản tin nhắc hạn vận hành 6:00 AM (Hòm thư: reports@omniassets.ryug.id.vn)
+app.post('/api/mail/send-daily-reminders', async (c) => {
+  try {
+    const { companyId } = await getTenantContext(c);
+    const body = await c.req.json().catch(() => ({}));
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+
+    const mailConfig = await getEmailConfig(c.env.DB, companyId);
+    let targetEmails = [];
+    if (body.email && String(body.email).trim()) {
+      targetEmails = String(body.email).split(/[,;\n]/).map(e => e.trim().toLowerCase()).filter(e => e && e.includes('@'));
+    } else if (mailConfig.reportRecipients && mailConfig.reportRecipients.trim()) {
+      targetEmails = mailConfig.reportRecipients.split(/[,;\n]/).map(e => e.trim().toLowerCase()).filter(e => e && e.includes('@'));
+    }
+
+    const compTenant = await c.env.DB.prepare('SELECT company_name, admin_email FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null);
+    if (targetEmails.length === 0 && compTenant?.admin_email) {
+      targetEmails = [compTenant.admin_email.trim().toLowerCase()];
+    }
+
+    if (targetEmails.length === 0) {
+      return c.json({ success: false, message: 'Chưa có email nào trong danh sách nhận thông báo nhắc hạn. Vui lòng thiết lập danh sách email nhận báo cáo.' }, 400);
+    }
+
+    const [overdueTasks, upcomingContracts, expiredContracts] = await Promise.all([
+      c.env.DB.prepare("SELECT title, assignee, due_date FROM tasks WHERE (company_id = ? OR company_id IS NULL) AND status != 'COMPLETED' AND due_date < ? ORDER BY due_date ASC LIMIT 10").bind(companyId, today).all().catch(() => ({ results: [] })),
+      c.env.DB.prepare("SELECT contract_number, partner_name, end_date FROM contracts WHERE (company_id = ? OR company_id IS NULL) AND status = 'ACTIVE' AND end_date <= date('now', '+30 day') ORDER BY end_date ASC LIMIT 10").bind(companyId).all().catch(() => ({ results: [] })),
+      c.env.DB.prepare("SELECT contract_number, partner_name, end_date FROM contracts WHERE (company_id = ? OR company_id IS NULL) AND status = 'EXPIRED' ORDER BY end_date DESC LIMIT 10").bind(companyId).all().catch(() => ({ results: [] }))
+    ]);
+
+    const companyName = compTenant?.company_name || 'OMNIASSETS';
+    const mailHtml = getDailyRemindersEmailHtml({
+      companyName,
+      date: today,
+      overdueTasks: overdueTasks.results || [],
+      upcomingContracts: upcomingContracts.results || [],
+      expiredContracts: expiredContracts.results || [],
+      dashboardUrl: 'https://company-sheet.hieupham101097.workers.dev'
+    });
+
+    const sentResults = [];
+    for (const email of targetEmails) {
+      try {
+        await sendEmail({
+          db: c.env.DB,
+          companyId,
+          senderType: 'reports',
+          to: email,
+          subject: `[Nhắc Hạn Vận Hành 06:00 AM] Báo cáo tiến độ ngày ${today} - ${companyName}`,
+          html: mailHtml
+        });
+        sentResults.push(email);
+      } catch (err) {
+        console.error(`Error sending reminder to ${email}:`, err.message);
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: `Đã gửi báo cáo nhắc hạn thành công đến ${sentResults.length}/${targetEmails.length} email (${sentResults.join(', ')})!`,
+      data: { sentCount: sentResults.length, recipients: sentResults }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: `Lỗi gửi bản tin nhắc hạn: ${err.message}` }, 500);
+  }
+});
+
+// 4. Trung tâm Soạn & Phát Email (Broadcast / Direct Email)
+app.post('/api/mail/broadcast', async (c) => {
+  try {
+    const { companyId } = await getTenantContext(c);
+    const body = await c.req.json().catch(() => ({}));
+    const {
+      recipient_type = 'SINGLE', // 'SINGLE', 'ALL', 'DEPARTMENT'
+      target_email,
+      target_department,
+      subject,
+      content,
+      urgency = 'NORMAL', // 'NORMAL', 'URGENT', 'ANNOUNCEMENT'
+      sender_type = 'tasks' // 'tasks' | 'attendance' | 'assets' | 'contracts' | 'reports' | 'notifications'
+    } = body;
+
+    if (!subject || !subject.trim()) {
+      return c.json({ success: false, message: 'Vui lòng nhập tiêu đề email' }, 400);
+    }
+    if (!content || !content.trim()) {
+      return c.json({ success: false, message: 'Vui lòng nhập nội dung thông báo email' }, 400);
+    }
+
+    const compTenant = await c.env.DB.prepare('SELECT company_name, admin_email FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null);
+    const companyName = compTenant?.company_name || 'OMNI ASSETS & LOGISTICS';
+
+    let recipients = [];
+    if (recipient_type === 'SINGLE') {
+      const email = (target_email || '').trim().toLowerCase();
+      if (!email || !email.includes('@')) {
+        return c.json({ success: false, message: 'Vui lòng nhập địa chỉ email người nhận hợp lệ' }, 400);
+      }
+      recipients = [email];
+    } else if (recipient_type === 'DEPARTMENT') {
+      if (!target_department || !target_department.trim()) {
+        return c.json({ success: false, message: 'Vui lòng chọn phòng ban nhận thư' }, 400);
+      }
+      const users = await c.env.DB.prepare('SELECT email FROM users WHERE (company_id = ? OR company_id IS NULL) AND department = ? AND status = "ACTIVE" AND email LIKE "%@%"').bind(companyId, target_department.trim()).all().catch(() => ({ results: [] }));
+      recipients = (users.results || []).map(u => (u.email || '').trim().toLowerCase());
+    } else {
+      // ALL
+      const users = await c.env.DB.prepare('SELECT email FROM users WHERE (company_id = ? OR company_id IS NULL) AND status = "ACTIVE" AND email LIKE "%@%"').bind(companyId).all().catch(() => ({ results: [] }));
+      recipients = (users.results || []).map(u => (u.email || '').trim().toLowerCase());
+    }
+
+    // Filter unique
+    recipients = Array.from(new Set(recipients)).filter(e => e && e.includes('@'));
+
+    if (recipients.length === 0) {
+      return c.json({ success: false, message: 'Không tìm thấy người nhận nào phù hợp với danh sách chọn' }, 400);
+    }
+
+    const mailHtml = getBroadcastEmailHtml({
+      companyName,
+      subject: subject.trim(),
+      content: content.trim(),
+      urgency,
+      dashboardUrl: 'https://company-sheet.hieupham101097.workers.dev'
+    });
+
+    const chosenSenderType = SENDER_MAILBOXES[sender_type] ? sender_type : 'tasks';
+
+    const sentList = [];
+    const failedList = [];
+
+    for (const email of recipients) {
+      try {
+        await sendEmail({
+          db: c.env.DB,
+          companyId,
+          senderType: chosenSenderType,
+          to: email,
+          subject: `[${companyName}] ${subject.trim()}`,
+          html: mailHtml
+        });
+        sentList.push(email);
+      } catch (err) {
+        failedList.push({ email, error: err.message });
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: `Đã phát email thành công đến ${sentList.length}/${recipients.length} người nhận!`,
+      data: {
+        total: recipients.length,
+        sentCount: sentList.length,
+        failedCount: failedList.length,
+        sentList,
+        failedList
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: `Lỗi phát email: ${err.message}` }, 500);
+  }
+});
+
+// Helper khởi tạo bảng support_tickets
+async function initSupportTicketsTable(db) {
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id TEXT PRIMARY KEY,
+        company_id TEXT,
+        company_name TEXT,
+        sender_name TEXT,
+        sender_email TEXT,
+        sender_phone TEXT,
+        subject TEXT,
+        message TEXT,
+        status TEXT DEFAULT 'PENDING',
+        reply_message TEXT,
+        replied_at TEXT,
+        replied_by TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+  } catch (e) {
+    console.error('Init support_tickets table error:', e.message);
+  }
+}
+
+// 5. Gửi Yêu Cầu Hỗ Trợ Kỹ Thuật & Vận Hành Về Ban Quản Trị Hệ Thống
+app.post('/api/mail/send-support', async (c) => {
+  try {
+    const { companyId } = await getTenantContext(c);
+    const body = await c.req.json().catch(() => ({}));
+    const {
+      sender_name,
+      sender_email,
+      sender_phone,
+      company_name,
+      subject = 'Yêu cầu hỗ trợ hệ thống OMNI ASSETS',
+      message
+    } = body;
+
+    if (!message || !message.trim()) {
+      return c.json({ success: false, message: 'Vui lòng nhập nội dung cần hỗ trợ' }, 400);
+    }
+
+    const cleanSenderEmail = (sender_email || '').trim().toLowerCase();
+
+    const compTenant = await c.env.DB.prepare('SELECT company_name FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null);
+    const effectiveCompName = company_name || compTenant?.company_name || 'Doanh Nghiệp OMNI ASSETS';
+
+    await initSupportTicketsTable(c.env.DB);
+
+    const ticketId = 'ticket_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    await c.env.DB.prepare(`
+      INSERT INTO support_tickets (id, company_id, company_name, sender_name, sender_email, sender_phone, subject, message, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', datetime('now'), datetime('now'))
+    `).bind(ticketId, companyId || 'TENANT', effectiveCompName, sender_name || 'Quản lý', cleanSenderEmail, sender_phone || '', subject, message).run();
+
+    const supportHtml = `
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:12px; padding:18px; margin-bottom:16px;">
+        <h3 style="margin:0 0 8px 0; color:#15803d; font-size:16px;">📩 YÊU CẦU HỖ TRỢ / LIÊN HỆ TỪ DOANH NGHIỆP</h3>
+        <p style="margin:4px 0; font-size:13px;"><strong>Mã Ticket:</strong> <code style="background:#dcfce7; padding:2px 6px; border-radius:4px; font-weight:bold;">${ticketId}</code></p>
+        <p style="margin:4px 0; font-size:13px;"><strong>Doanh nghiệp:</strong> ${effectiveCompName}</p>
+        <p style="margin:4px 0; font-size:13px;"><strong>Người liên hệ:</strong> ${sender_name || 'Quản lý'}</p>
+        <p style="margin:4px 0; font-size:13px;"><strong>Email gửi:</strong> <a href="mailto:${cleanSenderEmail}">${cleanSenderEmail || 'Chưa cung cấp'}</a></p>
+        <p style="margin:4px 0; font-size:13px;"><strong>Số điện thoại:</strong> ${sender_phone || 'Chưa cung cấp'}</p>
+      </div>
+      <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:18px;">
+        <h4 style="margin:0 0 8px 0; color:#0f172a; font-size:14px;">Nội dung yêu cầu hỗ trợ:</h4>
+        <p style="white-space:pre-wrap; color:#334155; line-height:1.6; font-size:14px; margin:0;">${message}</p>
+      </div>
+      <p style="font-size:12px; color:#64748b; margin-top:16px;">
+        ℹ️ Yêu cầu này đã được đồng bộ vào <strong>Cổng Quản Trị Hệ Thống (Super Admin Portal - Hòm Thư Hỗ Trợ)</strong>. Bạn có thể mở hệ thống để phản hồi trực tiếp cho khách hàng.
+      </p>
+    `;
+
+    // Thông báo cho Super Admin qua email
+    const notifyAdmins = ['adminManager@gmail.com', 'hieupham101097@gmail.com'];
+    for (const adminEmail of notifyAdmins) {
+      try {
+        await sendEmail({
+          db: c.env.DB,
+          companyId: 'SYSTEM',
+          senderType: 'support',
+          to: adminEmail,
+          replyTo: cleanSenderEmail || 'support@omniassets.ryug.id.vn',
+          subject: `[OMNI ASSETS SUPPORT] ${subject} - ${effectiveCompName}`,
+          html: wrapEmailHtml({
+            title: 'Yêu Cầu Hỗ Trợ Kỹ Thuật & Vận Hành',
+            preheader: `Yêu cầu hỗ trợ từ ${effectiveCompName}: ${subject}`,
+            contentHtml: supportHtml
+          })
+        });
+      } catch (err) {
+        console.error('Send admin support notify error:', err.message);
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: 'Yêu cầu hỗ trợ đã được chuyển thành công đến Ban Quản Trị OMNI ASSETS! Đội ngũ hỗ trợ sẽ phản hồi trong thời gian sớm nhất.',
+      data: { ticketId }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: `Lỗi gửi hỗ trợ: ${err.message}` }, 500);
+  }
+});
+
+// 5.6 Super Admin Support Desk: Lấy danh sách yêu cầu hỗ trợ (Support Tickets)
+app.get('/api/super-admin/support-tickets', async (c) => {
+  try {
+    const { isSuperAdmin, role, email } = await getTenantContext(c);
+    if (!isSuperAdmin && role !== 'SUPER_ADMIN' && email !== 'adminManager@gmail.com') {
+      return c.json({ success: false, message: 'Chỉ Super Admin mới có quyền truy cập hòm thư hỗ trợ' }, 403);
+    }
+
+    await initSupportTicketsTable(c.env.DB);
+
+    const res = await c.env.DB.prepare(`
+      SELECT * FROM support_tickets 
+      ORDER BY created_at DESC 
+      LIMIT 100
+    `).all().catch(() => ({ results: [] }));
+
+    return c.json({
+      success: true,
+      data: res.results || []
+    });
+  } catch (err) {
+    return c.json({ success: false, message: `Lỗi tải danh sách yêu cầu hỗ trợ: ${err.message}` }, 500);
+  }
+});
+
+// 5.7 Super Admin Support Desk: Phản hồi trực tiếp yêu cầu hỗ trợ (Reply Ticket via support@omniassets.ryug.id.vn)
+app.post('/api/super-admin/support-tickets/reply', async (c) => {
+  try {
+    const { isSuperAdmin, role, email } = await getTenantContext(c);
+    if (!isSuperAdmin && role !== 'SUPER_ADMIN' && email !== 'adminManager@gmail.com') {
+      return c.json({ success: false, message: 'Chỉ Super Admin mới có quyền phản hồi yêu cầu hỗ trợ' }, 403);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const { ticketId, replyMessage } = body;
+
+    if (!ticketId) {
+      return c.json({ success: false, message: 'Thiếu mã ticket' }, 400);
+    }
+    if (!replyMessage || !replyMessage.trim()) {
+      return c.json({ success: false, message: 'Vui lòng nhập nội dung thư phản hồi' }, 400);
+    }
+
+    await initSupportTicketsTable(c.env.DB);
+
+    const ticket = await c.env.DB.prepare('SELECT * FROM support_tickets WHERE id = ?').bind(ticketId).first().catch(() => null);
+    if (!ticket) {
+      return c.json({ success: false, message: 'Không tìm thấy yêu cầu hỗ trợ này' }, 404);
+    }
+
+    const recipientEmail = (ticket.sender_email || '').trim().toLowerCase();
+    if (!recipientEmail || !recipientEmail.includes('@')) {
+      return c.json({ success: false, message: 'Email người nhận không hợp lệ trong ticket này' }, 400);
+    }
+
+    const replySubject = `[OMNI ASSETS SUPPORT] Phản Hồi: ${ticket.subject || 'Yêu cầu hỗ trợ hệ thống'}`;
+
+    const replyContent = `
+      <div style="text-align: center; margin-bottom: 20px;">
+        <span class="badge badge-success" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; padding:6px 16px; font-size:11px; font-weight:700; border-radius:9999px;">
+          ✓ THƯ PHẢN HỒI CHÍNH THỨC TỪ BAN QUẢN TRỊ
+        </span>
+      </div>
+
+      <p style="font-size: 15px; font-weight: 700; color: #0f172a; margin: 0 0 12px 0;">
+        Kính gửi Quý Doanh nghiệp ${ticket.company_name} (${ticket.sender_name || 'Quản lý'}),
+      </p>
+      <p style="font-size: 14px; color: #334155; line-height: 1.65; margin: 0 0 16px 0;">
+        Ban Quản Trị Hệ Thống OMNI ASSETS trân trọng gửi thư phản hồi về yêu cầu hỗ trợ của bạn liên quan đến vấn đề: <strong>"${ticket.subject || 'Hỗ trợ kỹ thuật'}"</strong>.
+      </p>
+
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #059669; border-radius: 12px; padding: 18px 22px; margin: 18px 0;">
+        <h4 style="margin: 0 0 8px 0; color: #065f46; font-size: 14px; font-weight: 700;">Nội dung phản hồi từ Chuyên viên Hỗ trợ:</h4>
+        <p style="white-space: pre-wrap; font-size: 14px; color: #1e293b; line-height: 1.7; margin: 0;">${replyMessage.trim()}</p>
+      </div>
+
+      <div style="background: #f1f5f9; border-radius: 12px; padding: 14px 18px; margin-top: 20px; font-size: 12px; color: #64748b; border: 1px dashed #cbd5e1;">
+        <p style="margin: 0 0 4px 0; font-weight: 700; color: #475569;">Trích dẫn nội dung yêu cầu ban đầu của bạn:</p>
+        <p style="margin: 0; white-space: pre-wrap; font-style: italic;">"${ticket.message}"</p>
+      </div>
+
+      <p style="font-size: 13px; color: #64748b; line-height: 1.6; margin-top: 22px;">
+        Nếu bạn cần thêm bất kỳ trợ giúp nào, bạn có thể trả lời trực tiếp email này hoặc liên hệ lại với chúng tôi qua <a href="mailto:support@omniassets.ryug.id.vn" style="color: #059669; font-weight: 600; text-decoration: none;">support@omniassets.ryug.id.vn</a>.
+      </p>
+    `;
+
+    // Gửi email chính thức từ support@omniassets.ryug.id.vn
+    await sendEmail({
+      db: c.env.DB,
+      companyId: 'SYSTEM',
+      senderType: 'support',
+      senderName: 'OMNI ASSETS Support',
+      to: recipientEmail,
+      replyTo: 'support@omniassets.ryug.id.vn',
+      subject: replySubject,
+      html: wrapEmailHtml({
+        title: 'Phản Hồi Yêu Cầu Hỗ Trợ Kỹ Thuật',
+        preheader: `Phản hồi từ OMNI ASSETS: ${ticket.subject}`,
+        contentHtml: replyContent
+      })
+    });
+
+    // Cập nhật ticket thành REPLIED
+    await c.env.DB.prepare(`
+      UPDATE support_tickets 
+      SET status = 'REPLIED', reply_message = ?, replied_at = datetime('now'), replied_by = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(replyMessage.trim(), email || 'adminManager@gmail.com', ticketId).run();
+
+    return c.json({
+      success: true,
+      message: `Đã gửi thư phản hồi chính thức thành công đến ${recipientEmail}!`,
+      data: { ticketId, status: 'REPLIED' }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: `Lỗi phản hồi yêu cầu hỗ trợ: ${err.message}` }, 500);
+  }
+});
+
+// 5.5 Gửi Thông Báo Nội Bộ Cho Cấp Quản Lý Trong Doanh Nghiệp
+// Hòm thư gửi nội bộ: tasks@omniassets.ryug.id.vn (Quản Lý & Vận Hành Doanh Nghiệp)
+app.post('/api/mail/send-management-notification', async (c) => {
+  try {
+    const { companyId } = await getTenantContext(c);
+    const body = await c.req.json().catch(() => ({}));
+    const { subject, message, sender_name } = body;
+
+    // 1. Lấy thông tin công ty
+    const compTenant = await c.env.DB.prepare('SELECT company_name, admin_email FROM company_tenants WHERE id = ?').bind(companyId).first().catch(() => null);
+    const companyName = compTenant?.company_name || 'Doanh Nghiệp';
+
+    // 2. Tìm tất cả user có role là ADMIN, MANAGER trong công ty đó
+    let usersQuery = `
+      SELECT id, name, email, role, department 
+      FROM users 
+      WHERE (company_id = ? OR company_id IS NULL)
+        AND (role = 'ADMIN' OR role = 'MANAGER')
+        AND status != 'INACTIVE'
+        AND email LIKE '%@%'
+    `;
+    const usersRes = await c.env.DB.prepare(usersQuery).bind(companyId).all().catch(() => ({ results: [] }));
+    const managers = usersRes.results || [];
+
+    // Danh sách email
+    let recipientEmails = managers.map(u => (u.email || '').trim().toLowerCase()).filter(Boolean);
+    if (compTenant?.admin_email && compTenant.admin_email.includes('@')) {
+      recipientEmails.push(compTenant.admin_email.trim().toLowerCase());
+    }
+
+    // Lọc trùng
+    recipientEmails = Array.from(new Set(recipientEmails)).filter(e => e && e.includes('@'));
+
+    if (recipientEmails.length === 0) {
+      return c.json({
+        success: false,
+        message: 'Không tìm thấy tài khoản Quản Trị Viên (ADMIN) hoặc Quản Lý (MANAGER) có email hợp lệ trong doanh nghiệp.'
+      }, 400);
+    }
+
+    const timestamp = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+    const finalSubject = (subject || `[Thông Báo Nội Bộ] Cập nhật điều hành & phân quyền phòng ban (${companyName})`).trim();
+    const managerNames = managers.map(u => `${u.name} (${u.role})`);
+
+    const mailHtml = getManagementNotificationEmailHtml({
+      companyName,
+      subject: finalSubject,
+      message: message || 'Ban Điều Hành thông báo: Đã cập nhật và đồng bộ cấu hình phân quyền, danh mục và quy chế vận hành cho toàn bộ phòng ban trong doanh nghiệp.',
+      senderName: sender_name || 'Ban Quản Trị Doanh Nghiệp',
+      timestamp,
+      managerNames,
+      dashboardUrl: 'https://company-sheet.hieupham101097.workers.dev'
+    });
+
+    const sentList = [];
+    const failedList = [];
+
+    for (const email of recipientEmails) {
+      try {
+        await sendEmail({
+          db: c.env.DB,
+          companyId,
+          senderType: 'tasks',
+          to: email,
+          subject: finalSubject,
+          html: mailHtml
+        });
+        sentList.push(email);
+      } catch (err) {
+        failedList.push({ email, error: err.message });
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: `Đã gửi email thông báo nội bộ thành công đến ${sentList.length}/${recipientEmails.length} cán bộ Admin & Manager!`,
+      data: {
+        total: recipientEmails.length,
+        sentCount: sentList.length,
+        failedCount: failedList.length,
+        from: 'tasks@omniassets.ryug.id.vn',
+        sentList,
+        failedList
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: `Lỗi gửi email nội bộ: ${err.message}` }, 500);
+  }
+});
+
+// ========================================================
+// SUPER ADMIN EXCLUSIVE: THÔNG BÁO GÓI DỊCH VỤ & NỀN TẢNG
+// Hòm thư đại diện: notifications@omniassets.ryug.id.vn / support@omniassets.ryug.id.vn
+// Người gửi: Super Admin (adminManager@gmail.com)
+// Người nhận: Toàn bộ Admin & Manager của tất cả doanh nghiệp khách hàng
+// ========================================================
+
+// 1. Thống kê & Danh sách đối tượng nhận thư cho Super Admin
+app.get('/api/super-admin/announcements/recipients', async (c) => {
+  try {
+    const { isSuperAdmin, userId } = await getTenantContext(c);
+    const u = userId ? await c.env.DB.prepare('SELECT role, email FROM users WHERE id = ?').bind(userId).first().catch(() => null) : null;
+    const isSuper = isSuperAdmin || u?.role === 'SUPER_ADMIN' || u?.email === 'adminManager@gmail.com';
+    if (!isSuper) {
+      return c.json({ success: false, message: 'Quyền truy cập bị từ chối: Chỉ Super Admin (adminManager@gmail.com) mới có quyền truy cập.' }, 403);
+    }
+
+    // Lấy tất cả công ty khách hàng
+    const compRes = await c.env.DB.prepare('SELECT id, company_name, admin_name, admin_email, plan_code, license_status FROM company_tenants ORDER BY created_at DESC').all().catch(() => ({ results: [] }));
+    const companies = compRes.results || [];
+
+    // Lấy tất cả users có role ADMIN hoặc MANAGER trên toàn hệ thống
+    const usersRes = await c.env.DB.prepare(`
+      SELECT u.id, u.name, u.email, u.role, u.department, u.company_id, c.company_name
+      FROM users u
+      LEFT JOIN company_tenants c ON u.company_id = c.id
+      WHERE (u.role = 'ADMIN' OR u.role = 'MANAGER')
+        AND u.status != 'INACTIVE'
+        AND u.email LIKE '%@%'
+      ORDER BY c.company_name, u.role, u.name
+    `).all().catch(() => ({ results: [] }));
+    const managers = usersRes.results || [];
+
+    // Nhóm theo từng công ty
+    const companyMap = {};
+    companies.forEach(comp => {
+      companyMap[comp.id] = {
+        id: comp.id,
+        company_name: comp.company_name,
+        plan_code: comp.plan_code,
+        license_status: comp.license_status,
+        recipients: []
+      };
+      if (comp.admin_email && comp.admin_email.includes('@')) {
+        companyMap[comp.id].recipients.push({
+          email: comp.admin_email.trim().toLowerCase(),
+          name: comp.admin_name || 'Quản Trị Viên',
+          role: 'ADMIN'
+        });
+      }
+    });
+
+    managers.forEach(m => {
+      const cId = m.company_id || 'comp_1';
+      if (!companyMap[cId]) {
+        companyMap[cId] = {
+          id: cId,
+          company_name: m.company_name || 'Doanh Nghiệp',
+          plan_code: 'TRIAL_2M',
+          license_status: 'ACTIVE',
+          recipients: []
+        };
+      }
+      const cleanEmail = (m.email || '').trim().toLowerCase();
+      if (!companyMap[cId].recipients.some(r => r.email === cleanEmail)) {
+        companyMap[cId].recipients.push({
+          email: cleanEmail,
+          name: m.name,
+          role: m.role,
+          department: m.department
+        });
+      }
+    });
+
+    const allDistinctEmails = new Set();
+    Object.values(companyMap).forEach(c => {
+      c.recipients.forEach(r => allDistinctEmails.add(r.email));
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        totalCompanies: companies.length,
+        totalRecipients: allDistinctEmails.size,
+        distinctEmails: Array.from(allDistinctEmails),
+        companyList: Object.values(companyMap)
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 2. Phát thông báo gói dịch vụ / nền tảng từ notifications@omniassets.ryug.id.vn
+app.post('/api/super-admin/announcements/broadcast', async (c) => {
+  try {
+    const { isSuperAdmin, userId } = await getTenantContext(c);
+    const u = userId ? await c.env.DB.prepare('SELECT role, email FROM users WHERE id = ?').bind(userId).first().catch(() => null) : null;
+    const isSuper = isSuperAdmin || u?.role === 'SUPER_ADMIN' || u?.email === 'adminManager@gmail.com';
+    if (!isSuper) {
+      return c.json({ success: false, message: 'Quyền truy cập bị từ chối: Chỉ Super Admin (adminManager@gmail.com) mới có quyền sử dụng hòm thư nền tảng.' }, 403);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const {
+      sender_type = 'notifications', // 'notifications' | 'support'
+      target_type = 'ALL_COMPANIES', // 'ALL_COMPANIES' | 'SINGLE_COMPANY'
+      target_company_id = null,
+      subject,
+      message,
+      include_plans = true,
+      cta_text,
+      cta_url
+    } = body;
+
+    // Lựa chọn hòm thư gửi hợp lệ
+    const mailboxKey = (sender_type === 'support') ? 'support' : 'notifications';
+    const senderEmail = mailboxKey === 'support' ? 'support@omniassets.ryug.id.vn' : 'notifications@omniassets.ryug.id.vn';
+    const senderName = mailboxKey === 'support' ? 'OmniAssets Customer Support' : 'OmniAssets Platform Announcements';
+
+    // Lấy danh sách gói cước nếu include_plans
+    let plans = [];
+    if (include_plans) {
+      const planRes = await c.env.DB.prepare('SELECT code, name, duration_months, price, badge FROM pricing_plans WHERE is_active = 1 ORDER BY price ASC').all().catch(() => ({ results: [] }));
+      plans = planRes.results || [];
+    }
+
+    // Xác định danh sách email nhận
+    let recipientEmails = [];
+    let targetName = 'Toàn Bộ Khách Hàng';
+
+    if (target_type === 'SINGLE_COMPANY' && target_company_id) {
+      const comp = await c.env.DB.prepare('SELECT company_name, admin_email FROM company_tenants WHERE id = ?').bind(target_company_id).first().catch(() => null);
+      if (comp) targetName = comp.company_name;
+      if (comp?.admin_email && comp.admin_email.includes('@')) {
+        recipientEmails.push(comp.admin_email.trim().toLowerCase());
+      }
+      const usersRes = await c.env.DB.prepare(`
+        SELECT email FROM users 
+        WHERE company_id = ? AND (role = 'ADMIN' OR role = 'MANAGER') AND status != 'INACTIVE' AND email LIKE '%@%'
+      `).bind(target_company_id).all().catch(() => ({ results: [] }));
+      (usersRes.results || []).forEach(r => recipientEmails.push((r.email || '').trim().toLowerCase()));
+    } else {
+      // Toàn bộ công ty trên hệ sinh thái
+      const compRes = await c.env.DB.prepare('SELECT admin_email FROM company_tenants WHERE admin_email LIKE "%@%"').all().catch(() => ({ results: [] }));
+      (compRes.results || []).forEach(r => recipientEmails.push((r.admin_email || '').trim().toLowerCase()));
+
+      const usersRes = await c.env.DB.prepare(`
+        SELECT email FROM users 
+        WHERE (role = 'ADMIN' OR role = 'MANAGER') AND status != 'INACTIVE' AND email LIKE '%@%'
+      `).all().catch(() => ({ results: [] }));
+      (usersRes.results || []).forEach(r => recipientEmails.push((r.email || '').trim().toLowerCase()));
+    }
+
+    // Loại trừ email của Super Admin và lọc trùng
+    recipientEmails = Array.from(new Set(recipientEmails)).filter(e => e && e.includes('@') && e !== 'adminmanager@gmail.com');
+
+    if (recipientEmails.length === 0) {
+      return c.json({ success: false, message: 'Không tìm thấy email Quản trị viên/Quản lý nào trong phạm vi gửi.' }, 400);
+    }
+
+    const finalSubject = subject ? subject.trim() : '[OmniAssets] Cập Nhật Gói Cước Dịch Vụ & Ưu Đãi Bản Quyền Doanh Nghiệp';
+    const finalMessage = message ? message.trim() : 'Ban Quản Trị Nền Tảng trân trọng gửi thông báo về bảng gói cước dịch vụ và các tính năng mới đã được triển khai trên hệ thống.';
+
+    const mailHtml = getSuperAdminPlanAnnouncementEmailHtml({
+      subject: finalSubject,
+      message: finalMessage,
+      plans,
+      ctaText: cta_text || 'Khám Phá Bảng Giá & Nâng Cấp Gói',
+      ctaUrl: cta_url || 'https://company-sheet.hieupham101097.workers.dev',
+      senderEmail,
+      recipientName: targetName
+    });
+
+    const sentList = [];
+    const failedList = [];
+
+    for (const email of recipientEmails) {
+      try {
+        await sendEmail({
+          db: c.env.DB,
+          companyId: 'SYSTEM',
+          senderType: mailboxKey,
+          senderName,
+          to: email,
+          subject: finalSubject,
+          html: mailHtml
+        });
+        sentList.push(email);
+      } catch (err) {
+        failedList.push({ email, error: err.message });
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: `Đã phát thông báo thành công qua Resend (${senderEmail}) đến ${sentList.length}/${recipientEmails.length} cán bộ Quản lý trên hệ sinh thái!`,
+      data: {
+        total: recipientEmails.length,
+        sentCount: sentList.length,
+        failedCount: failedList.length,
+        sender: senderEmail,
+        sentList,
+        failedList
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: `Lỗi phát thông báo: ${err.message}` }, 500);
+  }
+});
+
+// 6. Lấy danh sách 7 hộp thư nghiệp vụ chuẩn (Mailbox Directory)
+app.get('/api/mail/templates', async (c) => {
+  return c.json({
+    success: true,
+    data: Object.values(SENDER_MAILBOXES)
+  });
 });
 
 // ========================
@@ -2947,6 +4845,56 @@ async function refreshDailyReminders(db) {
     `).bind(nowVN, new Date().toISOString()).run();
 
     console.log(`[06:00 AM Cron Trigger] Đã làm mới nhắc hạn hệ thống thành công lúc ${nowVN}`);
+
+    // 4. Tự động gửi email thông báo nhắc hạn 6:00 AM đến Danh sách email của các doanh nghiệp
+    try {
+      const companies = await db.prepare("SELECT id, company_name, admin_email FROM company_tenants").all().catch(() => ({ results: [] }));
+      for (const comp of (companies.results || [])) {
+        const mailConfig = await getEmailConfig(db, comp.id);
+        if (mailConfig.notifyReminders) {
+          let reportEmails = [];
+          if (mailConfig.reportRecipients) {
+            reportEmails = mailConfig.reportRecipients.split(/[,;\n]/).map(e => e.trim().toLowerCase()).filter(e => e && e.includes('@'));
+          }
+          if (reportEmails.length === 0 && comp.admin_email && comp.admin_email.includes('@')) {
+            reportEmails = [comp.admin_email.trim().toLowerCase()];
+          }
+          if (reportEmails.length === 0) continue;
+
+          const [overdueTasks, upcomingContracts, expiredContracts] = await Promise.all([
+            db.prepare("SELECT title, assignee, due_date FROM tasks WHERE company_id = ? AND status != 'COMPLETED' AND due_date < ? ORDER BY due_date ASC LIMIT 10").bind(comp.id, today).all().catch(() => ({ results: [] })),
+            db.prepare("SELECT contract_number, partner_name, end_date FROM contracts WHERE company_id = ? AND status = 'ACTIVE' AND end_date <= date('now', '+30 day') ORDER BY end_date ASC LIMIT 10").bind(comp.id).all().catch(() => ({ results: [] })),
+            db.prepare("SELECT contract_number, partner_name, end_date FROM contracts WHERE company_id = ? AND status = 'EXPIRED' ORDER BY end_date DESC LIMIT 10").bind(comp.id).all().catch(() => ({ results: [] }))
+          ]);
+
+          const hasAlerts = (overdueTasks.results?.length > 0) || (upcomingContracts.results?.length > 0) || (expiredContracts.results?.length > 0);
+          if (hasAlerts) {
+            const mailHtml = getDailyRemindersEmailHtml({
+              companyName: comp.company_name,
+              date: today,
+              overdueTasks: overdueTasks.results || [],
+              upcomingContracts: upcomingContracts.results || [],
+              expiredContracts: expiredContracts.results || [],
+              dashboardUrl: 'https://company-sheet.hieupham101097.workers.dev'
+            });
+
+            for (const recipient of reportEmails) {
+              await sendEmail({
+                db,
+                companyId: comp.id,
+                senderType: 'reports',
+                to: recipient,
+                subject: `[06:00 AM] Báo cáo nhắc việc & Hợp đồng đến hạn - ${comp.company_name}`,
+                html: mailHtml
+              }).catch(e => console.error('[Reminder Mail Error]', comp.company_name, recipient, e.message));
+            }
+          }
+        }
+      }
+    } catch (mailCronErr) {
+      console.error('[Reminder Mail Cron Error]', mailCronErr.message);
+    }
+
     return { success: true, refreshed_at: nowVN, today };
   } catch (err) {
     console.error('[06:00 AM Cron Error]', err);
@@ -2977,6 +4925,7 @@ app.get('/api/super-admin/overview', async (c) => {
 
     const totalRevenueRes = await c.env.DB.prepare("SELECT sum(amount) as total FROM license_orders WHERE payment_status IN ('PAID', 'COMPLETED')").first('total') || 0;
     const totalOrders = await c.env.DB.prepare('SELECT count(*) as count FROM license_orders').first('count') || 0;
+    const pendingOrdersCount = await c.env.DB.prepare("SELECT count(*) as count FROM license_orders WHERE payment_status = 'PENDING'").first('count') || 0;
 
     const planStats = await c.env.DB.prepare(`
       SELECT plan_code, count(*) as count, sum(revenue) as plan_revenue 
@@ -3011,7 +4960,8 @@ app.get('/api/super-admin/overview', async (c) => {
           activeKeys: Number(activeKeys),
           usedKeys: Number(usedKeys),
           totalRevenue: Number(totalRevenueRes),
-          totalOrders: Number(totalOrders)
+          totalOrders: Number(totalOrders),
+          pendingOrdersCount: Number(pendingOrdersCount)
         },
         planDistribution: planStats.results || [],
         recentOrders: recentOrders.results || [],
@@ -3439,7 +5389,15 @@ app.delete('/api/super-admin/plans/:id', async (c) => {
 // 9. Danh sách Đơn hàng & Doanh thu Đăng ký Gói
 app.get('/api/super-admin/revenue-orders', async (c) => {
   try {
-    const orders = await c.env.DB.prepare('SELECT * FROM license_orders ORDER BY order_date DESC, created_at DESC').all();
+    const status = c.req.query('status');
+    let query = 'SELECT * FROM license_orders';
+    const params = [];
+    if (status) {
+      query += ' WHERE payment_status = ?';
+      params.push(status);
+    }
+    query += ' ORDER BY created_at DESC, order_date DESC';
+    const orders = await c.env.DB.prepare(query).bind(...params).all();
     return c.json({
       success: true,
       data: orders.results || []
@@ -3459,7 +5417,7 @@ app.post('/api/super-admin/orders', async (c) => {
       plan_code,
       plan_name,
       amount,
-      payment_status = 'PAID',
+      payment_status = 'PENDING',
       notes = ''
     } = body;
 
@@ -3495,6 +5453,167 @@ app.post('/api/super-admin/orders', async (c) => {
     }
 
     return c.json({ success: true, message: 'Tạo đơn hàng bản quyền thành công!', data: { id: orderId } });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 11. Duyệt đơn hàng & Kích hoạt bản quyền gói cho Doanh Nghiệp
+app.put('/api/super-admin/orders/:id/approve', async (c) => {
+  try {
+    const orderId = c.req.param('id');
+    const order = await c.env.DB.prepare('SELECT * FROM license_orders WHERE id = ?').bind(orderId).first();
+    if (!order) {
+      return c.json({ success: false, message: 'Không tìm thấy đơn hàng' }, 404);
+    }
+
+    if (order.payment_status === 'PAID') {
+      return c.json({ success: false, message: 'Đơn hàng này đã được duyệt và kích hoạt trước đó.' }, 400);
+    }
+
+    // Tìm kiếm thông tin doanh nghiệp theo company_id hoặc company_name
+    let tenant = null;
+    if (order.company_id && order.company_id !== 'comp_1') {
+      tenant = await c.env.DB.prepare('SELECT * FROM company_tenants WHERE id = ?').bind(order.company_id).first();
+    }
+    if (!tenant && order.company_name) {
+      tenant = await c.env.DB.prepare('SELECT * FROM company_tenants WHERE company_name LIKE ?').bind(`%${order.company_name.trim()}%`).first();
+    }
+    if (!tenant) {
+      // Fallback: nếu hệ thống chỉ có 1 công ty tenant
+      const allTenants = await c.env.DB.prepare('SELECT * FROM company_tenants LIMIT 2').all();
+      if (allTenants?.results?.length === 1) {
+        tenant = allTenants.results[0];
+      }
+    }
+
+    // Lấy thông tin gói cước
+    const plan = await c.env.DB.prepare('SELECT * FROM pricing_plans WHERE code = ?').bind(order.plan_code).first().catch(() => null);
+
+    // Tính toán ngày hết hạn mới
+    let newExpireDate = null;
+    if (order.plan_code === 'LIFETIME' || order.plan_code === 'LIFETIME_PRO') {
+      newExpireDate = null;
+    } else {
+      const months = plan?.duration_months || (order.plan_code === 'ANNUAL_2Y' ? 24 : 12);
+      const today = new Date();
+      let baseDate = today;
+      if (tenant?.expire_date && tenant?.license_status === 'ACTIVE') {
+        const existingExp = new Date(tenant.expire_date);
+        if (existingExp > today) {
+          baseDate = existingExp;
+        }
+      }
+      baseDate.setMonth(baseDate.getMonth() + months);
+      newExpireDate = baseDate.toISOString().slice(0, 10);
+    }
+
+    // 1. Cập nhật trạng thái đơn hàng thành PAID
+    const approvedNote = (order.notes || '') + ' [Đã duyệt & kích hoạt lúc ' + new Date().toLocaleString('vi-VN') + ']';
+    await c.env.DB.prepare(`
+      UPDATE license_orders 
+      SET payment_status = 'PAID', notes = ? 
+      WHERE id = ?
+    `).bind(approvedNote.trim(), orderId).run();
+
+    // 2. Kích hoạt bản quyền cho doanh nghiệp (nếu tìm thấy tenant)
+    if (tenant) {
+      await c.env.DB.prepare(`
+        UPDATE company_tenants 
+        SET plan_code = ?, license_status = 'ACTIVE', expire_date = ?, revenue = COALESCE(revenue, 0) + ? 
+        WHERE id = ?
+      `).bind(order.plan_code, newExpireDate, Number(order.amount) || 0, tenant.id).run();
+
+      // Đồng bộ license_key tương ứng nếu cần
+      await c.env.DB.prepare(`
+        INSERT INTO company_settings (id, company_id, key, value, updated_at)
+        VALUES (?, ?, 'license_key', ?, datetime('now'))
+        ON CONFLICT(company_id, key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+      `).bind(`set_${Date.now()}`, tenant.id, order.plan_code === 'LIFETIME' ? 'OMNI-LIFETIME' : `OMNI-${order.plan_code}-${Date.now().toString().slice(-4)}`).run().catch(() => {});
+    }
+
+    // 3. Tự động gửi Email chúc mừng & xác nhận kích hoạt cho doanh nghiệp
+    const targetEmail = tenant?.admin_email;
+    if (targetEmail) {
+      const planDisplayName = order.plan_name || plan?.name || order.plan_code;
+      const formattedAmount = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(order.amount) || 0);
+      const emailHtml = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0;">
+          <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 32px 24px; text-align: center; color: #ffffff;">
+            <div style="font-size: 36px; margin-bottom: 8px;">🎉</div>
+            <h1 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Xác Nhận Kích Hoạt Bản Quyền Thành Công</h1>
+            <p style="margin: 8px 0 0; font-size: 13px; opacity: 0.95;">Ban Quản Trị OMNI ASSETS đã đối soát thanh toán và kích hoạt gói dịch vụ cho Quý khách</p>
+          </div>
+          <div style="padding: 28px 24px; color: #334155; line-height: 1.6; font-size: 14px;">
+            <p>Kính gửi Quý Doanh Nghiệp <strong>${tenant.company_name || order.company_name}</strong>,</p>
+            <p>Chúng tôi đã nhận được thanh toán đối soát qua chuyển khoản ngân hàng và đã kích hoạt toàn diện quyền lợi gói dịch vụ:</p>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 20px; margin: 20px 0;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <tr><td style="padding: 6px 0; color: #64748b;">Mã Đơn Hàng:</td><td style="padding: 6px 0; font-weight: 700; text-align: right; font-family: monospace;">${order.id}</td></tr>
+                <tr><td style="padding: 6px 0; color: #64748b;">Gói Bản Quyền:</td><td style="padding: 6px 0; font-weight: 700; text-align: right; color: #7c3aed;">${planDisplayName}</td></tr>
+                <tr><td style="padding: 6px 0; color: #64748b;">Số Tiền Đã Thanh Toán:</td><td style="padding: 6px 0; font-weight: 800; text-align: right; color: #059669; font-size: 15px;">${formattedAmount}</td></tr>
+                <tr><td style="padding: 6px 0; color: #64748b;">Thời Hạn Sử Dụng:</td><td style="padding: 6px 0; font-weight: 700; text-align: right;">${newExpireDate ? `Đến ngày ${newExpireDate}` : 'Vĩnh viễn trọn đời (Lifetime)'}</td></tr>
+                <tr><td style="padding: 6px 0; color: #64748b;">Trạng Thái Bản Quyền:</td><td style="padding: 6px 0; font-weight: 700; text-align: right; color: #10b981;">ĐANG HOẠT ĐỘNG (ACTIVE)</td></tr>
+              </table>
+            </div>
+            <p>Toàn bộ giới hạn về tài sản, nhân viên, hợp đồng và in ấn không watermark đã được mở khóa hoàn toàn trên tài khoản của Quý công ty.</p>
+            <div style="text-align: center; margin: 28px 0 16px;">
+              <a href="https://company-sheet.hieupham101097.workers.dev" style="background: #10b981; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 10px; font-weight: 700; font-size: 14px; display: inline-block;">Truy Cập Nền Tảng Ngay &rarr;</a>
+            </div>
+            <p style="font-size: 12px; color: #94a3b8; text-align: center; margin-top: 24px;">Nếu cần hỗ trợ kỹ thuật hoặc xuất hóa đơn VAT, Quý khách vui lòng liên hệ hotline / Zalo: 0799.097.070 hoặc gửi yêu cầu tại mục Trợ Giúp.</p>
+          </div>
+        </div>
+      `;
+      try {
+        await sendEmail({
+          db: c.env.DB,
+          companyId: tenant.id,
+          to: targetEmail,
+          senderType: 'notifications',
+          senderName: 'OMNI ASSETS (Ban Quản Trị)',
+          subject: `🎉 [Xác Nhận] Đơn Hàng & Kích Hoạt Bản Quyền Gói ${planDisplayName} Thành Công`,
+          html: emailHtml
+        });
+      } catch (mailErr) {
+        console.error('Lỗi gửi email xác nhận kích hoạt đơn hàng:', mailErr);
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: `Duyệt đơn hàng và kích hoạt thành công gói ${order.plan_name || order.plan_code} cho doanh nghiệp!`,
+      data: {
+        orderId,
+        companyId: tenant?.id,
+        planCode: order.plan_code,
+        expireDate: newExpireDate
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message }, 500);
+  }
+});
+
+// 12. Hủy đơn hàng (Từ chối duyệt / không nhận được tiền)
+app.put('/api/super-admin/orders/:id/cancel', async (c) => {
+  try {
+    const orderId = c.req.param('id');
+    const body = await c.req.json().catch(() => ({}));
+    const reason = body.reason || 'Admin hủy đơn';
+
+    const order = await c.env.DB.prepare('SELECT * FROM license_orders WHERE id = ?').bind(orderId).first();
+    if (!order) {
+      return c.json({ success: false, message: 'Không tìm thấy đơn hàng' }, 404);
+    }
+
+    const updatedNote = (order.notes || '') + ` [Đã hủy: ${reason}]`;
+    await c.env.DB.prepare(`
+      UPDATE license_orders 
+      SET payment_status = 'CANCELLED', notes = ? 
+      WHERE id = ?
+    `).bind(updatedNote.trim(), orderId).run();
+
+    return c.json({ success: true, message: 'Đã hủy đơn hàng thành công!' });
   } catch (err) {
     return c.json({ success: false, message: err.message }, 500);
   }

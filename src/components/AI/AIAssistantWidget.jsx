@@ -24,6 +24,11 @@ export function AIAssistantWidget({
   currentUser = null,
   onNavigate
 }) {
+  // Quản trị nền tảng (SUPER_ADMIN) không cần AI hỗ trợ
+  if (userRole === 'SUPER_ADMIN' || currentUser?.role === 'SUPER_ADMIN') {
+    return null;
+  }
+
   const [isOpen, setIsOpen] = useState(false);
   const [showTooltip, setShowTooltip] = useState(true);
   const [inputMessage, setInputMessage] = useState('');

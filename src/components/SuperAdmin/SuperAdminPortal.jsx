@@ -29,11 +29,19 @@ import {
   UserCheck,
   UserX,
   ExternalLink,
-  ShieldCheck,
   Mail,
   Send,
   Bell,
-  Share2
+  Share2,
+  Megaphone,
+  Zap,
+  Sliders,
+  HelpCircle,
+  MessageSquare,
+  Phone,
+  Inbox,
+  XCircle,
+  Filter
 } from 'lucide-react';
 import { Modal } from '../Common/Modal';
 import { Badge } from '../Common/Badge';
@@ -56,6 +64,12 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPlan, setFilterPlan] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
+
+  // Orders Filter, Search & Action States
+  const [orderFilterStatus, setOrderFilterStatus] = useState('ALL'); // 'ALL' | 'PENDING' | 'PAID' | 'CANCELLED'
+  const [orderSearchTerm, setOrderSearchTerm] = useState('');
+  const [approvingOrderId, setApprovingOrderId] = useState(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState(null);
 
   // Keys Filter & Search
   const [searchKey, setSearchKey] = useState('');
@@ -81,6 +95,30 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
   const [selectedCompanyForUsers, setSelectedCompanyForUsers] = useState(null);
   const [companyUsersList, setCompanyUsersList] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Super Admin Announcements & Plans Dispatcher States
+  const [announcementSender, setAnnouncementSender] = useState('notifications'); // 'notifications' | 'support'
+  const [announcementTargetType, setAnnouncementTargetType] = useState('ALL_COMPANIES'); // 'ALL_COMPANIES' | 'SINGLE_COMPANY'
+  const [announcementTargetCompanyId, setAnnouncementTargetCompanyId] = useState('');
+  const [announcementSubject, setAnnouncementSubject] = useState('🚀 [OmniAssets] Ra Mắt Bảng Gói Cước Mới & Tính Năng Tự Động Hóa 2026');
+  const [announcementMessage, setAnnouncementMessage] = useState('Ban Quản Trị Nền Tảng trân trọng giới thiệu bảng gói cước dịch vụ mới với hàng loạt đặc quyền: Quản trị tài sản không giới hạn, Tự động phân quyền phòng ban theo cơ cấu tổ chức, và Báo cáo kiểm kê chuyên nghiệp.');
+  const [announcementIncludePlans, setAnnouncementIncludePlans] = useState(true);
+  const [announcementCtaText, setAnnouncementCtaText] = useState('Khám Phá Các Gói Cước & Nhận Ưu Đãi');
+  const [announcementCtaUrl, setAnnouncementCtaUrl] = useState('https://company-sheet.hieupham101097.workers.dev');
+  const [recipientsData, setRecipientsData] = useState(null);
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
+  const [sendingAnnouncement, setSendingAnnouncement] = useState(false);
+  const [announcementResult, setAnnouncementResult] = useState(null);
+
+  // Super Admin Support Tickets Desk States
+  const [supportTickets, setSupportTickets] = useState([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+  const [replyResult, setReplyResult] = useState(null);
+  const [ticketSearchTerm, setTicketSearchTerm] = useState('');
+  const [ticketFilterStatus, setTicketFilterStatus] = useState('ALL'); // 'ALL' | 'PENDING' | 'REPLIED'
 
   // Forms
   const [companyForm, setCompanyForm] = useState({
@@ -141,12 +179,13 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [overRes, compRes, planRes, ordRes, keyRes] = await Promise.all([
+      const [overRes, compRes, planRes, ordRes, keyRes, ticketRes] = await Promise.all([
         api.getSuperAdminOverview(),
         api.getSuperAdminCompanies(),
         api.getSuperAdminPlans(),
         api.getSuperAdminOrders(),
-        api.getSuperAdminKeys()
+        api.getSuperAdminKeys(),
+        api.getSuperAdminSupportTickets().catch(() => ({ data: [] }))
       ]);
 
       setOverview(overRes?.data || null);
@@ -154,6 +193,7 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
       setPlans(planRes?.data || []);
       setOrders(ordRes?.data || []);
       setKeys(keyRes?.data || []);
+      setSupportTickets(ticketRes?.data || []);
     } catch (err) {
       console.error('Lỗi tải dữ liệu Quản trị Tổng:', err);
     } finally {
@@ -161,9 +201,190 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
     }
   };
 
+  const fetchSupportTickets = async () => {
+    try {
+      setLoadingTickets(true);
+      const res = await api.getSuperAdminSupportTickets();
+      if (res?.success) {
+        setSupportTickets(res.data || []);
+      }
+    } catch (err) {
+      console.error('Lỗi tải danh sách yêu cầu hỗ trợ:', err);
+    } finally {
+      setLoadingTickets(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'support-desk') {
+      fetchSupportTickets();
+    }
+  }, [activeTab]);
+
+  const handleReplyTicket = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedTicket) return;
+    if (!replyText.trim()) {
+      alert('Vui lòng nhập nội dung thư phản hồi!');
+      return;
+    }
+
+    try {
+      setSendingReply(true);
+      setReplyResult(null);
+      const res = await api.replySuperAdminSupportTicket({
+        ticketId: selectedTicket.id,
+        replyMessage: replyText.trim()
+      });
+
+      if (res?.success) {
+        setReplyResult({
+          type: 'success',
+          text: res.message || 'Đã gửi thư phản hồi chính thức thành công đến khách hàng!'
+        });
+        const updatedTicket = {
+          ...selectedTicket,
+          status: 'REPLIED',
+          reply_message: replyText.trim(),
+          replied_at: new Date().toISOString(),
+          replied_by: currentUser?.email || 'adminManager@gmail.com'
+        };
+        setSelectedTicket(updatedTicket);
+        setSupportTickets((prev) =>
+          prev.map((t) => (t.id === selectedTicket.id ? updatedTicket : t))
+        );
+        setReplyText('');
+      } else {
+        setReplyResult({
+          type: 'error',
+          text: res?.message || 'Lỗi gửi phản hồi'
+        });
+      }
+    } catch (err) {
+      setReplyResult({
+        type: 'error',
+        text: err.message || 'Lỗi kết nối khi gửi phản hồi'
+      });
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  const filteredTickets = supportTickets.filter((t) => {
+    const term = ticketSearchTerm.toLowerCase();
+    const matchSearch =
+      !term ||
+      t.id?.toLowerCase().includes(term) ||
+      t.company_name?.toLowerCase().includes(term) ||
+      t.sender_name?.toLowerCase().includes(term) ||
+      t.sender_email?.toLowerCase().includes(term) ||
+      t.subject?.toLowerCase().includes(term) ||
+      t.message?.toLowerCase().includes(term);
+
+    const matchStatus = ticketFilterStatus === 'ALL' || t.status === ticketFilterStatus;
+    return matchSearch && matchStatus;
+  });
+
+  const fetchAnnouncementRecipients = async () => {
+    try {
+      setLoadingRecipients(true);
+      const res = await api.getSuperAdminAnnouncementRecipients();
+      if (res.success) {
+        setRecipientsData(res.data);
+      }
+    } catch (err) {
+      console.error('Lỗi nạp danh sách nhận tin Super Admin:', err);
+    } finally {
+      setLoadingRecipients(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'announcements') {
+      fetchAnnouncementRecipients();
+    }
+  }, [activeTab]);
+
+  const applyAnnouncementTemplate = (templateKey) => {
+    if (templateKey === 'PLAN_NEW') {
+      setAnnouncementSender('notifications');
+      setAnnouncementSubject('🚀 [OmniAssets] Thông Báo Phát Hành Bảng Gói Cước Dịch Vụ Mới 2026');
+      setAnnouncementMessage('Ban Quản Trị Nền Tảng OMNI ASSETS trân trọng thông báo tới Quý Doanh nghiệp về việc chính thức phát hành bảng gói cước dịch vụ mới: Gói Dùng Thử 2 Tháng (Trial 60N), Gói Tiêu Chuẩn 1 Năm và Gói Doanh Nghiệp Vĩnh Viễn. Mọi tính năng quản trị tài sản, phân quyền phòng ban, chấm công và in biên bản A4 đều được mở khóa toàn diện.');
+      setAnnouncementIncludePlans(true);
+      setAnnouncementCtaText('Xem Bảng Gói Cước & Đăng Ký');
+      setAnnouncementCtaUrl('https://company-sheet.hieupham101097.workers.dev');
+    } else if (templateKey === 'LICENSE_GRANTED') {
+      setAnnouncementSender('notifications');
+      setAnnouncementSubject('🎉 [Xác Nhận] Thông Báo Cấp Quyền & Kích Hoạt Bản Quyền Doanh Nghiệp Thành Công');
+      setAnnouncementMessage('Ban Quản Trị Nền Tảng OMNI ASSETS trân trọng xác nhận: Doanh nghiệp của Quý khách đã được duyệt và cấp quyền bản quyền thành công trên hệ thống. Toàn bộ các giới hạn tính năng đã được gỡ bỏ để Quý công ty vận hành và số hóa tài sản, nhân sự trơn tru.');
+      setAnnouncementIncludePlans(false);
+      setAnnouncementCtaText('Truy Cập Nền Tảng Vận Hành Ngay');
+      setAnnouncementCtaUrl('https://company-sheet.hieupham101097.workers.dev');
+    } else if (templateKey === 'NEW_SERVICE') {
+      setAnnouncementSender('notifications');
+      setAnnouncementSubject('🌟 [Dịch Vụ Mới] Giới Thiệu Tính Năng & Dịch Vụ Nâng Cao Mới Cho Doanh Nghiệp');
+      setAnnouncementMessage('Hệ thống OMNI ASSETS vừa chính thức bổ sung loạt dịch vụ mới: Cổng gửi mail tự động xác thực DKIM/SPF, Cơ chế ma trận phân quyền theo cơ cấu tổ chức, Biên bản bàn giao tài sản chuẩn in ấn A4 có dấu mộc và Bản tin nhắc việc khẩn cấp 06:00 AM mỗi sáng. Trân trọng kính mời Quý Doanh nghiệp trải nghiệm.');
+      setAnnouncementIncludePlans(false);
+      setAnnouncementCtaText('Khám Phá Tính Năng Mới Ngay');
+      setAnnouncementCtaUrl('https://company-sheet.hieupham101097.workers.dev');
+    } else if (templateKey === 'SYSTEM_UPDATE') {
+      setAnnouncementSender('support');
+      setAnnouncementSubject('🔔 [Thông Báo] Sắp Có Bản Cập Nhật Hệ Thống & Nâng Cấp Tính Năng Mới');
+      setAnnouncementMessage('Ban Quản Trị Nền Tảng trân trọng thông báo: Hệ thống OMNI ASSETS sắp có bản cập nhật nâng cấp giao diện, tối ưu hóa tốc độ truy xuất cơ sở dữ liệu và gia tăng bảo mật đa lớp. Mọi dữ liệu của Quý công ty được bảo đảm an toàn 100% trong quá trình cập nhật.');
+      setAnnouncementIncludePlans(false);
+      setAnnouncementCtaText('Mở Bàn Làm Việc Kiểm Tra');
+      setAnnouncementCtaUrl('https://company-sheet.hieupham101097.workers.dev');
+    }
+  };
+
+  const handleSendAnnouncement = async () => {
+    const senderEmail = announcementSender === 'support' ? 'support@omniassets.ryug.id.vn' : 'notifications@omniassets.ryug.id.vn';
+    const targetLabel = announcementTargetType === 'ALL_COMPANIES' 
+      ? `TOÀN BỘ Admin & Manager của tất cả ${recipientsData?.totalCompanies || companies.length} doanh nghiệp khách hàng`
+      : `doanh nghiệp "${companies.find(c => c.id === announcementTargetCompanyId)?.company_name || 'đã chọn'}"`;
+
+    if (!window.confirm(`XÁC NHẬN PHÁT THƯ NỀN TẢNG:\n\n- Người gửi: Super Admin (adminManager@gmail.com)\n- Hòm thư đại diện: ${senderEmail}\n- Đối tượng nhận: ${targetLabel}\n- Tiêu đề: "${announcementSubject}"\n\nBạn có chắc chắn muốn phát thông báo qua Resend API ngay bây giờ?`)) {
+      return;
+    }
+
+    try {
+      setSendingAnnouncement(true);
+      setAnnouncementResult(null);
+      const res = await api.broadcastSuperAdminAnnouncement({
+        sender_type: announcementSender,
+        target_type: announcementTargetType,
+        target_company_id: announcementTargetCompanyId || undefined,
+        subject: announcementSubject,
+        message: announcementMessage,
+        include_plans: announcementIncludePlans,
+        cta_text: announcementCtaText,
+        cta_url: announcementCtaUrl
+      });
+
+      if (res.success) {
+        setAnnouncementResult({
+          type: 'success',
+          text: res.message || 'Đã phát thông báo gói dịch vụ thành công qua Resend!'
+        });
+      } else {
+        setAnnouncementResult({
+          type: 'error',
+          text: res.message || 'Lỗi khi phát thông báo'
+        });
+      }
+    } catch (err) {
+      setAnnouncementResult({
+        type: 'error',
+        text: err.message || 'Lỗi kết nối khi gửi thông báo'
+      });
+    } finally {
+      setSendingAnnouncement(false);
+    }
+  };
 
   // Format Helpers
   const formatCurrency = (val) => {
@@ -355,24 +576,75 @@ export function SuperAdminPortal({ currentUser, activeTab: propActiveTab, onNavi
     }
   };
 
-  // Tạo đơn hàng doanh thu
-  const handleSaveOrder = async (e) => {
-    e.preventDefault();
-    if (!orderForm.company_name.trim()) {
-      alert('Vui lòng nhập tên công ty thanh toán!');
-      return;
-    }
+  // Phê duyệt đơn hàng & kích hoạt bản quyền
+  const handleApproveOrder = async (ord) => {
+    const formattedAmount = formatCurrency(ord.amount);
+    const confirmed = window.confirm(
+      `⚡ XÁC NHẬN PHÊ DUYỆT ĐƠN HÀNG:\n\n` +
+      `• Mã đơn: ${ord.id}\n` +
+      `• Doanh nghiệp: ${ord.company_name}\n` +
+      `• Gói cước: ${ord.plan_name || ord.plan_code}\n` +
+      `• Số tiền: ${formattedAmount}\n\n` +
+      `Hệ thống sẽ:\n` +
+      `1. Chuyển trạng thái đơn sang ĐÃ THANH TOÁN\n` +
+      `2. Kích hoạt toàn quyền bản quyền ACTIVE cho doanh nghiệp\n` +
+      `3. Gia hạn/cập nhật thời hạn sử dụng tự động\n` +
+      `4. Gửi Email thông báo chính thức cho quản trị viên doanh nghiệp\n\n` +
+      `Bạn có chắc chắn muốn duyệt và kích hoạt ngay?`
+    );
+    if (!confirmed) return;
+
     try {
-      setLoading(true);
-      await api.createSuperAdminOrder(orderForm);
-      setIsOrderModalOpen(false);
-      fetchData();
-      alert('Ghi nhận doanh thu đơn hàng thành công!');
+      setApprovingOrderId(ord.id);
+      const res = await api.approveSuperAdminOrder(ord.id);
+      if (res?.success) {
+        alert(res.message || 'Duyệt đơn hàng và kích hoạt bản quyền thành công!');
+        fetchData();
+      } else {
+        alert(res?.message || 'Lỗi khi duyệt đơn hàng');
+      }
     } catch (err) {
-      alert(err.message || 'Lỗi tạo đơn hàng');
+      alert(err.message || 'Lỗi kết nối khi duyệt đơn hàng');
     } finally {
-      setLoading(false);
+      setApprovingOrderId(null);
     }
+  };
+
+  // Hủy đơn hàng (Từ chối duyệt / không nhận được tiền)
+  const handleCancelOrder = async (ord) => {
+    const reason = window.prompt(
+      `Nhập lý do hủy đơn hàng ${ord.id} của "${ord.company_name}":`,
+      'Không nhận được chuyển khoản / Khách yêu cầu hủy'
+    );
+    if (reason === null) return;
+
+    try {
+      setCancellingOrderId(ord.id);
+      const res = await api.cancelSuperAdminOrder(ord.id, { reason });
+      if (res?.success) {
+        alert('Đã hủy đơn hàng thành công!');
+        fetchData();
+      } else {
+        alert(res?.message || 'Lỗi khi hủy đơn hàng');
+      }
+    } catch (err) {
+      alert(err.message || 'Lỗi kết nối khi hủy đơn hàng');
+    } finally {
+      setCancellingOrderId(null);
+    }
+  };
+
+  // Mở thư thông báo nền tảng cho đơn hàng
+  const handleOpenAnnouncementForOrder = (ord) => {
+    const comp = companies.find(c => c.id === ord.company_id || c.company_name === ord.company_name);
+    if (comp) {
+      setAnnouncementTargetType('SINGLE_COMPANY');
+      setAnnouncementTargetCompanyId(comp.id);
+    }
+    setAnnouncementSubject(`🎉 [Xác Nhận] Đơn Hàng & Cấp Bản Quyền Gói ${ord.plan_name || ord.plan_code} - ${ord.company_name}`);
+    setAnnouncementMessage(`Kính gửi Quý Doanh Nghiệp ${ord.company_name},\n\nBan Quản Trị Nền Tảng OMNI ASSETS trân trọng thông báo: Đơn hàng bản quyền gói "${ord.plan_name || ord.plan_code}" với số tiền ${formatCurrency(ord.amount)} đã được kích hoạt thành công trên hệ thống.\n\nToàn bộ tính năng cao cấp không giới hạn đã sẵn sàng phục vụ Quý công ty.`);
+    setActiveTab('announcements');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Trình tạo Key ngẫu nhiên
@@ -599,6 +871,25 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
     return matchSearch && matchStatus;
   });
 
+  const pendingOrders = orders.filter((o) => o.payment_status === 'PENDING');
+  const paidOrders = orders.filter((o) => o.payment_status === 'PAID');
+  const cancelledOrders = orders.filter((o) => o.payment_status === 'CANCELLED');
+  const totalPaidRevenue = paidOrders.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+
+  // Lọc danh sách đơn hàng
+  const filteredOrders = orders.filter((ord) => {
+    if (orderFilterStatus !== 'ALL' && ord.payment_status !== orderFilterStatus) return false;
+    if (orderSearchTerm.trim()) {
+      const term = orderSearchTerm.trim().toLowerCase();
+      const idMatch = (ord.id || '').toLowerCase().includes(term);
+      const nameMatch = (ord.company_name || '').toLowerCase().includes(term);
+      const planMatch = (ord.plan_name || ord.plan_code || '').toLowerCase().includes(term);
+      const notesMatch = (ord.notes || '').toLowerCase().includes(term);
+      return idMatch || nameMatch || planMatch || notesMatch;
+    }
+    return true;
+  });
+
   const calculatedTotalUsers = companies.reduce((acc, c) => acc + (Number(c.user_count) || 0), 0);
   const stats = {
     totalCompanies: companies.length,
@@ -606,8 +897,9 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
     trialCompanies: companies.filter((c) => c.plan_code === 'TRIAL_2M').length,
     expiredCompanies: companies.filter((c) => c.license_status === 'EXPIRED').length,
     lockedCompanies: companies.filter((c) => c.license_status === 'LOCKED').length,
-    totalRevenue: companies.reduce((acc, c) => acc + (Number(c.revenue) || 0), 0),
+    totalRevenue: totalPaidRevenue || companies.reduce((acc, c) => acc + (Number(c.revenue) || 0), 0),
     totalOrders: orders.length,
+    pendingOrdersCount: pendingOrders.length,
     totalUsers: overview?.stats?.totalUsers || calculatedTotalUsers,
     totalKeys: keys.length,
     activeKeys: keys.filter((k) => k.status === 'ACTIVE').length,
@@ -765,6 +1057,35 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
         </button>
 
         <button
+          onClick={() => setActiveTab('support-desk')}
+          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+            activeTab === 'support-desk'
+              ? 'bg-purple-600 text-white shadow-soft'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <HelpCircle size={15} />
+          <span>Hòm Thư Hỗ Trợ (Tickets)</span>
+          {supportTickets.filter(t => t.status === 'PENDING').length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse">
+              {supportTickets.filter(t => t.status === 'PENDING').length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('announcements')}
+          className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+            activeTab === 'announcements'
+              ? 'bg-purple-600 text-white shadow-soft'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Megaphone size={15} />
+          Phát Thư Gói Dịch Vụ (Resend)
+        </button>
+
+        <button
           onClick={() => setActiveTab('revenue')}
           className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
             activeTab === 'revenue'
@@ -773,7 +1094,12 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
           }`}
         >
           <Receipt size={15} />
-          Doanh Thu & Hóa Đơn ({orders.length})
+          <span>Doanh Thu &amp; Đơn Hàng ({orders.length})</span>
+          {pendingOrders.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
+              {pendingOrders.length} chờ duyệt
+            </span>
+          )}
         </button>
       </div>
 
@@ -782,6 +1108,38 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
       {/* ==================================================== */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Cảnh báo đơn hàng mua gói đang chờ duyệt (Highlight Alert) */}
+          {pendingOrders.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 p-4 sm:p-5 rounded-3xl text-white shadow-lg border border-amber-300/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner">
+                  <Receipt size={24} className="text-white animate-bounce" />
+                </div>
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 text-[10px] font-black uppercase tracking-wider mb-1 backdrop-blur-xs">
+                    <Clock size={11} />
+                    <span>Yêu Cầu Duyệt Bản Quyền Mới</span>
+                  </div>
+                  <h4 className="text-base sm:text-lg font-black tracking-tight">
+                    Có {pendingOrders.length} đơn hàng mua gói từ doanh nghiệp đang chờ duyệt!
+                  </h4>
+                  <p className="text-xs text-amber-100/90 mt-0.5 max-w-xl">
+                    Doanh nghiệp đã quét VietQR hoàn tất thanh toán. Vui lòng đối soát và bấm duyệt để tự động kích hoạt bản quyền gói cho họ.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setOrderFilterStatus('PENDING');
+                  setActiveTab('revenue');
+                }}
+                className="px-5 py-2.5 rounded-2xl bg-white hover:bg-amber-50 text-amber-900 font-black text-xs shadow-md transition active:scale-95 shrink-0 flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>Xem &amp; Duyệt Ngay ({pendingOrders.length})</span>
+                <ArrowUpRight size={15} />
+              </button>
+            </div>
+          )}
           {/* Top Quick Analysis Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-pastel-200/80 shadow-soft">
@@ -1150,6 +1508,19 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
                               >
                                 <Sparkles size={13} />
                                 Cấp quyền
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setAnnouncementTargetType('SINGLE_COMPANY');
+                                  setAnnouncementTargetCompanyId(c.id);
+                                  applyAnnouncementTemplate('LICENSE_GRANTED');
+                                  setActiveTab('announcements');
+                                }}
+                                className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition cursor-pointer"
+                                title="Gửi email thông báo cấp quyền cho doanh nghiệp này"
+                              >
+                                <Mail size={14} />
                               </button>
 
                               <button
@@ -1523,80 +1894,1118 @@ Trân trọng cảm ơn Quý đối tác đã tin tưởng và đồng hành cù
       {/* TAB 3: DOANH THU & HÓA ĐƠN GIAO DỊCH GÓI             */}
       {/* ==================================================== */}
       {activeTab === 'revenue' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-pastel-200/80 shadow-soft">
+        <div className="space-y-5 animate-fade-in">
+          {/* Top Header Card */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-pastel-200/80 shadow-soft">
             <div>
-              <h2 className="text-sm font-bold text-slate-800">Lịch Sử Giao Dịch & Dòng Tiền Đăng Ký Gói</h2>
-              <p className="text-xs text-slate-500">
-                Toàn bộ đơn hàng đăng ký gói bản quyền được ghi nhận và đối soát tự động từ các doanh nghiệp.
+              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-[11px] font-bold uppercase tracking-wider mb-1">
+                <Receipt size={13} />
+                <span>Quản Lý Doanh Thu &amp; Cấp Bản Quyền</span>
+              </div>
+              <h2 className="text-base sm:text-lg font-black text-slate-800">
+                Lịch Sử Giao Dịch &amp; Đơn Hàng Mua Gói Doanh Nghiệp
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Đối soát chuyển khoản VietQR, theo dõi doanh nghiệp mua gói và phê duyệt kích hoạt bản quyền tức thì.
               </p>
             </div>
-            <button
-              onClick={() => setIsOrderModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-soft transition"
-            >
-              <Plus size={15} />
-              Tạo Đơn Thu Tiền
-            </button>
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={fetchData}
+                disabled={loading}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
+                title="Tải lại danh sách"
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                <span>Làm mới</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsOrderModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-soft transition cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>Tạo Đơn Thu Tiền</span>
+              </button>
+            </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-pastel-200/80 shadow-soft overflow-hidden">
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-pastel-200/80 shadow-soft flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Tổng Doanh Thu Thực Thu
+                </span>
+                <div className="text-xl sm:text-2xl font-black text-emerald-600 mt-1">
+                  {formatCurrency(totalPaidRevenue)}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5 font-medium">
+                  {paidOrders.length} đơn hàng đã thanh toán
+                </div>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 size={24} />
+              </div>
+            </div>
+
+            <div className={`p-4 sm:p-5 rounded-2xl border shadow-soft flex items-center justify-between transition-all ${
+              pendingOrders.length > 0 
+                ? 'bg-amber-50/60 border-amber-300 ring-2 ring-amber-400/30' 
+                : 'bg-white border-pastel-200/80'
+            }`}>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">
+                    Đơn Hàng Đang Chờ Duyệt
+                  </span>
+                  {pendingOrders.length > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                  )}
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-amber-700 mt-1">
+                  {pendingOrders.length} đơn hàng
+                </div>
+                <div className="text-[11px] text-amber-800/80 mt-0.5 font-medium">
+                  {pendingOrders.length > 0 ? '⚡ Cần Admin kiểm tra & duyệt kích hoạt' : 'Hiện không có đơn tồn đọng'}
+                </div>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <Clock size={24} className={pendingOrders.length > 0 ? 'animate-pulse' : ''} />
+              </div>
+            </div>
+
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-pastel-200/80 shadow-soft flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Tổng Số Giao Dịch
+                </span>
+                <div className="text-xl sm:text-2xl font-black text-slate-800 mt-1">
+                  {orders.length} giao dịch
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5 font-medium">
+                  {cancelledOrders.length} đơn đã hủy / không thành công
+                </div>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <Receipt size={24} />
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Bar & Search */}
+          <div className="bg-white p-4 rounded-2xl border border-pastel-200/80 shadow-soft flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setOrderFilterStatus('ALL')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  orderFilterStatus === 'ALL'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Tất Cả ({orders.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOrderFilterStatus('PENDING')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                  orderFilterStatus === 'PENDING'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
+                }`}
+              >
+                <Clock size={13} />
+                <span>Chờ Duyệt ({pendingOrders.length})</span>
+                {pendingOrders.length > 0 && (
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOrderFilterStatus('PAID')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                  orderFilterStatus === 'PAID'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                }`}
+              >
+                <CheckCircle2 size={13} />
+                <span>Đã Thanh Toán ({paidOrders.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOrderFilterStatus('CANCELLED')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                  orderFilterStatus === 'CANCELLED'
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <XCircle size={13} />
+                <span>Đã Hủy ({cancelledOrders.length})</span>
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative min-w-[240px]">
+              <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+              <input
+                type="text"
+                value={orderSearchTerm}
+                onChange={(e) => setOrderSearchTerm(e.target.value)}
+                placeholder="Tìm mã đơn, tên công ty, ghi chú..."
+                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              />
+            </div>
+          </div>
+
+          {/* Orders Table */}
+          <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50/80 border-b border-pastel-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="py-3.5 px-4">Mã Đơn / Ngày Tạo</th>
-                    <th className="py-3.5 px-4">Doanh Nghiệp Thanh Toán</th>
-                    <th className="py-3.5 px-4">Gói Đăng Ký</th>
+                    <th className="py-3.5 px-4">Mã Đơn / Thời Gian</th>
+                    <th className="py-3.5 px-4">Doanh Nghiệp Đặt Mua</th>
+                    <th className="py-3.5 px-4">Gói Bản Quyền</th>
                     <th className="py-3.5 px-4">Số Tiền (VND)</th>
                     <th className="py-3.5 px-4">Trạng Thái</th>
-                    <th className="py-3.5 px-4">Ghi Chú</th>
+                    <th className="py-3.5 px-4">Ghi Chú &amp; Chi Tiết</th>
+                    <th className="py-3.5 px-4 text-right">Thao Tác Duyệt</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-pastel-100 text-xs">
-                  {orders.length === 0 ? (
+                  {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-10 text-center text-slate-400">
-                        Chưa có lịch sử giao dịch nào được ghi nhận.
+                      <td colSpan={7} className="py-12 text-center text-slate-400">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <Receipt size={32} className="text-slate-300" />
+                          <p className="font-medium text-slate-500">
+                            {orderFilterStatus === 'PENDING'
+                              ? 'Hiện không có đơn hàng nào đang chờ duyệt!'
+                              : 'Không tìm thấy đơn hàng nào phù hợp với bộ lọc.'}
+                          </p>
+                        </div>
                       </td>
                     </tr>
                   ) : (
-                    orders.map((ord) => (
-                      <tr key={ord.id} className="hover:bg-slate-50/60 transition">
-                        <td className="py-3 px-4">
-                          <div className="font-bold text-slate-800">{ord.id}</div>
-                          <div className="text-[11px] text-slate-400">{formatDate(ord.order_date)}</div>
-                        </td>
+                    filteredOrders.map((ord) => {
+                      const isPending = ord.payment_status === 'PENDING';
+                      const isPaid = ord.payment_status === 'PAID';
+                      const isCancelled = ord.payment_status === 'CANCELLED';
 
-                        <td className="py-3 px-4 font-semibold text-slate-800">
-                          {ord.company_name}
-                        </td>
+                      // Tìm thông tin doanh nghiệp chi tiết nếu có
+                      const matchedCompany = companies.find(
+                        (c) => c.id === ord.company_id || c.company_name === ord.company_name
+                      );
 
-                        <td className="py-3 px-4">
-                          <span className="font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200 text-[11px]">
-                            {ord.plan_name || ord.plan_code}
-                          </span>
-                        </td>
+                      return (
+                        <tr
+                          key={ord.id}
+                          className={`transition ${
+                            isPending
+                              ? 'bg-amber-50/30 hover:bg-amber-50/60'
+                              : 'hover:bg-slate-50/60'
+                          }`}
+                        >
+                          <td className="py-3.5 px-4">
+                            <div className="font-mono font-bold text-slate-800">{ord.id}</div>
+                            <div className="text-[11px] text-slate-400 mt-0.5">
+                              {ord.created_at ? ord.created_at.slice(0, 16) : formatDate(ord.order_date)}
+                            </div>
+                          </td>
 
-                        <td className="py-3 px-4 font-black text-slate-900">
-                          {formatCurrency(ord.amount)}
-                        </td>
+                          <td className="py-3.5 px-4">
+                            <div className="font-extrabold text-slate-900">{ord.company_name}</div>
+                            {matchedCompany && (
+                              <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
+                                {matchedCompany.admin_email && (
+                                  <span>{matchedCompany.admin_email}</span>
+                                )}
+                                {matchedCompany.admin_phone && (
+                                  <span>• {matchedCompany.admin_phone}</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
 
-                        <td className="py-3 px-4">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
-                            <CheckCircle2 size={12} />
-                            Đã Thanh Toán
-                          </span>
-                        </td>
+                          <td className="py-3.5 px-4">
+                            <span className="font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200 text-[11px] inline-block">
+                              {ord.plan_name || ord.plan_code}
+                            </span>
+                          </td>
 
-                        <td className="py-3 px-4 text-slate-500 text-[11px]">
-                          {ord.notes || '—'}
-                        </td>
-                      </tr>
-                    ))
+                          <td className="py-3.5 px-4 font-black text-slate-900 text-sm">
+                            {formatCurrency(ord.amount)}
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            {isPending ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-black animate-pulse">
+                                <Clock size={12} className="text-amber-700" />
+                                <span>Chờ Duyệt</span>
+                              </span>
+                            ) : isPaid ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 text-[11px] font-bold">
+                                <CheckCircle2 size={12} />
+                                <span>Đã Thanh Toán</span>
+                              </span>
+                            ) : isCancelled ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-300 text-[11px] font-bold">
+                                <XCircle size={12} />
+                                <span>Đã Hủy</span>
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px]">
+                                {ord.payment_status}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4 text-slate-600 text-[11px] max-w-xs">
+                            <p className="line-clamp-2 leading-relaxed">{ord.notes || '—'}</p>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right">
+                            {isPending ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveOrder(ord)}
+                                  disabled={approvingOrderId === ord.id}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black shadow-md shadow-emerald-600/20 active:scale-95 transition cursor-pointer disabled:opacity-50"
+                                  title="Duyệt đơn & kích hoạt bản quyền gói ngay cho doanh nghiệp"
+                                >
+                                  {approvingOrderId === ord.id ? (
+                                    <RefreshCw size={12} className="animate-spin" />
+                                  ) : (
+                                    <Zap size={13} className="text-amber-300 fill-amber-300" />
+                                  )}
+                                  <span>Duyệt &amp; Kích Hoạt</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelOrder(ord)}
+                                  disabled={cancellingOrderId === ord.id}
+                                  className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition cursor-pointer"
+                                  title="Hủy đơn hàng này"
+                                >
+                                  <XCircle size={15} />
+                                </button>
+                              </div>
+                            ) : isPaid ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAnnouncementForOrder(ord)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-[11px] font-bold border border-purple-200 transition cursor-pointer"
+                                title="Mở cổng phát thư gửi email thông báo xác nhận bản quyền"
+                              >
+                                <Mail size={12} />
+                                <span>Gửi Lại Thư</span>
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 font-medium">Đã kết thúc</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* TAB 5: PHÁT THƯ GÓI DỊCH VỤ & THÔNG BÁO NỀN TẢNG (SUPER ADMIN) */}
+      {/* ==================================================== */}
+      {activeTab === 'announcements' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Top Banner */}
+          <div className="bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 p-6 sm:p-8 rounded-3xl text-white shadow-xl border border-purple-500/30 relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-200 text-xs font-bold uppercase tracking-wider backdrop-blur-md">
+                  <Megaphone size={14} className="text-purple-300" />
+                  <span>Trung Tâm Phát Thông Báo Nền Tảng (Super Admin Dispatcher)</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+                  Phát Thư Gói Dịch Vụ &amp; Bản Quyền Cho Cấp Quản Lý Toàn Hệ Thống
+                </h2>
+                <p className="text-purple-200/80 text-xs sm:text-sm max-w-3xl leading-relaxed">
+                  Dành riêng cho Super Admin (<strong className="text-white font-mono">adminManager@gmail.com</strong>). Kết nối trực tiếp Resend API qua 2 hòm thư đại diện chính thức: <code className="bg-black/30 px-2 py-0.5 rounded text-amber-300 font-mono font-bold">notifications@omniassets.ryug.id.vn</code> (Thông báo gói cước) và <code className="bg-black/30 px-2 py-0.5 rounded text-emerald-300 font-mono font-bold">support@omniassets.ryug.id.vn</code> (Hỗ trợ khách hàng).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="p-3 bg-white/10 rounded-2xl border border-white/10 text-center backdrop-blur-md min-w-[140px]">
+                  <div className="text-[10px] text-purple-200 font-bold uppercase">Tổng Cán Bộ Nhận</div>
+                  <div className="text-2xl font-black text-amber-300">
+                    {loadingRecipients ? '...' : (recipientsData?.totalRecipients || 0)}
+                  </div>
+                  <div className="text-[10px] text-purple-200/70">
+                    trên {recipientsData?.totalCompanies || companies.length} doanh nghiệp
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Preset Templates Bar */}
+          <div className="bg-white p-5 rounded-3xl border border-pastel-200/90 shadow-soft space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <Sparkles size={15} className="text-purple-600" />
+                <span>Mẫu Thư Nền Tảng Dựng Sẵn (1-Click Nạp Nội Dung)</span>
+              </span>
+              <span className="text-[11px] text-slate-400">
+                Chọn mẫu để tự động điền tiêu đề, nội dung và cấu hình gửi chuẩn
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <button
+                type="button"
+                onClick={() => applyAnnouncementTemplate('PLAN_NEW')}
+                className="p-3.5 rounded-2xl border border-purple-200/80 bg-purple-50/50 hover:bg-purple-100/60 text-left transition cursor-pointer group"
+              >
+                <div className="flex items-center gap-2 font-bold text-xs text-purple-900 group-hover:text-purple-950">
+                  <span>🚀 Thông Báo Phát Hành Gói Mới</span>
+                </div>
+                <p className="text-[11px] text-purple-700/80 mt-1 line-clamp-2">
+                  Phát thông báo bảng giá gói cước mới và ưu đãi nâng cấp cho doanh nghiệp.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => applyAnnouncementTemplate('LICENSE_GRANTED')}
+                className="p-3.5 rounded-2xl border border-emerald-200/80 bg-emerald-50/50 hover:bg-emerald-100/60 text-left transition cursor-pointer group"
+              >
+                <div className="flex items-center gap-2 font-bold text-xs text-emerald-900 group-hover:text-emerald-950">
+                  <span>🎉 Thông Báo Cấp Quyền Thành Công</span>
+                </div>
+                <p className="text-[11px] text-emerald-700/80 mt-1 line-clamp-2">
+                  Xác nhận kích hoạt và mở khóa toàn diện bản quyền cho doanh nghiệp.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => applyAnnouncementTemplate('NEW_SERVICE')}
+                className="p-3.5 rounded-2xl border border-amber-200/80 bg-amber-50/50 hover:bg-amber-100/60 text-left transition cursor-pointer group"
+              >
+                <div className="flex items-center gap-2 font-bold text-xs text-amber-900 group-hover:text-amber-950">
+                  <span>🌟 Thông Báo Dịch Vụ Mới</span>
+                </div>
+                <p className="text-[11px] text-amber-700/80 mt-1 line-clamp-2">
+                  Giới thiệu các tính năng và dịch vụ mới vừa bổ sung trên nền tảng.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => applyAnnouncementTemplate('SYSTEM_UPDATE')}
+                className="p-3.5 rounded-2xl border border-sky-200/80 bg-sky-50/50 hover:bg-sky-100/60 text-left transition cursor-pointer group"
+              >
+                <div className="flex items-center gap-2 font-bold text-xs text-sky-900 group-hover:text-sky-950">
+                  <span>🔔 Thông Báo Sắp Có Bản Cập Nhật</span>
+                </div>
+                <p className="text-[11px] text-sky-700/80 mt-1 line-clamp-2">
+                  Thông báo lịch nâng cấp tính năng và bảo trì tối ưu hóa cơ sở dữ liệu.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* Main Dispatch Composer & Target Audience */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Dispatch Form (8 cols) */}
+            <div className="lg:col-span-8 bg-white p-6 rounded-3xl border border-pastel-200/90 shadow-soft space-y-4">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Sliders size={16} className="text-purple-600" />
+                <span>Soạn Thảo Thông Báo Gói Cước &amp; Cấu Hình Phát Thư</span>
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Sender Mailbox */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Hòm Thư Đại Diện Gửi Đi (Chính Thức) *
+                  </label>
+                  <select
+                    value={announcementSender}
+                    onChange={(e) => setAnnouncementSender(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-purple-900 bg-purple-50/50 focus:ring-2 focus:ring-purple-400 outline-none"
+                  >
+                    <option value="notifications">notifications@omniassets.ryug.id.vn (Thông Báo Gói Cước)</option>
+                    <option value="support">support@omniassets.ryug.id.vn (Bộ Phận Hỗ Trợ Nền Tảng)</option>
+                  </select>
+                </div>
+
+                {/* Target Audience Scope */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Phạm Vi Người Nhận *
+                  </label>
+                  <select
+                    value={announcementTargetType}
+                    onChange={(e) => setAnnouncementTargetType(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-purple-400 outline-none"
+                  >
+                    <option value="ALL_COMPANIES">
+                      🌐 Toàn Bộ Khách Hàng ({recipientsData?.totalCompanies || companies.length} Doanh Nghiệp • {recipientsData?.totalRecipients || 0} Cán Bộ)
+                    </option>
+                    <option value="SINGLE_COMPANY">
+                      🏢 Gửi Riêng Cho 1 Doanh Nghiệp Chỉ Định
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              {/* If Single Company: select company */}
+              {announcementTargetType === 'SINGLE_COMPANY' && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl animate-fade-in">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Chọn Doanh Nghiệp Nhận Thông Báo *
+                  </label>
+                  <select
+                    value={announcementTargetCompanyId}
+                    onChange={(e) => setAnnouncementTargetCompanyId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white focus:ring-2 focus:ring-purple-400 outline-none"
+                  >
+                    <option value="">-- Vui lòng chọn doanh nghiệp --</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.company_name} (Admin: {c.admin_email || 'Chưa có email'} - Gói: {c.plan_code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Subject */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Tiêu Đề Thư Gửi Đến Cấp Quản Lý *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={announcementSubject}
+                  onChange={(e) => setAnnouncementSubject(e.target.value)}
+                  placeholder="[OmniAssets] Thông báo cập nhật gói cước dịch vụ..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-purple-400 outline-none bg-white"
+                />
+              </div>
+
+              {/* Message */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nội Dung Chi Tiết (Hiển thị nổi bật trong khung thư) *
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={announcementMessage}
+                  onChange={(e) => setAnnouncementMessage(e.target.value)}
+                  placeholder="Nhập nội dung thông điệp gửi đến Quản trị viên và Quản lý các công ty..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 focus:ring-2 focus:ring-purple-400 outline-none leading-relaxed"
+                />
+              </div>
+
+              {/* Options: Include Pricing Plans */}
+              <div className="p-3.5 bg-purple-50/50 border border-purple-200/80 rounded-2xl flex items-center justify-between">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={announcementIncludePlans}
+                    onChange={(e) => setAnnouncementIncludePlans(e.target.checked)}
+                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 cursor-pointer"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-purple-900 block">
+                      Tự động đính kèm Bảng Gói Cước Dịch Vụ (Official Pricing Table)
+                    </span>
+                    <span className="text-[11px] text-purple-700/70">
+                      Hiển thị danh sách các gói cước đang áp dụng ({plans.length} gói: {plans.map(p => p.name).join(', ')})
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {/* CTA Button Config */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Chữ Trên Nút Bấm Hành Động (CTA Button)
+                  </label>
+                  <input
+                    type="text"
+                    value={announcementCtaText}
+                    onChange={(e) => setAnnouncementCtaText(e.target.value)}
+                    placeholder="Khám Phá Các Gói Cước & Nhận Ưu Đãi"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-purple-400 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Đường Dẫn Khi Bấm Vào Nút
+                  </label>
+                  <input
+                    type="text"
+                    value={announcementCtaUrl}
+                    onChange={(e) => setAnnouncementCtaUrl(e.target.value)}
+                    placeholder="https://company-sheet.hieupham101097.workers.dev"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-700 focus:ring-2 focus:ring-purple-400 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <span className="text-[11px] text-slate-400">
+                  Gửi tự động qua Resend API • Người gửi: <strong className="text-purple-700 font-mono">adminManager@gmail.com</strong>
+                </span>
+
+                <button
+                  type="button"
+                  disabled={sendingAnnouncement}
+                  onClick={handleSendAnnouncement}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-700 active:scale-95 text-white text-xs font-bold shadow-lg shadow-purple-600/30 transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  <Send size={15} className={sendingAnnouncement ? 'animate-pulse' : ''} />
+                  <span>{sendingAnnouncement ? 'Đang phát thông báo qua Resend...' : '⚡ Nhấn Để Phát Thư Gói Dịch Vụ Ngay'}</span>
+                </button>
+              </div>
+
+              {/* Result Banner */}
+              {announcementResult && (
+                <div
+                  className={`p-4 rounded-2xl border text-xs font-semibold flex items-start gap-3 animate-scale-in ${
+                    announcementResult.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : 'bg-rose-50 text-rose-800 border-rose-200'
+                  }`}
+                >
+                  {announcementResult.type === 'success' ? (
+                    <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle size={18} className="text-rose-600 shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1 space-y-1">
+                    <p className="font-bold">{announcementResult.text}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAnnouncementResult(null)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Live Target Recipients Preview (4 cols) */}
+            <div className="lg:col-span-4 bg-white p-5 rounded-3xl border border-pastel-200/90 shadow-soft space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                  <UserCheck size={15} className="text-emerald-600" />
+                  <span>Danh Sách Người Nhận Thư</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={fetchAnnouncementRecipients}
+                  className="text-slate-400 hover:text-purple-600 p-1"
+                  title="Tải lại danh sách"
+                >
+                  <RefreshCw size={13} className={loadingRecipients ? 'animate-spin' : ''} />
+                </button>
+              </div>
+
+              {loadingRecipients ? (
+                <div className="py-8 text-center text-xs text-slate-400">
+                  <RefreshCw size={20} className="animate-spin mx-auto mb-2 text-purple-600" />
+                  Đang quét danh sách người dùng toàn hệ thống...
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Số doanh nghiệp:</span>
+                      <strong className="text-slate-800">{recipientsData?.totalCompanies || companies.length} công ty</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Số cán bộ nhận thư:</span>
+                      <strong className="text-purple-700 font-black">{recipientsData?.totalRecipients || 0} cán bộ (Admin &amp; Manager)</strong>
+                    </div>
+                  </div>
+
+                  <div className="max-h-[460px] overflow-y-auto space-y-2.5 pr-1 scrollbar-thin">
+                    {(recipientsData?.companyList || []).map((comp) => (
+                      <div
+                        key={comp.id}
+                        className="p-3 rounded-2xl border border-slate-200/80 bg-white hover:bg-slate-50/50 transition space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800 truncate" title={comp.company_name}>
+                            {comp.company_name}
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                            {comp.plan_code}
+                          </span>
+                        </div>
+
+                        <div className="space-y-1">
+                          {comp.recipients.map((rec, rIdx) => (
+                            <div key={rIdx} className="flex items-center justify-between text-[11px] text-slate-600">
+                              <span className="font-mono truncate max-w-[180px]">{rec.email}</span>
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 font-bold">
+                                {rec.role}
+                              </span>
+                            </div>
+                          ))}
+                          {comp.recipients.length === 0 && (
+                            <span className="text-[10px] text-slate-400 italic">Chưa có email quản lý</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* TAB 4.5: HÒM THƯ YÊU CẦU HỖ TRỢ & PHẢN HỒI TICKETS    */}
+      {/* ==================================================== */}
+      {activeTab === 'support-desk' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Top Banner */}
+          <div className="bg-gradient-to-br from-indigo-950 via-purple-900 to-slate-900 p-6 sm:p-8 rounded-3xl text-white shadow-xl border border-purple-500/30 relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-96 h-96 bg-purple-500/15 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-purple-200 text-xs font-bold uppercase tracking-wider backdrop-blur-md">
+                  <HelpCircle size={14} className="text-purple-300" />
+                  <span>Trung Tâm Hỗ Trợ Kỹ Thuật &amp; Khách Hàng Nền Tảng (Support Desk)</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+                  Hòm Thư Yêu Cầu Hỗ Trợ &amp; Trả Lời Doanh Nghiệp
+                </h2>
+                <p className="text-purple-200/80 text-xs sm:text-sm max-w-3xl leading-relaxed">
+                  Tiếp nhận các yêu cầu trợ giúp kỹ thuật, báo cáo lỗi hoặc tư vấn gói cước từ doanh nghiệp khách hàng. Bạn có thể soạn thư trả lời trực tiếp từ hòm thư chính thức <strong className="text-emerald-300 font-mono">support@omniassets.ryug.id.vn</strong> ngay trên hệ thống.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={fetchSupportTickets}
+                  disabled={loadingTickets}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-semibold transition backdrop-blur-md cursor-pointer"
+                >
+                  <RefreshCw size={14} className={loadingTickets ? 'animate-spin' : ''} />
+                  <span>Làm mới hòm thư</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Support Desk Metrics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-purple-500/20">
+              <div className="bg-white/5 backdrop-blur-sm p-3.5 rounded-2xl border border-white/10">
+                <div className="text-[11px] text-purple-200/80 font-medium">Tổng Số Tickets</div>
+                <div className="text-xl font-bold mt-1 text-white">{supportTickets.length}</div>
+                <div className="text-[10px] text-purple-300/60 mt-0.5">Yêu cầu từ doanh nghiệp</div>
+              </div>
+
+              <div className="bg-amber-500/10 backdrop-blur-sm p-3.5 rounded-2xl border border-amber-500/20">
+                <div className="text-[11px] text-amber-200 font-medium flex items-center justify-between">
+                  <span>Chờ Phản Hồi</span>
+                  <Clock size={13} className="text-amber-300" />
+                </div>
+                <div className="text-xl font-bold mt-1 text-amber-300">
+                  {supportTickets.filter(t => t.status === 'PENDING').length}
+                </div>
+                <div className="text-[10px] text-amber-200/70 mt-0.5">Cần chuyên viên giải đáp</div>
+              </div>
+
+              <div className="bg-emerald-500/10 backdrop-blur-sm p-3.5 rounded-2xl border border-emerald-500/20">
+                <div className="text-[11px] text-emerald-200 font-medium flex items-center justify-between">
+                  <span>Đã Phản Hồi</span>
+                  <CheckCircle2 size={13} className="text-emerald-300" />
+                </div>
+                <div className="text-xl font-bold mt-1 text-emerald-300">
+                  {supportTickets.filter(t => t.status === 'REPLIED').length}
+                </div>
+                <div className="text-[10px] text-emerald-200/70 mt-0.5">Đã gửi mail chính thức</div>
+              </div>
+
+              <div className="bg-purple-500/10 backdrop-blur-sm p-3.5 rounded-2xl border border-purple-500/20">
+                <div className="text-[11px] text-purple-200 font-medium flex items-center justify-between">
+                  <span>Hòm Thư Phản Hồi</span>
+                  <Mail size={13} className="text-purple-300" />
+                </div>
+                <div className="text-xs font-bold mt-1 text-purple-100 font-mono truncate">
+                  support@omniassets.ryug.id.vn
+                </div>
+                <div className="text-[10px] text-purple-300/70 mt-0.5">Kênh đại diện chính thức</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Search & Filters */}
+          <div className="bg-white p-4 rounded-2xl border border-pastel-200/80 shadow-soft flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+              <input
+                type="text"
+                value={ticketSearchTerm}
+                onChange={(e) => setTicketSearchTerm(e.target.value)}
+                placeholder="Tìm kiếm theo mã Ticket, công ty, người gửi, email hoặc nội dung câu hỏi..."
+                className="w-full pl-10 pr-4 py-2 rounded-xl border border-pastel-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-slate-50/50"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 w-full md:w-auto shrink-0 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setTicketFilterStatus('ALL')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  ticketFilterStatus === 'ALL'
+                    ? 'bg-purple-600 text-white shadow-soft'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Tất Cả ({supportTickets.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTicketFilterStatus('PENDING')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  ticketFilterStatus === 'PENDING'
+                    ? 'bg-amber-600 text-white shadow-soft'
+                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
+                }`}
+              >
+                Chờ Phản Hồi ({supportTickets.filter(t => t.status === 'PENDING').length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTicketFilterStatus('REPLIED')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  ticketFilterStatus === 'REPLIED'
+                    ? 'bg-emerald-600 text-white shadow-soft'
+                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                }`}
+              >
+                Đã Phản Hồi ({supportTickets.filter(t => t.status === 'REPLIED').length})
+              </button>
+            </div>
+          </div>
+
+          {/* Main 2-Column Split View: Tickets List (5 cols) & Ticket Viewer / Reply Composer (7 cols) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Column: Tickets List */}
+            <div className="lg:col-span-5 space-y-3">
+              <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+                <span className="font-bold uppercase tracking-wider">
+                  Danh Sách Yêu Cầu ({filteredTickets.length})
+                </span>
+                <span>Bấm để xem chi tiết &amp; phản hồi</span>
+              </div>
+
+              {loadingTickets ? (
+                <div className="bg-white p-8 rounded-2xl border border-pastel-200/80 shadow-soft text-center text-slate-400 space-y-2">
+                  <RefreshCw size={24} className="animate-spin mx-auto text-purple-600" />
+                  <p className="text-xs">Đang nạp danh sách hòm thư hỗ trợ...</p>
+                </div>
+              ) : filteredTickets.length === 0 ? (
+                <div className="bg-white p-8 rounded-2xl border border-pastel-200/80 shadow-soft text-center text-slate-400 space-y-2">
+                  <Inbox size={32} className="mx-auto text-slate-300" />
+                  <p className="text-xs font-medium">Không tìm thấy yêu cầu hỗ trợ nào phù hợp.</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-[750px] overflow-y-auto pr-1 scrollbar-thin">
+                  {filteredTickets.map((t) => {
+                    const isSelected = selectedTicket?.id === t.id;
+                    const isPending = t.status === 'PENDING';
+
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => {
+                          setSelectedTicket(t);
+                          setReplyResult(null);
+                        }}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer text-left space-y-2 ${
+                          isSelected
+                            ? 'bg-purple-50/80 border-purple-400 shadow-md ring-2 ring-purple-200'
+                            : 'bg-white hover:bg-slate-50/80 border-slate-200/80 shadow-soft'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              isPending
+                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            }`}
+                          >
+                            {isPending ? (
+                              <>
+                                <Clock size={11} />
+                                <span>Chờ Phản Hồi</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 size={11} />
+                                <span>Đã Phản Hồi</span>
+                              </>
+                            )}
+                          </span>
+
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {t.created_at ? new Date(t.created_at).toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : ''}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="text-xs font-extrabold text-slate-800 line-clamp-1">
+                            {t.subject || 'Yêu cầu hỗ trợ hệ thống'}
+                          </h4>
+                          <div className="flex items-center gap-1.5 text-[11px] text-purple-700 font-semibold mt-0.5">
+                            <Building2 size={12} className="shrink-0 text-purple-500" />
+                            <span className="truncate">{t.company_name || 'Doanh Nghiệp'}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed bg-slate-50 p-2 rounded-xl border border-slate-100">
+                          {t.message}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100">
+                          <span className="truncate">Người gửi: <strong>{t.sender_name || 'Quản lý'}</strong></span>
+                          <span className="font-mono text-slate-500 truncate max-w-[160px]">{t.sender_email}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Ticket Viewer & Direct Reply Composer */}
+            <div className="lg:col-span-7">
+              {selectedTicket ? (
+                <div className="bg-white rounded-3xl border border-pastel-200/90 shadow-soft p-6 space-y-6">
+                  {/* Ticket Header & Customer Metadata */}
+                  <div className="border-b border-slate-100 pb-5 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200">
+                            {selectedTicket.id}
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              selectedTicket.status === 'PENDING'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            }`}
+                          >
+                            {selectedTicket.status === 'PENDING' ? 'Đang Chờ Xử Lý' : 'Đã Gửi Thư Phản Hồi'}
+                          </span>
+                        </div>
+                        <h3 className="text-base font-extrabold text-slate-900 mt-1.5">
+                          {selectedTicket.subject || 'Yêu cầu hỗ trợ hệ thống'}
+                        </h3>
+                      </div>
+
+                      <div className="text-right text-[11px] text-slate-400">
+                        <div>Tiếp nhận lúc:</div>
+                        <strong className="text-slate-600">
+                          {selectedTicket.created_at ? new Date(selectedTicket.created_at).toLocaleString('vi-VN') : '—'}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {/* Requester Contact Strip */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-purple-50/60 rounded-2xl border border-purple-100 text-xs">
+                      <div>
+                        <span className="text-[10px] text-purple-600 font-bold uppercase block">Doanh nghiệp</span>
+                        <strong className="text-slate-800">{selectedTicket.company_name || '—'}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-purple-600 font-bold uppercase block">Người liên hệ</span>
+                        <strong className="text-slate-800">{selectedTicket.sender_name || 'Quản lý'}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-purple-600 font-bold uppercase block">Email nhận phản hồi</span>
+                        <a
+                          href={`mailto:${selectedTicket.sender_email}`}
+                          className="font-mono text-purple-700 font-bold hover:underline truncate block"
+                        >
+                          {selectedTicket.sender_email || '—'}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Customer Message Body */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <MessageSquare size={14} className="text-purple-600" />
+                      <span>Nội Dung Yêu Cầu Của Khách Hàng:</span>
+                    </label>
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs text-slate-800 whitespace-pre-wrap leading-relaxed font-medium">
+                      {selectedTicket.message}
+                    </div>
+                  </div>
+
+                  {/* Previous Reply Notice (if replied) */}
+                  {selectedTicket.status === 'REPLIED' && selectedTicket.reply_message && (
+                    <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200/90 space-y-2">
+                      <div className="flex items-center justify-between text-xs text-emerald-800 font-bold">
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle2 size={15} className="text-emerald-600" />
+                          <span>Thư Phản Hồi Đã Gửi Thành Công:</span>
+                        </span>
+                        <span className="text-[10px] text-emerald-700 font-mono">
+                          {selectedTicket.replied_at ? new Date(selectedTicket.replied_at).toLocaleString('vi-VN') : ''}
+                        </span>
+                      </div>
+                      <div className="p-3 bg-white/90 rounded-xl border border-emerald-100 text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
+                        {selectedTicket.reply_message}
+                      </div>
+                      <div className="text-[11px] text-emerald-700 flex items-center justify-between">
+                        <span>Đã phát từ: <strong className="font-mono">support@omniassets.ryug.id.vn</strong></span>
+                        <span>Bởi: <strong className="font-mono">{selectedTicket.replied_by || 'adminManager@gmail.com'}</strong></span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 1-Click Official Reply Composer */}
+                  <form onSubmit={handleReplyTicket} className="space-y-4 pt-2 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <Send size={14} className="text-purple-600" />
+                        <span>{selectedTicket.status === 'REPLIED' ? 'Gửi Thêm Phản Hồi Mới' : 'Soạn Thư Phản Hồi Khách Hàng'}</span>
+                      </label>
+                      <span className="text-[11px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full font-mono font-bold">
+                        support@omniassets.ryug.id.vn
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500">
+                      Thư sẽ được hệ thống định dạng thương hiệu OMNIASSETS chuẩn chỉ và gửi trực tiếp qua Resend API đến hòm thư <strong className="text-slate-700 font-mono">{selectedTicket.sender_email}</strong>.
+                    </p>
+
+                    {/* Quick Response Helper Buttons */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setReplyText('Ban Quản Trị OMNIASSETS đã tiếp nhận yêu cầu của bạn và hoàn tất xử lý trên hệ thống. Bạn vui lòng làm mới trang (F5) để kiểm tra lại nhé!')}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-purple-100 text-[11px] text-slate-700 font-medium transition cursor-pointer"
+                      >
+                        ✓ Đã xử lý xong &amp; F5
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setReplyText('Chào bạn, để mở rộng thêm tính năng và số lượng nhân sự, bạn có thể tham khảo bảng gói cước Enterprise 1 Năm với ưu đãi 20%. Đội ngũ kỹ thuật sẵn sàng hỗ trợ kích hoạt Key cho doanh nghiệp.')}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-purple-100 text-[11px] text-slate-700 font-medium transition cursor-pointer"
+                      >
+                        🚀 Tư vấn nâng cấp gói
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setReplyText('Cảm ơn đóng góp quý báu của bạn! Bộ phận phát triển sản phẩm đã ghi nhận tính năng này vào lộ trình cập nhật tiếp theo của OMNIASSETS.')}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-purple-100 text-[11px] text-slate-700 font-medium transition cursor-pointer"
+                      >
+                        💡 Ghi nhận góp ý tính năng
+                      </button>
+                    </div>
+
+                    <textarea
+                      rows={5}
+                      required
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      placeholder="Nhập nội dung thư phản hồi chi tiết giải đáp cho khách hàng..."
+                      className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs text-slate-800 focus:ring-2 focus:ring-purple-400 outline-none leading-relaxed bg-white"
+                    />
+
+                    {replyResult && (
+                      <div
+                        className={`p-3.5 rounded-xl border text-xs font-semibold flex items-start gap-2.5 animate-scale-in ${
+                          replyResult.type === 'success'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-rose-50 text-rose-800 border-rose-200'
+                        }`}
+                      >
+                        {replyResult.type === 'success' ? (
+                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                        )}
+                        <span className="flex-1">{replyResult.text}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px] text-slate-400">
+                        Người gửi đại diện: <strong className="text-purple-700 font-mono">adminManager@gmail.com</strong>
+                      </span>
+
+                      <button
+                        type="submit"
+                        disabled={sendingReply || !replyText.trim()}
+                        className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow-soft transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        {sendingReply ? (
+                          <>
+                            <RefreshCw size={14} className="animate-spin" />
+                            <span>Đang gửi thư qua Resend...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send size={14} />
+                            <span>Gửi Thư Phản Hồi Chính Thức</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ) : (
+                <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft p-12 text-center text-slate-400 space-y-3">
+                  <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mx-auto border border-purple-100">
+                    <HelpCircle size={28} />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-700">Chưa Chọn Yêu Cầu Hỗ Trợ</h4>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                    Vui lòng chọn một ticket từ danh sách bên trái để đọc nội dung và soạn thư phản hồi chính thức cho khách hàng.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -31,6 +31,7 @@ import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { formatDateVN, formatDateRangeVN, formatMoneyVN } from '../../utils/formatters';
 import { api } from '../../services/api';
+import { hasPermission } from '../../utils/permissionHelper';
 
 const DEFAULT_TERMS = `ĐIỀU 1: ĐỐI TƯỢNG VÀ NỘI DUNG THỰC HIỆN
 1.1. Bên B cam kết cung cấp sản phẩm/dịch vụ theo đúng yêu cầu kỹ thuật, tiêu chuẩn chất lượng và phạm vi thỏa thuận.
@@ -73,9 +74,16 @@ export function ContractManager({
   assets = [], 
   users = [], 
   onRefresh,
+  userRole = 'ADMIN',
+  currentUser,
+  companySettings,
   licenseInfo,
   onOpenUpgrade 
 }) {
+  const canView = hasPermission(currentUser, companySettings, 'contracts_view') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canCreate = hasPermission(currentUser, companySettings, 'contracts_create') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canAi = hasPermission(currentUser, companySettings, 'contracts_ai') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canHandover = hasPermission(currentUser, companySettings, 'assets_handover') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
   const [activeSubTab, setActiveSubTab] = useState('CONTRACTS'); // 'CONTRACTS' hoặc 'HANDOVERS'
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
   const [isHandoverModalOpen, setIsHandoverModalOpen] = useState(false);
@@ -463,6 +471,18 @@ export function ContractManager({
 
   const totalContractValue = contracts.reduce((acc, curr) => acc + (Number(curr.value) || 0), 0);
 
+  if (!canView) {
+    return (
+      <div className="bg-white p-8 rounded-3xl border border-pastel-200/90 shadow-soft text-center py-16">
+        <FileText size={48} className="mx-auto text-slate-300 mb-3" />
+        <h3 className="text-base font-bold text-slate-700">Không Có Quyền Truy Cập</h3>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+          Bộ phận của bạn không được phân quyền xem hoặc quản lý hợp đồng và biên bản bàn giao.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -479,27 +499,31 @@ export function ContractManager({
         {/* Action Buttons in Clean Grid on Mobile */}
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
           {/* Nút 1: Học Mẫu Mới Bằng AI */}
-          <button
-            onClick={() => {
-              setLearnedSuccessInfo(null);
-              setIsLearnModalOpen(true);
-            }}
-            className="justify-center inline-flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all active:scale-95"
-            title="Tải lên hoặc dán hợp đồng để AI học mô hình cấu trúc"
-          >
-            <BrainCircuit size={15} />
-            <span>AI Học Mẫu Mới</span>
-          </button>
+          {canAi && (
+            <button
+              onClick={() => {
+                setLearnedSuccessInfo(null);
+                setIsLearnModalOpen(true);
+              }}
+              className="justify-center inline-flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all active:scale-95"
+              title="Tải lên hoặc dán hợp đồng để AI học mô hình cấu trúc"
+            >
+              <BrainCircuit size={15} />
+              <span>AI Học Mẫu Mới</span>
+            </button>
+          )}
 
           {/* Nút 2: Soạn Thảo Bằng AI */}
-          <button
-            onClick={() => setIsAiDraftModalOpen(true)}
-            className="justify-center inline-flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all active:scale-95"
-            title="Dựa trên mẫu đã học để tự động viết hợp đồng cho khách hàng"
-          >
-            <Wand2 size={15} />
-            <span>Soạn Thảo Bằng AI</span>
-          </button>
+          {canAi && (
+            <button
+              onClick={() => setIsAiDraftModalOpen(true)}
+              className="justify-center inline-flex items-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all active:scale-95"
+              title="Dựa trên mẫu đã học để tự động viết hợp đồng cho khách hàng"
+            >
+              <Wand2 size={15} />
+              <span>Soạn Thảo Bằng AI</span>
+            </button>
+          )}
 
           <button
             onClick={activeSubTab === 'CONTRACTS' ? handleExportContracts : handleExportHandovers}
@@ -509,7 +533,7 @@ export function ContractManager({
             <span>Xuất Excel</span>
           </button>
 
-          {activeSubTab === 'CONTRACTS' ? (
+          {activeSubTab === 'CONTRACTS' && canCreate ? (
             <button
               onClick={handleOpenContractModal}
               className="justify-center inline-flex items-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all active:scale-95"
@@ -517,7 +541,7 @@ export function ContractManager({
               <Plus size={15} />
               <span>Thêm Hợp Đồng</span>
             </button>
-          ) : activeSubTab === 'HANDOVERS' ? (
+          ) : activeSubTab === 'HANDOVERS' && canHandover ? (
             <button
               onClick={() => setIsHandoverModalOpen(true)}
               className="justify-center inline-flex items-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all active:scale-95"
@@ -1171,7 +1195,7 @@ export function ContractManager({
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-600 text-xs">
                 <span>Đối tác: <strong>{appendixContract.partner_name}</strong></span>
                 <span>Giá trị gốc: <strong className="text-pastel-700">{formatMoneyVN(appendixContract.value)}</strong></span>
-                <span>Thời hạn: <strong className="font-mono">{formatDateRangeVN(appendixContract.start_date, appendixContract.end_date)}</strong></span>
+                <span>Thời hạn: <strong className="font-bold text-slate-700">{formatDateRangeVN(appendixContract.start_date, appendixContract.end_date)}</strong></span>
               </div>
             </div>
 
@@ -1369,7 +1393,7 @@ export function ContractManager({
                   • Tổng giá trị hợp đồng: <strong className="text-pastel-800 text-sm">{formatMoneyVN(previewContract.value)}</strong>
                 </p>
                 <p className="text-slate-700">
-                  • Thời hạn thực hiện: <strong className="font-mono">{formatDateRangeVN(previewContract.start_date, previewContract.end_date)}</strong>
+                  • Thời hạn thực hiện: <strong className="font-bold text-slate-800">{formatDateRangeVN(previewContract.start_date, previewContract.end_date)}</strong>
                 </p>
               </div>
 

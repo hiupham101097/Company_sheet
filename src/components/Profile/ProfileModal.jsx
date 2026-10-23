@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User,
   Mail,
@@ -15,10 +15,16 @@ import {
   CalendarCheck,
   CheckSquare,
   Award,
-  Crown
+  Crown,
+  UploadCloud,
+  ImagePlus,
+  RefreshCw,
+  Zap,
+  Link as LinkIcon
 } from 'lucide-react';
 import { Modal } from '../Common/Modal';
 import { api } from '../../services/api';
+import { compressAndResizeImage } from '../../utils/imageOptimizer';
 
 // Danh sách các mẫu avatar phong cách doanh nghiệp hiện đại
 const AVATAR_PRESETS = [
@@ -49,6 +55,50 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }) {
     new_password: '',
     confirm_password: '',
   });
+
+  const fileInputRef = useRef(null);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionStats, setCompressionStats] = useState(null);
+  const [avatarSource, setAvatarSource] = useState('upload'); // 'upload' | 'preset' | 'url'
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    e.target.value = '';
+
+    if (!file.type.startsWith('image/')) {
+      setMessage({ type: 'error', text: 'Vui lòng chọn tệp hình ảnh (.jpg, .jpeg, .png, .webp)!' });
+      return;
+    }
+
+    try {
+      setIsCompressing(true);
+      setMessage({ type: '', text: '' });
+
+      // Nén ảnh thông minh chuẩn WebP, crop vuông 200x200px, chất lượng 82%
+      const result = await compressAndResizeImage(file, {
+        maxWidth: 200,
+        maxHeight: 200,
+        quality: 0.82,
+        squareCrop: true,
+      });
+
+      setFormData((prev) => ({ ...prev, avatar: result.dataUrl }));
+      setCompressionStats({
+        originalKB: result.originalSizeKB,
+        compressedKB: result.compressedSizeKB,
+        reductionPercent: result.reductionPercent,
+        format: result.format === 'image/webp' ? 'WebP' : 'JPEG',
+      });
+      setAvatarSource('upload');
+    } catch (err) {
+      console.error('Lỗi khi nén ảnh:', err);
+      setMessage({ type: 'error', text: 'Không thể xử lý ảnh: ' + (err.message || 'Lỗi không xác định') });
+    } finally {
+      setIsCompressing(false);
+    }
+  };
 
   const [showCurrentPass, setShowCurrentPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
@@ -165,14 +215,22 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }) {
       <div className="space-y-5">
         {/* User Card Header Summary */}
         <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 text-white flex flex-col sm:flex-row items-center gap-4 shadow-soft">
-          <div className="relative shrink-0">
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="relative shrink-0 group cursor-pointer"
+            title="Nhấp để tải ảnh đại diện từ máy tính"
+          >
             <img
               src={formData.avatar || currentUser?.avatar}
               alt="Avatar"
-              className="w-16 h-16 rounded-2xl object-cover ring-4 ring-white/20 shadow-md bg-white/10"
+              className="w-16 h-16 rounded-2xl object-cover ring-4 ring-white/20 shadow-md bg-white/10 group-hover:opacity-85 transition"
             />
+            <div className="absolute inset-0 bg-black/45 rounded-2xl opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition">
+              <Camera size={18} className="text-white" />
+              <span className="text-[9px] text-white font-medium mt-0.5">Đổi ảnh</span>
+            </div>
             {currentUser?.role === 'SUPER_ADMIN' && (
-              <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-xs">
+              <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-xs z-10">
                 <Crown size={13} className="fill-slate-950" />
               </div>
             )}
@@ -257,36 +315,160 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }) {
           {/* TAB 1: THÔNG TIN CƠ BẢN */}
           {activeTab === 'info' && (
             <div className="space-y-4 animate-fade-in">
-              {/* Chọn Avatar Nhanh */}
+              {/* Chọn Avatar & Tải Ảnh Lên (Tối ưu hóa WebP) */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
-                  <span>Ảnh Đại Diện (Avatar)</span>
-                  <span className="text-[11px] font-normal text-slate-400">Chọn ảnh mẫu hoặc dán link ảnh</span>
-                </label>
-                <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-50 border border-pastel-200 rounded-2xl">
-                  {AVATAR_PRESETS.map((preset, idx) => (
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Camera size={14} className="text-purple-600" />
+                    <span>Ảnh Đại Diện (Avatar)</span>
+                  </label>
+                  <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                    <Zap size={11} className="fill-emerald-600 text-emerald-600" />
+                    Tự động nén WebP &lt; 15KB (Tiết kiệm 99% data)
+                  </span>
+                </div>
+
+                {/* Input chọn file ẩn */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png, image/jpeg, image/jpg, image/webp"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+
+                <div className="p-3 bg-slate-50 border border-pastel-200 rounded-2xl space-y-3">
+                  {/* Selector Tabs */}
+                  <div className="flex items-center gap-1 p-1 bg-white rounded-xl border border-pastel-200 text-xs font-semibold">
                     <button
-                      key={idx}
                       type="button"
-                      onClick={() => setFormData({ ...formData, avatar: preset })}
-                      className={`w-10 h-10 rounded-xl overflow-hidden border-2 transition transform active:scale-95 ${
-                        formData.avatar === preset
-                          ? 'border-purple-600 ring-2 ring-purple-300 scale-105'
-                          : 'border-transparent hover:border-slate-300'
+                      onClick={() => setAvatarSource('upload')}
+                      className={`flex-1 py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${
+                        avatarSource === 'upload'
+                          ? 'bg-purple-600 text-white shadow-xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                       }`}
                     >
-                      <img src={preset} alt={`Preset ${idx}`} className="w-full h-full object-cover" />
+                      <UploadCloud size={13} />
+                      Tải ảnh từ máy
                     </button>
-                  ))}
-                </div>
-                <div className="mt-2">
-                  <input
-                    type="url"
-                    value={formData.avatar}
-                    onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
-                    placeholder="Hoặc dán URL ảnh đại diện tùy chỉnh (https://...)"
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
-                  />
+                    <button
+                      type="button"
+                      onClick={() => setAvatarSource('preset')}
+                      className={`flex-1 py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${
+                        avatarSource === 'preset'
+                          ? 'bg-purple-600 text-white shadow-xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Sparkles size={13} />
+                      Ảnh mẫu ({AVATAR_PRESETS.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAvatarSource('url')}
+                      className={`flex-1 py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${
+                        avatarSource === 'url'
+                          ? 'bg-purple-600 text-white shadow-xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      }`}
+                    >
+                      <LinkIcon size={13} />
+                      Dán link URL
+                    </button>
+                  </div>
+
+                  {/* VÙNG 1: TẢI ẢNH TỪ THIẾT BỊ (Nén WebP Client-side) */}
+                  {avatarSource === 'upload' && (
+                    <div className="space-y-2.5 animate-fade-in">
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        className="group border-2 border-dashed border-pastel-300 hover:border-purple-500 bg-white hover:bg-purple-50/40 rounded-xl p-3.5 flex flex-col items-center justify-center text-center cursor-pointer transition-all"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-purple-50 group-hover:bg-purple-100 text-purple-600 flex items-center justify-center mb-1.5 transition transform group-hover:scale-110">
+                          {isCompressing ? (
+                            <RefreshCw size={18} className="animate-spin text-purple-600" />
+                          ) : (
+                            <ImagePlus size={18} />
+                          )}
+                        </div>
+                        <p className="text-xs font-bold text-slate-800">
+                          {isCompressing ? 'Đang nén tối ưu WebP...' : 'Nhấp để chọn ảnh từ máy tính hoặc điện thoại'}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Hỗ trợ PNG, JPG, JPEG, WEBP • Tự động crop vuông và nén siêu nhẹ
+                        </p>
+                      </div>
+
+                      {/* Hiển thị kết quả tối ưu dung lượng */}
+                      {compressionStats && (
+                        <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-emerald-800 animate-fade-in">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                              ✓
+                            </span>
+                            <div>
+                              <span className="font-bold">Đã nén tối ưu: </span>
+                              <span>
+                                Gốc {compressionStats.originalKB} KB ➔{' '}
+                                <strong className="text-emerald-950">{compressionStats.compressedKB} KB</strong> ({compressionStats.format})
+                              </span>
+                            </div>
+                          </div>
+                          <span className="self-start sm:self-auto px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 font-bold text-[10px]">
+                            Giảm {compressionStats.reductionPercent}% dung lượng
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* VÙNG 2: CHỌN ẢNH MẪU CÓ SẴN */}
+                  {avatarSource === 'preset' && (
+                    <div className="space-y-1.5 animate-fade-in">
+                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                        {AVATAR_PRESETS.map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setFormData({ ...formData, avatar: preset });
+                              setCompressionStats(null);
+                            }}
+                            className={`w-11 h-11 rounded-xl overflow-hidden border-2 transition transform active:scale-95 ${
+                              formData.avatar === preset
+                                ? 'border-purple-600 ring-2 ring-purple-300 scale-105'
+                                : 'border-white hover:border-slate-300'
+                            }`}
+                          >
+                            <img src={preset} alt={`Preset ${idx}`} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        Chọn một trong các avatar minh họa doanh nghiệp hiện đại.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* VÙNG 3: DÁN LINK URL TRỰC TIẾP */}
+                  {avatarSource === 'url' && (
+                    <div className="space-y-1.5 animate-fade-in">
+                      <input
+                        type="url"
+                        value={formData.avatar}
+                        onChange={(e) => {
+                          setFormData({ ...formData, avatar: e.target.value });
+                          setCompressionStats(null);
+                        }}
+                        placeholder="Dán URL ảnh đại diện (https://...)"
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-white border border-pastel-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      />
+                      <p className="text-[11px] text-slate-400">
+                        Hỗ trợ link ảnh trực tiếp từ Unsplash, Google Drive, hoặc CDN ngoài.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

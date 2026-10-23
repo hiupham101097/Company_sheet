@@ -16,29 +16,102 @@ import {
   TrendingUp,
   Download,
   Building2,
-  ShieldAlert
+  ShieldAlert,
+  Mail,
+  RefreshCw,
+  Send
 } from 'lucide-react';
 import { Badge } from '../Common/Badge';
 import { Modal } from '../Common/Modal';
-import { exportToExcel } from '../../utils/exportExcel';
+import { exportToExcel, exportMultiSheetExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
 import { formatDateVN } from '../../utils/formatters';
+import { hasPermission } from '../../utils/permissionHelper';
 
-export function AttendanceManager({ attendanceList = [], users = [], summary, onRefresh }) {
+export function AttendanceManager({ 
+  attendanceList = [], 
+  users = [], 
+  summary, 
+  onRefresh,
+  userRole = 'ADMIN',
+  currentUser,
+  companySettings
+}) {
+  const canCheckin = hasPermission(currentUser, companySettings, 'attendance_checkin') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canViewAll = hasPermission(currentUser, companySettings, 'attendance_view_all') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canSendTimesheet = hasPermission(currentUser, companySettings, 'attendance_send_timesheet') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+
   // Navigation sub-tab: 'DAILY' (Điểm danh & Nhật ký) vs 'ACCOUNTING' (Thống kê từng cá nhân cho Kế toán)
-  const [activeSubTab, setActiveSubTab] = useState('ACCOUNTING');
+  const [activeSubTab, setActiveSubTab] = useState(canViewAll ? 'ACCOUNTING' : 'DAILY');
 
   // Daily check-in terminal state
   const [selectedUser, setSelectedUser] = useState(users[0]?.id || 'usr_1');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState('');
+  const [categoriesDept, setCategoriesDept] = useState([]);
 
   // Accounting filter state
   const [selectedMonth, setSelectedMonth] = useState('ALL');
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [searchEmployee, setSearchEmployee] = useState('');
   const [detailUser, setDetailUser] = useState(null); // Selected user for deep-dive timesheet modal
+
+  // Email timesheet state
+  const [sendingEmailUserId, setSendingEmailUserId] = useState(null);
+  const [emailFeedback, setEmailFeedback] = useState(null);
+
+  const handleSendTimesheetEmail = async (item) => {
+    if (!item?.user?.email) {
+      alert(`Nhân viên ${item?.user?.name || ''} chưa có địa chỉ email.`);
+      return;
+    }
+
+    const monthTarget = selectedMonth === 'ALL' ? new Date().toISOString().slice(0, 7) : selectedMonth;
+    const confirmSend = window.confirm(
+      `Gửi phiếu báo cáo công tháng ${monthTarget} đến email: ${item.user.email} (${item.user.name})?`
+    );
+    if (!confirmSend) return;
+
+    try {
+      setSendingEmailUserId(item.user.id);
+      setEmailFeedback(null);
+      const res = await api.sendTimesheetEmail({
+        user_id: item.user.id,
+        user_name: item.user.name,
+        email: item.user.email,
+        month: monthTarget,
+        totalDaysWorked: item.totalDaysWorked,
+        totalHours: item.totalHours,
+        standardWorkDays: item.standardWorkDays,
+        onTimeDays: item.onTimeDays,
+        lateDays: item.lateDays,
+        lateMinutes: item.lateMinutes || 0,
+        punctualityRate: item.punctualityRate,
+        notes: `Phòng Kế toán & Hành chính tổng hợp công tháng ${monthTarget}.`
+      });
+
+      if (res.success) {
+        setEmailFeedback({
+          type: 'success',
+          text: `Đã gửi thành công phiếu công tháng ${monthTarget} đến ${item.user.email}!`
+        });
+        setTimeout(() => setEmailFeedback(null), 5000);
+      } else {
+        setEmailFeedback({
+          type: 'error',
+          text: res.message || 'Lỗi khi gửi email phiếu công'
+        });
+      }
+    } catch (err) {
+      setEmailFeedback({
+        type: 'error',
+        text: err.message || 'Lỗi kết nối khi gửi email'
+      });
+    } finally {
+      setSendingEmailUserId(null);
+    }
+  };
 
   // Ticking live clock
   useEffect(() => {
@@ -92,14 +165,24 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
     return Array.from(months).sort().reverse();
   }, [attendanceList]);
 
-  // Extract distinct departments from users
+  useEffect(() => {
+    api.getCategories('DEPARTMENT')
+      .then((res) => {
+        const list = res?.data || [];
+        setCategoriesDept(list.map(c => c.name).filter(Boolean));
+      })
+      .catch((err) => console.error('Error fetching categories in AttendanceManager:', err));
+  }, []);
+
+  // Extract distinct departments from API categories and users
   const availableDepts = useMemo(() => {
     const depts = new Set();
+    categoriesDept.forEach(d => depts.add(d));
     users.forEach((u) => {
       if (u.department) depts.add(u.department);
     });
     return Array.from(depts);
-  }, [users]);
+  }, [categoriesDept, users]);
 
   // Calculate detailed individual statistics for each employee
   const employeeTimesheets = useMemo(() => {
@@ -241,34 +324,205 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
     exportToExcel(exportData, 'Nhat_Ky_Diem_Danh_Hang_Ngay', 'Nhật Ký');
   };
 
-  // Xuất bảng tính lương & công kế toán chuyên dụng
+  // Xuất bảng chấm công từng ngày trong tháng (1/10 - 31/10) chuyên nghiệp cho Kế toán
   const handleExportAccountingExcel = () => {
-    const monthLabel = selectedMonth === 'ALL' ? 'Toan_Thoi_Gian' : selectedMonth.replace('-', '_');
-    const exportData = filteredEmployeeTimesheets.map((item, index) => ({
-      'STT': index + 1,
-      'Mã Nhân Viên': item.user.id,
-      'Họ Và Tên': item.user.name,
-      'Phòng Ban': item.user.department || 'Chưa gán',
-      'Chức Vụ': item.user.role === 'ADMIN' ? 'Quản trị viên' : item.user.role === 'MANAGER' ? 'Quản lý' : 'Nhân viên',
-      'Số Ngày Đi Làm (Ngày)': item.totalDaysWorked,
-      'Tổng Giờ Làm (Giờ)': item.totalHours,
-      'Số Công Chuẩn (Giờ / 8)': item.standardWorkDays,
-      'Đúng Giờ (Ngày)': item.onTimeDays,
-      'Đi Muộn (Lần)': item.lateDays,
-      'Về Sớm (Lần)': item.earlyLeaveDays,
-      'Tỷ Lệ Chuyên Cần (%)': `${item.punctualityRate}%`,
-      'Đánh Giá Kế Toán':
-        item.lateDays === 0 && item.totalDaysWorked > 0
+    if (!filteredEmployeeTimesheets.length) {
+      alert('Không có dữ liệu nhân viên để xuất file Excel!');
+      return;
+    }
+
+    // 1. Xác định tháng cần xuất: nếu chọn ALL thì lấy tháng gần nhất có dữ liệu hoặc tháng hiện tại
+    const targetMonth =
+      selectedMonth !== 'ALL'
+        ? selectedMonth
+        : (availableMonths[0] || new Date().toISOString().slice(0, 7));
+
+    const [yearStr, monthStr] = targetMonth.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const daysInMonth = new Date(year, month, 0).getDate(); // Số ngày trong tháng (vd: tháng 10 có 31 ngày)
+    const monthLabel = `Thang_${monthStr}_${yearStr}`;
+    const monthTitle = `Tháng ${monthStr}/${yearStr}`;
+
+    // Tạo danh sách các ngày trong tháng (1 đến daysInMonth)
+    const dayOfWeekNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const daysList = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dStr = String(d).padStart(2, '0');
+      const dateKey = `${yearStr}-${monthStr}-${dStr}`;
+      const dateObj = new Date(year, month - 1, d);
+      const dow = dayOfWeekNames[dateObj.getDay()];
+      daysList.push({
+        dayNumber: d,
+        dStr,
+        dateKey,
+        dow,
+        colKey: `${dStr}/${monthStr} (${dow})`,
+        isWeekend: dateObj.getDay() === 0 || dateObj.getDay() === 6,
+        isSunday: dateObj.getDay() === 0,
+        isSaturday: dateObj.getDay() === 6,
+      });
+    }
+
+    // 2. SHEET 1: MA TRẬN CHẤM CÔNG TỪNG NGÀY TRONG THÁNG (1/10 - 31/10)
+    const matrixData = filteredEmployeeTimesheets.map((item, index) => {
+      // Lấy tất cả records của nhân viên này trong tháng được chọn
+      const userMonthRecords = attendanceList.filter(
+        (att) => att.user_id === item.user.id && att.date && att.date.startsWith(targetMonth)
+      );
+
+      const recordMap = {};
+      userMonthRecords.forEach((r) => {
+        if (r.date) recordMap[r.date] = r;
+      });
+
+      const row = {
+        'STT': index + 1,
+        'Mã Nhân Viên': item.user.id,
+        'Họ Và Tên': item.user.name,
+        'Phòng Ban': item.user.department || 'Chưa gán',
+        'Chức Vụ':
+          item.user.role === 'ADMIN'
+            ? 'Quản trị viên'
+            : item.user.role === 'MANAGER'
+              ? 'Quản lý'
+              : item.user.role === 'SUPER_ADMIN'
+                ? 'Tổng Giám Đốc (Master)'
+                : 'Nhân viên',
+      };
+
+      let daysWorkedCount = 0;
+      let lateCount = 0;
+      let earlyLeaveCount = 0;
+      let onTimeCount = 0;
+      let totalHoursCount = 0;
+
+      // Điền trạng thái cho từng ngày từ 1 đến 31
+      daysList.forEach((dayInfo) => {
+        const rec = recordMap[dayInfo.dateKey];
+        let cellText = '-';
+
+        if (rec && rec.check_in) {
+          daysWorkedCount++;
+          const h = Number(rec.total_hours) || (rec.check_out ? 8 : 4);
+          totalHoursCount += h;
+
+          if (rec.status === 'LATE') {
+            lateCount++;
+            cellText = `1.0 (Trễ ${rec.check_in})`;
+          } else if (rec.status === 'EARLY_LEAVE') {
+            earlyLeaveCount++;
+            cellText = `1.0 (Về sớm ${rec.check_out || ''})`;
+          } else if (rec.status === 'ABSENT') {
+            cellText = 'Vắng (0)';
+          } else {
+            onTimeCount++;
+            cellText = '1.0 (Đúng giờ)';
+          }
+        } else {
+          // Không có dữ liệu chấm công
+          if (dayInfo.isSunday) {
+            cellText = 'Nghỉ (CN)';
+          } else if (dayInfo.isSaturday) {
+            cellText = 'Nghỉ (T7)';
+          } else if (dayInfo.dateKey < todayStr) {
+            cellText = 'V (Vắng)';
+          } else {
+            cellText = '-';
+          }
+        }
+
+        row[dayInfo.colKey] = cellText;
+      });
+
+      const standardDays = Math.round((totalHoursCount / 8) * 10) / 10;
+      const punctualityRate = daysWorkedCount > 0 ? Math.round((onTimeCount / daysWorkedCount) * 100) : 0;
+
+      // Cột tổng kết sau các ngày
+      row['Tổng Ngày Đi Làm (Ngày)'] = daysWorkedCount;
+      row['Tổng Giờ Làm (Giờ)'] = Math.round(totalHoursCount * 10) / 10;
+      row['Số Công Chuẩn (h/8)'] = standardDays;
+      row['Số Lần Đi Trễ (Lần)'] = lateCount;
+      row['Số Lần Về Sớm (Lần)'] = earlyLeaveCount;
+      row['Tỷ Lệ Chuyên Cần (%)'] = `${punctualityRate}%`;
+      row['Đánh Giá Kế Toán'] =
+        lateCount === 0 && daysWorkedCount > 0
           ? 'Đạt chuyên cần xuất sắc'
-          : item.lateDays <= 2
+          : lateCount <= 2
             ? 'Đạt chuyên cần tiêu chuẩn'
-            : `Vi phạm đi muộn ${item.lateDays} lần`
+            : `Kỷ luật đi trễ (${lateCount} lần)`;
+
+      return row;
+    });
+
+    // 3. SHEET 2: BẢNG TỔNG HỢP CÔNG & LƯƠNG TẬP TRUNG (Payroll Summary)
+    const summaryData = filteredEmployeeTimesheets.map((item, index) => {
+      const userMonthRecords = attendanceList.filter(
+        (att) => att.user_id === item.user.id && att.date && att.date.startsWith(targetMonth)
+      );
+
+      const daysWorked = userMonthRecords.filter((r) => r.check_in).length;
+      const hours = Math.round(userMonthRecords.reduce((sum, r) => sum + (Number(r.total_hours) || 0), 0) * 10) / 10;
+      const stdDays = Math.round((hours / 8) * 10) / 10;
+      const onTime = userMonthRecords.filter((r) => r.status === 'ON_TIME').length;
+      const late = userMonthRecords.filter((r) => r.status === 'LATE').length;
+      const early = userMonthRecords.filter((r) => r.status === 'EARLY_LEAVE').length;
+      const pRate = daysWorked > 0 ? Math.round((onTime / daysWorked) * 100) : 0;
+
+      return {
+        'STT': index + 1,
+        'Kỳ Chấm Công': monthTitle,
+        'Mã Nhân Viên': item.user.id,
+        'Họ Và Tên': item.user.name,
+        'Phòng Ban': item.user.department || 'Chưa gán',
+        'Chức Vụ':
+          item.user.role === 'ADMIN'
+            ? 'Quản trị viên'
+            : item.user.role === 'MANAGER'
+              ? 'Quản lý'
+              : item.user.role === 'SUPER_ADMIN'
+                ? 'Tổng Giám Đốc'
+                : 'Nhân viên',
+        'Tổng Số Ngày Đi Làm (Ngày)': daysWorked,
+        'Tổng Giờ Làm (Giờ)': hours,
+        'Số Công Chuẩn Quy Đổi (h/8)': stdDays,
+        'Đúng Giờ (Ngày)': onTime,
+        'Số Lần Đi Trễ (Lần)': late,
+        'Số Lần Về Sớm (Lần)': early,
+        'Tỷ Lệ Đúng Giờ (%)': `${pRate}%`,
+        'Xếp Loại Kế Toán':
+          late === 0 && daysWorked > 0
+            ? 'Chuyên cần xuất sắc (100%)'
+            : late <= 2
+              ? 'Chuyên cần tiêu chuẩn'
+              : `Vi phạm đi muộn (${late} lần)`,
+        'Ghi Chú': ''
+      };
+    });
+
+    // 4. SHEET 3: NHẬT KÝ QUẸT THẺ CHI TIẾT TỪNG LƯỢT (Check-in / Check-out Audit Log)
+    const monthAttList = attendanceList.filter((att) => att.date && att.date.startsWith(targetMonth));
+    const auditData = monthAttList.map((att, idx) => ({
+      'STT': idx + 1,
+      'Ngày': formatDateVN(att.date),
+      'Mã NV': att.user_id,
+      'Họ Và Tên': att.user_name || att.user_id,
+      'Phòng Ban': att.user_department || '',
+      'Giờ Vào': att.check_in || 'Chưa vào',
+      'Giờ Ra': att.check_out || 'Chưa ra',
+      'Số Giờ Làm': att.total_hours || 0,
+      'Trạng Thái': statusMap[att.status]?.label || att.status,
+      'Ghi Chú': att.notes || ''
     }));
 
-    exportToExcel(
-      exportData,
-      `Bang_Tong_Hop_Cong_Ke_Toan_${monthLabel}`,
-      'Bảng Công Kế Toán'
+    // 5. Xuất file Excel đa Sheet chuyên nghiệp
+    exportMultiSheetExcel(
+      [
+        { name: `Cham_Cong_${monthStr}_${yearStr}`, data: matrixData },
+        { name: 'Tong_Hop_Luong_Ke_Toan', data: summaryData },
+        { name: 'Nhat_Ky_Quet_The_Chi_Tiet', data: auditData.length ? auditData : [{ 'Thông báo': 'Chưa có nhật ký quẹt thẻ trong kỳ này' }] }
+      ],
+      `Bang_Cham_Cong_Chi_Tiet_${monthLabel}`
     );
   };
 
@@ -328,7 +582,7 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
               className="inline-flex items-center gap-2 px-4 py-2 bg-pastel-600 hover:bg-pastel-700 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all"
             >
               <FileSpreadsheet size={16} />
-              <span>Xuất Bảng Công Kế Toán (Excel)</span>
+              <span>Xuất Bảng Chấm Công Từng Ngày (Excel)</span>
             </button>
           ) : (
             <button
@@ -344,24 +598,26 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
 
       {/* Sub-Tabs Switcher Bar */}
       <div className="flex items-center gap-3 border-b border-pastel-200/80 pb-3">
-        <button
-          onClick={() => setActiveSubTab('ACCOUNTING')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-xs ${
-            activeSubTab === 'ACCOUNTING'
-              ? 'bg-pastel-500 text-white shadow-soft'
-              : 'bg-white text-slate-600 hover:bg-pastel-50 border border-pastel-200/80'
-          }`}
-        >
-          <Award size={15} />
-          <span>Thống Kê Công Từng Cá Nhân (Kế Toán)</span>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] ${
-              activeSubTab === 'ACCOUNTING' ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'
+        {canViewAll && (
+          <button
+            onClick={() => setActiveSubTab('ACCOUNTING')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-xs ${
+              activeSubTab === 'ACCOUNTING'
+                ? 'bg-pastel-500 text-white shadow-soft'
+                : 'bg-white text-slate-600 hover:bg-pastel-50 border border-pastel-200/80'
             }`}
           >
-            {users.length} NV
-          </span>
-        </button>
+            <Award size={15} />
+            <span>Thống Kê Công Từng Cá Nhân (Kế Toán)</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] ${
+                activeSubTab === 'ACCOUNTING' ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {users.length} NV
+            </span>
+          </button>
+        )}
 
         <button
           onClick={() => setActiveSubTab('DAILY')}
@@ -500,10 +756,47 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
                   Bảng Tổng Hợp Ngày Công & Giờ Làm Nhân Sự Cho Kế Toán
                 </h3>
               </div>
-              <span className="text-xs font-bold text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200">
-                Hiển thị {filteredEmployeeTimesheets.length} / {users.length} nhân sự
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 bg-white px-3 py-1.5 rounded-xl border border-slate-200 hidden sm:inline-block">
+                  Hiển thị {filteredEmployeeTimesheets.length} / {users.length} nhân sự
+                </span>
+                <button
+                  onClick={handleExportAccountingExcel}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-soft transition-all"
+                  title="Xuất bảng chấm công chi tiết từng ngày trong tháng ra file Excel"
+                >
+                  <Download size={14} />
+                  <span>Xuất Excel Chi Tiết Ngày (1 - 31)</span>
+                </button>
+              </div>
             </div>
+
+            {/* Email Feedback Banner */}
+            {emailFeedback && (
+              <div
+                className={`mx-5 my-3 p-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2.5 transition-all animate-fade-in ${
+                  emailFeedback.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {emailFeedback.type === 'success' ? (
+                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                  )}
+                  <span>{emailFeedback.text}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEmailFeedback(null)}
+                  className="text-slate-400 hover:text-slate-600 font-bold px-1.5 py-0.5"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
             <div className="w-full overflow-x-auto">
               <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '950px' }}>
@@ -624,15 +917,33 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
                           </div>
                         </td>
 
-                        {/* Thao Tác: Xem Chi Tiết Bảng Công */}
+                        {/* Thao Tác: Xem Chi Tiết & Gửi Email */}
                         <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                          <button
-                            onClick={() => setDetailUser(item)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pastel-50 hover:bg-pastel-100 text-pastel-700 border border-pastel-200 text-xs font-bold shadow-xs transition-colors"
-                          >
-                            <Eye size={13} />
-                            <span>Chi Tiết Công</span>
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => setDetailUser(item)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-pastel-50 hover:bg-pastel-100 text-pastel-700 border border-pastel-200 text-xs font-bold shadow-xs transition-colors"
+                              title="Xem chi tiết các ngày công"
+                            >
+                              <Eye size={13} />
+                              <span>Chi Tiết</span>
+                            </button>
+                            {canSendTimesheet && (
+                              <button
+                                onClick={() => handleSendTimesheetEmail(item)}
+                                disabled={sendingEmailUserId === item.user.id}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold shadow-xs transition-colors disabled:opacity-50"
+                                title={`Gửi phiếu công tháng ${selectedMonth === 'ALL' ? 'hiện tại' : selectedMonth} đến ${item.user.email}`}
+                              >
+                                {sendingEmailUserId === item.user.id ? (
+                                  <RefreshCw size={13} className="animate-spin text-emerald-600" />
+                                ) : (
+                                  <Mail size={13} />
+                                )}
+                                <span>{sendingEmailUserId === item.user.id ? 'Đang gửi...' : 'Gửi Email'}</span>
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1030,11 +1341,30 @@ export function AttendanceManager({ attendanceList = [], users = [], summary, on
               </div>
             </div>
 
-            {/* Modal Bottom Close */}
-            <div className="flex justify-end pt-2">
+            {/* Modal Bottom Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
               <button
+                type="button"
+                onClick={() => handleSendTimesheetEmail(detailUser)}
+                disabled={sendingEmailUserId === detailUser.user.id}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-soft transition-all disabled:opacity-50"
+              >
+                {sendingEmailUserId === detailUser.user.id ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Đang gửi email...</span>
+                  </>
+                ) : (
+                  <>
+                    <Mail size={14} />
+                    <span>Gửi Phiếu Chấm Công Đến Email ({detailUser.user.email})</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
                 onClick={() => setDetailUser(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
               >
                 Đóng
               </button>

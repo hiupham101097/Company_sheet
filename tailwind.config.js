@@ -8,15 +8,25 @@ export default {
     extend: {
       fontFamily: {
         sans: [
-          '"Plus Jakarta Sans"',
+          'Be Vietnam Pro',
           'Inter',
           '-apple-system',
           'BlinkMacSystemFont',
-          '"Segoe UI"',
+          'Segoe UI',
           'Roboto',
-          '"Helvetica Neue"',
+          'Helvetica Neue',
           'Arial',
           'sans-serif',
+        ],
+        mono: [
+          'ui-monospace',
+          'SFMono-Regular',
+          'Menlo',
+          'Monaco',
+          'Consolas',
+          '"Liberation Mono"',
+          '"Courier New"',
+          'monospace',
         ],
       },
       colors: {

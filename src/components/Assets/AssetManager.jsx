@@ -19,15 +19,22 @@ import { Modal } from '../Common/Modal';
 import { exportToExcel } from '../../utils/exportExcel';
 import { api } from '../../services/api';
 import { formatMoneyVN } from '../../utils/formatters';
+import { hasPermission } from '../../utils/permissionHelper';
 
 export function AssetManager({ 
   assets = [], 
   users = [], 
   onRefresh, 
   userRole = 'ADMIN',
+  currentUser,
+  companySettings,
   licenseInfo,
   onOpenUpgrade 
 }) {
+  const canView = hasPermission(currentUser, companySettings, 'assets_view') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canCreate = hasPermission(currentUser, companySettings, 'assets_create') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canDelete = hasPermission(currentUser, companySettings, 'assets_delete') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canExport = hasPermission(currentUser, companySettings, 'assets_export') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedAsset, setSelectedAsset] = useState(null);
@@ -152,6 +159,18 @@ export function AssetManager({
     }
   };
 
+  if (!canView) {
+    return (
+      <div className="bg-white p-8 rounded-3xl border border-pastel-200/90 shadow-soft text-center py-16">
+        <Laptop size={48} className="mx-auto text-slate-300 mb-3" />
+        <h3 className="text-base font-bold text-slate-700">Không Có Quyền Truy Cập</h3>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+          Bộ phận của bạn không được phân quyền xem hoặc quản lý tài sản, trang thiết bị công ty.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -173,17 +192,19 @@ export function AssetManager({
         </div>
 
         <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
-          <button
-            onClick={handleExportExcel}
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all w-full sm:w-auto"
-          >
-            <FileSpreadsheet size={16} className="text-pastel-600 shrink-0" />
-            <span>Xuất Excel</span>
-            {licenseInfo?.isDemo && (
-              <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-bold">Khóa</span>
-            )}
-          </button>
-          {userRole !== 'STAFF' && (
+          {canExport && (
+            <button
+              onClick={handleExportExcel}
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-xs transition-all w-full sm:w-auto"
+            >
+              <FileSpreadsheet size={16} className="text-pastel-600 shrink-0" />
+              <span>Xuất Excel</span>
+              {licenseInfo?.isDemo && (
+                <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-bold">Khóa</span>
+              )}
+            </button>
+          )}
+          {canCreate && (
             <button
               onClick={handleOpenAddModal}
               className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-pastel-500 hover:bg-pastel-600 text-white rounded-xl text-xs font-bold shadow-soft hover:shadow-soft-lg transition-all w-full sm:w-auto"
@@ -312,7 +333,7 @@ export function AssetManager({
                       <Eye size={14} />
                       <span>Xem Thẻ & QR</span>
                     </button>
-                    {userRole === 'ADMIN' && (
+                    {canDelete && (
                       <button
                         onClick={() => handleDelete(asset.id, asset.name)}
                         className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-50 border border-rose-100 transition-colors"
@@ -398,7 +419,7 @@ export function AssetManager({
                             >
                               <Eye size={15} />
                             </button>
-                            {userRole === 'ADMIN' && (
+                            {canDelete && (
                               <button
                                 onClick={() => handleDelete(asset.id, asset.name)}
                                 title="Xóa tài sản"

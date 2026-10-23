@@ -43,6 +43,7 @@ export const api = {
 
   // Xác thực đăng nhập & Đăng ký doanh nghiệp
   login: (credentials) => request('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+  sendRegistrationOtp: (data) => request('/auth/send-registration-otp', { method: 'POST', body: JSON.stringify(data) }),
   registerCompany: (data) => request('/auth/register-company', { method: 'POST', body: JSON.stringify(data) }),
   getProfile: (id) => request(id ? `/auth/profile?id=${id}` : '/auth/profile'),
   updateProfile: (data) => request('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
@@ -109,6 +110,14 @@ export const api = {
   getSettings: () => request('/settings'),
   updateSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),
 
+  // Dịch vụ Email & Tự Động Hóa (Resend & Brevo)
+  sendTestEmail: (data) => request('/mail/test', { method: 'POST', body: JSON.stringify(data || {}) }),
+  sendTimesheetEmail: (data) => request('/mail/send-timesheet', { method: 'POST', body: JSON.stringify(data) }),
+  sendDailyRemindersEmail: (data) => request('/mail/send-daily-reminders', { method: 'POST', body: JSON.stringify(data || {}) }),
+  broadcastEmail: (data) => request('/mail/broadcast', { method: 'POST', body: JSON.stringify(data) }),
+  sendSupportEmail: (data) => request('/mail/send-support', { method: 'POST', body: JSON.stringify(data) }),
+  sendManagementNotification: (data) => request('/mail/send-management-notification', { method: 'POST', body: JSON.stringify(data || {}) }),
+
   // Trợ lý AI Linh vật
   aiChat: (data) => request('/ai/chat', { method: 'POST', body: JSON.stringify(data) }),
 
@@ -132,7 +141,20 @@ export const api = {
   getSuperAdminPlans: () => request('/super-admin/plans'),
   saveSuperAdminPlan: (data) => request('/super-admin/plans', { method: 'POST', body: JSON.stringify(data) }),
   deleteSuperAdminPlan: (id) => request(`/super-admin/plans/${id}`, { method: 'DELETE' }),
-  getSuperAdminOrders: () => request('/super-admin/revenue-orders'),
+  getSuperAdminOrders: (params) => {
+    const qs = params?.status ? `?status=${params.status}` : '';
+    return request(`/super-admin/revenue-orders${qs}`);
+  },
   createSuperAdminOrder: (data) => request('/super-admin/orders', { method: 'POST', body: JSON.stringify(data) }),
+  approveSuperAdminOrder: (id) => request(`/super-admin/orders/${id}/approve`, { method: 'PUT' }),
+  cancelSuperAdminOrder: (id, data) => request(`/super-admin/orders/${id}/cancel`, { method: 'PUT', body: JSON.stringify(data || {}) }),
+
+  // Super Admin: Phát Thư Gói Dịch Vụ & Thông Báo Nền Tảng (notifications@omniassets.ryug.id.vn)
+  getSuperAdminAnnouncementRecipients: () => request('/super-admin/announcements/recipients'),
+  broadcastSuperAdminAnnouncement: (data) => request('/super-admin/announcements/broadcast', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Super Admin: Hòm Thư Yêu Cầu Hỗ Trợ (Tickets - support@omniassets.ryug.id.vn)
+  getSuperAdminSupportTickets: () => request('/super-admin/support-tickets'),
+  replySuperAdminSupportTicket: (data) => request('/super-admin/support-tickets/reply', { method: 'POST', body: JSON.stringify(data) }),
 };
 
