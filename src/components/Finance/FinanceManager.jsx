@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -50,6 +50,66 @@ export function FinanceManager({
   const canView = hasPermission(currentUser, companySettings, 'finance_view') || userRole !== 'STAFF';
   const canCreate = hasPermission(currentUser, companySettings, 'finance_create') || userRole === 'ADMIN' || userRole === 'MANAGER';
   const canExport = hasPermission(currentUser, companySettings, 'finance_export') || userRole === 'ADMIN' || userRole === 'MANAGER';
+
+  // Tập hợp các năm có dữ liệu thu chi thực tế
+  const availableYears = useMemo(() => {
+    const yearSet = new Set();
+    const currentYear = new Date().getFullYear();
+    yearSet.add(currentYear);
+    financeList.forEach((item) => {
+      if (item.date) {
+        const y = parseInt(item.date.slice(0, 4), 10);
+        if (y && !isNaN(y)) yearSet.add(y);
+      }
+    });
+    return Array.from(yearSet).sort((a, b) => b - a);
+  }, [financeList]);
+
+  // Năm đang được chọn để vẽ biểu đồ 12 tháng (mặc định lấy năm mới nhất có dữ liệu)
+  const [selectedYear, setSelectedYear] = useState(() => {
+    if (financeList.length > 0) {
+      const dates = financeList.map((f) => f.date).filter(Boolean).sort().reverse();
+      if (dates.length > 0) {
+        const y = parseInt(dates[0].slice(0, 4), 10);
+        if (y && !isNaN(y)) return y;
+      }
+    }
+    return new Date().getFullYear();
+  });
+
+  useEffect(() => {
+    if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
+      setSelectedYear(availableYears[0]);
+    }
+  }, [availableYears, selectedYear]);
+
+  // Dữ liệu biểu đồ 12 tháng (T1 -> T12) được tính toán CHUẨN XÁC 100% từ financeList thực tế
+  const chartData = useMemo(() => {
+    const months = Array.from({ length: 12 }, (_, i) => ({
+      month: `T${i + 1}`,
+      revenue: 0,
+      expense: 0,
+      profit: 0
+    }));
+
+    financeList.forEach((item) => {
+      if (!item.date) return;
+      const parts = item.date.split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      if (y === selectedYear && m >= 1 && m <= 12) {
+        const amt = Number(item.amount) || 0;
+        if (item.type === 'REVENUE') {
+          months[m - 1].revenue += amt;
+        } else if (item.type === 'EXPENSE') {
+          months[m - 1].expense += amt;
+        }
+        months[m - 1].profit = months[m - 1].revenue - months[m - 1].expense;
+      }
+    });
+
+    return months;
+  }, [financeList, selectedYear]);
 
   useEffect(() => {
     api.getCategories('FINANCE_CATEGORY')
@@ -245,12 +305,36 @@ export function FinanceManager({
 
       {/* Monthly Bar Comparison Chart */}
       <div className="bg-white p-6 rounded-3xl border border-pastel-200/80 shadow-soft">
-        <h3 className="text-sm font-bold text-slate-800 mb-4 tracking-tight">
-          So Sánh Doanh Thu & Chi Phí Theo Các Tháng Trong Năm (VNĐ)
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 tracking-tight">
+              So Sánh Doanh Thu & Chi Phí Theo Các Tháng Trong Năm {selectedYear} (VNĐ)
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Dữ liệu đối soát thực tế từ sổ thu chi ({financeList.filter((f) => f.date?.startsWith(String(selectedYear))).length} giao dịch năm {selectedYear})
+            </p>
+          </div>
+          {availableYears.length > 1 && (
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Năm tài chính:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="px-2.5 py-1 text-xs font-bold bg-pastel-50/70 border border-pastel-200 text-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-pastel-400 cursor-pointer shadow-xs"
+              >
+                {availableYears.map((yr) => (
+                  <option key={yr} value={yr}>
+                    Năm {yr}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={monthlyData?.monthlyData || []}>
+            <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
               <XAxis dataKey="month" stroke="#94A3B8" fontSize={11} tickLine={false} />
               <YAxis
@@ -278,9 +362,17 @@ export function FinanceManager({
 
       {/* Transaction List: Mobile Cards + Desktop Table */}
       <div className="space-y-3">
-        <div className="bg-white p-4 rounded-2xl border border-pastel-200/80 shadow-xs flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-800">Sổ Nhật Ký Thu Chi</h3>
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+        <div className="bg-white p-4 rounded-2xl border border-pastel-200/80 shadow-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 shrink-0">
+            <h3 className="text-sm sm:text-base font-bold text-slate-800 tracking-tight whitespace-nowrap">
+              Sổ Nhật Ký Thu Chi
+            </h3>
+            <span className="text-xs text-slate-400 font-medium whitespace-nowrap hidden sm:inline">
+              ({filteredList.length} giao dịch)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none shrink-0">
             {[
               { id: 'ALL', label: 'Tất cả' },
               { id: 'REVENUE', label: 'Khoản Thu' },
@@ -289,10 +381,11 @@ export function FinanceManager({
               <button
                 key={t.id}
                 onClick={() => setTypeFilter(t.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${typeFilter === t.id
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                  typeFilter === t.id
                     ? 'bg-pastel-500 text-white shadow-soft'
                     : 'text-slate-600 hover:bg-pastel-50'
-                  }`}
+                }`}
               >
                 {t.label}
               </button>

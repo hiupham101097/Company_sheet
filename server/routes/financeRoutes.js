@@ -17,43 +17,40 @@ router.get('/', async (req, res) => {
 router.get('/monthly-summary', async (req, res) => {
   try {
     const list = await db.getCollection('finance');
+    const urlYear = req.query.year;
+
+    let targetYear = urlYear ? parseInt(urlYear, 10) : null;
+    if (!targetYear || isNaN(targetYear)) {
+      const years = list
+        .map((item) => (item.date ? parseInt(item.date.slice(0, 4), 10) : null))
+        .filter((y) => y && !isNaN(y));
+      targetYear = years.length > 0 ? Math.max(...years) : new Date().getFullYear();
+    }
 
     // Nhóm theo Năm-Tháng (YYYY-MM)
     const summaryMap = {};
     for (let i = 1; i <= 12; i++) {
-      const monthKey = `2024-${String(i).padStart(2, '0')}`;
+      const monthKey = `${targetYear}-${String(i).padStart(2, '0')}`;
       summaryMap[monthKey] = { month: `T${i}`, revenue: 0, expense: 0, profit: 0 };
     }
 
-    // Một số dữ liệu mẫu tăng trưởng nếu ít giao dịch
-    const sampleTrend = [
-      { m: '2024-01', rev: 95000000, exp: 40000000 },
-      { m: '2024-02', rev: 110000000, exp: 45000000 },
-      { m: '2024-03', rev: 135000000, exp: 52000000 },
-      { m: '2024-04', rev: 160000000, exp: 58000000 },
-      { m: '2024-05', rev: 145000000, exp: 62000000 },
-      { m: '2024-06', rev: 170000000, exp: 46500000 },
-    ];
-    sampleTrend.forEach(s => {
-      if (summaryMap[s.m]) {
-        summaryMap[s.m].revenue = s.rev;
-        summaryMap[s.m].expense = s.exp;
-        summaryMap[s.m].profit = s.rev - s.exp;
+    list.forEach((item) => {
+      if (!item.date) return;
+      const ym = item.date.slice(0, 7);
+      const itemYear = parseInt(ym.slice(0, 4), 10);
+      if (itemYear === targetYear) {
+        if (!summaryMap[ym]) {
+          const mNum = parseInt(ym.slice(5, 7), 10) || 1;
+          summaryMap[ym] = { month: `T${mNum}`, revenue: 0, expense: 0, profit: 0 };
+        }
+        const amt = Number(item.amount) || 0;
+        if (item.type === 'REVENUE') {
+          summaryMap[ym].revenue += amt;
+        } else if (item.type === 'EXPENSE') {
+          summaryMap[ym].expense += amt;
+        }
+        summaryMap[ym].profit = summaryMap[ym].revenue - summaryMap[ym].expense;
       }
-    });
-
-    list.forEach(item => {
-      const ym = item.date ? item.date.slice(0, 7) : '2024-06';
-      if (!summaryMap[ym]) {
-        const monthNum = ym.split('-')[1] || '06';
-        summaryMap[ym] = { month: `T${parseInt(monthNum, 10)}`, revenue: 0, expense: 0, profit: 0 };
-      }
-      if (item.type === 'REVENUE') {
-        summaryMap[ym].revenue += item.amount;
-      } else if (item.type === 'EXPENSE') {
-        summaryMap[ym].expense += item.amount;
-      }
-      summaryMap[ym].profit = summaryMap[ym].revenue - summaryMap[ym].expense;
     });
 
     const monthlyData = Object.values(summaryMap);
