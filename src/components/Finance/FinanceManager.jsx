@@ -362,17 +362,23 @@ export function FinanceManager({
 
       {/* Transaction List: Mobile Cards + Desktop Table */}
       <div className="space-y-3">
-        <div className="bg-white p-4 rounded-2xl border border-pastel-200/80 shadow-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 shrink-0">
-            <h3 className="text-sm sm:text-base font-bold text-slate-800 tracking-tight whitespace-nowrap">
+        <div className="w-full bg-white p-4 rounded-2xl border border-pastel-200/80 shadow-xs flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 shrink-0" style={{ minWidth: 'max-content' }}>
+            <h3
+              className="text-base font-bold text-slate-800 tracking-tight"
+              style={{ whiteSpace: 'nowrap', wordBreak: 'keep-all' }}
+            >
               Sổ Nhật Ký Thu Chi
             </h3>
-            <span className="text-xs text-slate-400 font-medium whitespace-nowrap hidden sm:inline">
+            <span className="text-xs text-slate-400 font-medium hidden sm:inline" style={{ whiteSpace: 'nowrap' }}>
               ({filteredList.length} giao dịch)
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none shrink-0">
+          <div
+            className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none shrink-0"
+            style={{ marginLeft: 'auto' }}
+          >
             {[
               { id: 'ALL', label: 'Tất cả' },
               { id: 'REVENUE', label: 'Khoản Thu' },
@@ -381,7 +387,7 @@ export function FinanceManager({
               <button
                 key={t.id}
                 onClick={() => setTypeFilter(t.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                   typeFilter === t.id
                     ? 'bg-pastel-500 text-white shadow-soft'
                     : 'text-slate-600 hover:bg-pastel-50'

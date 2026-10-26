@@ -6060,7 +6060,9 @@ app.notFound(async (c) => {
       if (contentType.includes('text/html') || path === '/' || path === '/index.html') {
         const headers = new Headers(assetRes.headers);
         headers.set('Content-Type', 'text/html; charset=utf-8');
-        headers.set('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+        headers.set('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0, s-maxage=0');
+        headers.set('CDN-Cache-Control', 'no-store');
+        headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
         headers.set('Pragma', 'no-cache');
         headers.set('Expires', '0');
         return new Response(assetRes.body, { status: assetRes.status, headers });
@@ -6075,7 +6077,9 @@ app.notFound(async (c) => {
     if (indexRes.status === 200) {
       const headers = new Headers(indexRes.headers);
       headers.set('Content-Type', 'text/html; charset=utf-8');
-      headers.set('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+      headers.set('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0, s-maxage=0');
+      headers.set('CDN-Cache-Control', 'no-store');
+      headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
       headers.set('Pragma', 'no-cache');
       headers.set('Expires', '0');
       return new Response(indexRes.body, { status: 200, headers });
