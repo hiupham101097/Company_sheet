@@ -21,7 +21,8 @@ import {
   Receipt,
   BarChart3,
   Megaphone,
-  HelpCircle
+  HelpCircle,
+  PhoneCall
 } from 'lucide-react';
 import { getBrandDisplayName } from '../../utils/brandHelper';
 import { canAccessTab } from '../../utils/permissionHelper';
@@ -330,7 +331,7 @@ export function Sidebar({
         </div>
 
         {/* User Personal Profile Quick Button */}
-        <div className="p-3 border-t border-pastel-100 bg-surface-subtle/30">
+        <div className="p-3 border-t border-pastel-100 bg-surface-subtle/30 space-y-2">
           <button
             onClick={() => {
               if (onOpenProfile) onOpenProfile();
@@ -346,6 +347,26 @@ export function Sidebar({
               <p className="text-[10px] text-slate-400 truncate">Hồ sơ & Đổi mật khẩu</p>
             </div>
           </button>
+
+          {/* Quick Emergency Support Bar */}
+          <div className="flex items-center justify-between p-2 rounded-xl bg-rose-50/80 border border-rose-200/80 text-rose-700 text-[11px] font-bold shadow-2xs">
+            <a
+              href="tel:0394264400"
+              className="flex items-center gap-1.5 hover:underline truncate"
+              title="Hotline khẩn cấp 24/7"
+            >
+              <PhoneCall size={12} className="text-rose-600 shrink-0" />
+              <span className="truncate">Hotline: 0394264400</span>
+            </a>
+            <a
+              href="https://zalo.me/0394264400"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[10px] bg-white text-blue-600 px-2 py-0.5 rounded-md border border-blue-200 hover:bg-blue-50 font-bold shrink-0 shadow-2xs"
+            >
+              Zalo 24/7
+            </a>
+          </div>
         </div>
       </aside>
     </>

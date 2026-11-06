@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Layout/Sidebar';
 import { Navbar } from './components/Layout/Navbar';
+import { Footer } from './components/Layout/Footer';
 import { Dashboard } from './components/Dashboard/Dashboard';
 import { AssetManager } from './components/Assets/AssetManager';
 import { FinanceManager } from './components/Finance/FinanceManager';
@@ -371,6 +372,16 @@ export default function App() {
             </>
           )}
         </main>
+
+        {/* Footer: Thông tin liên hệ & Hỗ trợ khẩn cấp 24/7 */}
+        <Footer
+          brandName={brandName}
+          companyName={companyName}
+          licenseInfo={licenseInfo}
+          onOpenUpgrade={handleOpenUpgrade}
+          onNavigate={setCurrentTab}
+          userRole={currentUser?.role || 'STAFF'}
+        />
       </div>
 
       {/* Floating AI Mascot Assistant - Chỉ hiển thị cho Doanh nghiệp (Admin, Manager, Staff). Quản trị nền tảng (SUPER_ADMIN) không cần AI */}
