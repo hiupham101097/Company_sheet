@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Crown,
@@ -1176,7 +1176,7 @@ export function UpgradeModal({
                   {/* Nút hành động */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md pt-2">
                     <a
-                      href={`https://zalo.me/0394264400?text=${encodeURIComponent(`Chào Admin, tôi vừa chuyển khoản thanh toán ${createdOrder?.plan_name} (Mã đơn: ${createdOrder?.id}, Số tiền: ${formatCurrency(createdOrder?.amount)}). Nhờ Admin kiểm tra và duyệt kích hoạt sớm giúp tôi!`)}`}
+                      href="https://zaloapp.com/qr/p/m51o2foo5wgf"
                       target="_blank"
                       rel="noreferrer"
                       className="py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-soft transition cursor-pointer"

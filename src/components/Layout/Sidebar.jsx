@@ -40,6 +40,7 @@ export function Sidebar({
   licenseInfo,
   onOpenUpgrade,
   onOpenProfile,
+  onOpenZalo,
   brandName,
   companyName
 }) {
@@ -358,14 +359,13 @@ export function Sidebar({
               <PhoneCall size={12} className="text-rose-600 shrink-0" />
               <span className="truncate">Hotline: 0394264400</span>
             </a>
-            <a
-              href="https://zalo.me/0394264400"
-              target="_blank"
-              rel="noreferrer"
-              className="text-[10px] bg-white text-blue-600 px-2 py-0.5 rounded-md border border-blue-200 hover:bg-blue-50 font-bold shrink-0 shadow-2xs"
+            <button
+              type="button"
+              onClick={onOpenZalo}
+              className="text-[10px] bg-white text-blue-600 px-2 py-0.5 rounded-md border border-blue-200 hover:bg-blue-50 font-bold shrink-0 shadow-2xs cursor-pointer"
             >
-              Zalo 24/7
-            </a>
+              Zalo QR
+            </button>
           </div>
         </div>
       </aside>

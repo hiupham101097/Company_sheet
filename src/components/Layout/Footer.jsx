@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   PhoneCall,
   Mail,
@@ -10,8 +10,10 @@ import {
   ExternalLink,
   Headphones,
   CheckCircle2,
-  Building2
+  Building2,
+  QrCode
 } from 'lucide-react';
+import { ZaloSupportModal } from '../Common/ZaloSupportModal';
 
 export function Footer({
   brandName,
@@ -19,13 +21,22 @@ export function Footer({
   licenseInfo,
   onOpenUpgrade,
   onNavigate,
+  onOpenZalo,
   userRole = 'STAFF'
 }) {
+  const [internalZaloOpen, setInternalZaloOpen] = useState(false);
+  const handleOpenZaloModal = () => {
+    if (onOpenZalo) {
+      onOpenZalo();
+    } else {
+      setInternalZaloOpen(true);
+    }
+  };
+
   const currentYear = new Date().getFullYear();
   const hotline = '0394264400';
   const hotlineNumberOnly = '0394264400';
   const supportEmail = 'support@omniassets.ryug.id.vn';
-  const zaloUrl = `https://zalo.me/${hotlineNumberOnly}`;
 
   return (
     <footer className="mt-auto border-t border-pastel-200/90 bg-gradient-to-b from-white via-pastel-50/30 to-pastel-100/40 text-slate-600 transition-all">
@@ -90,21 +101,21 @@ export function Footer({
                 </span>
               </a>
 
-              <a
-                href={zaloUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between p-2.5 rounded-xl bg-blue-50/70 hover:bg-blue-100/80 border border-blue-200/80 text-blue-700 transition group"
-                title="Nhắn tin Zalo hỗ trợ"
+              <button
+                type="button"
+                onClick={handleOpenZaloModal}
+                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-blue-50/70 hover:bg-blue-100/80 border border-blue-200/80 text-blue-700 transition group cursor-pointer"
+                title="Quét mã QR Zalo kết bạn và hỗ trợ 24/7"
               >
                 <div className="flex items-center gap-2">
                   <MessageCircle size={15} className="text-blue-600 group-hover:scale-110 transition-transform" />
                   <span className="text-xs font-bold">Zalo Hỗ Trợ 24/7</span>
                 </div>
-                <span className="text-[10px] font-semibold bg-white text-blue-700 px-2 py-0.5 rounded-md border border-blue-200 shadow-2xs">
-                  Chat Zalo
+                <span className="text-[10px] font-semibold bg-white text-blue-700 px-2 py-0.5 rounded-md border border-blue-200 shadow-2xs flex items-center gap-1">
+                  <QrCode size={11} />
+                  <span>Quét QR</span>
                 </span>
-              </a>
+              </button>
             </div>
           </div>
 
@@ -222,15 +233,14 @@ export function Footer({
               <span>Khẩn cấp: {hotline}</span>
             </a>
             <span className="text-slate-300">•</span>
-            <a
-              href={zaloUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="hover:text-blue-600 transition flex items-center gap-1"
+            <button
+              type="button"
+              onClick={handleOpenZaloModal}
+              className="hover:text-blue-600 transition flex items-center gap-1 cursor-pointer"
             >
               <MessageCircle size={12} />
-              <span>Zalo 24/7</span>
-            </a>
+              <span>Zalo QR 24/7</span>
+            </button>
             <span className="text-slate-300">•</span>
             <a
               href={`mailto:${supportEmail}`}
@@ -242,6 +252,12 @@ export function Footer({
           </div>
         </div>
       </div>
+
+      {/* Zalo QR Support Modal */}
+      <ZaloSupportModal
+        isOpen={internalZaloOpen}
+        onClose={() => setInternalZaloOpen(false)}
+      />
     </footer>
   );
 }

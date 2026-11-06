@@ -16,6 +16,7 @@ import { UpgradeModal } from './components/License/UpgradeModal';
 import { Login } from './components/Auth/Login';
 import { SuperAdminPortal } from './components/SuperAdmin/SuperAdminPortal';
 import { ProfileModal } from './components/Profile/ProfileModal';
+import { ZaloSupportModal } from './components/Common/ZaloSupportModal';
 import { getTabFromPath, syncTabToUrlAndSeo } from './utils/seoRoutes';
 import { getBrandDisplayName } from './utils/brandHelper';
 import { api } from './services/api';
@@ -60,6 +61,7 @@ export default function App() {
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [upgradeTriggerReason, setUpgradeTriggerReason] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isZaloModalOpen, setIsZaloModalOpen] = useState(false);
 
   const handleOpenUpgrade = (reason = '') => {
     setUpgradeTriggerReason(reason);
@@ -218,6 +220,7 @@ export default function App() {
         licenseInfo={licenseInfo}
         onOpenUpgrade={handleOpenUpgrade}
         onOpenProfile={() => setIsProfileModalOpen(true)}
+        onOpenZalo={() => setIsZaloModalOpen(true)}
         brandName={brandName}
         companyName={companyName}
       />
@@ -380,6 +383,7 @@ export default function App() {
           licenseInfo={licenseInfo}
           onOpenUpgrade={handleOpenUpgrade}
           onNavigate={setCurrentTab}
+          onOpenZalo={() => setIsZaloModalOpen(true)}
           userRole={currentUser?.role || 'STAFF'}
         />
       </div>
@@ -417,6 +421,12 @@ export default function App() {
           setCurrentUser(updatedUser);
           loadAllData();
         }}
+      />
+
+      {/* Zalo Support QR Modal */}
+      <ZaloSupportModal
+        isOpen={isZaloModalOpen}
+        onClose={() => setIsZaloModalOpen(false)}
       />
     </div>
   );
