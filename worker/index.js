@@ -2911,7 +2911,7 @@ app.post('/api/attendance/check', async (c) => {
 
 app.get('/api/attendance/summary', async (c) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
     const { companyId, isSuperAdmin } = await getTenantContext(c);
 
     let usersQuery = 'SELECT count(*) as count FROM users WHERE company_id = ?';

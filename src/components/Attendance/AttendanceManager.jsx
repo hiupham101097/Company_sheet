@@ -44,15 +44,22 @@ export function AttendanceManager({
   // Navigation sub-tab: 'DAILY' (Điểm danh & Nhật ký) vs 'ACCOUNTING' (Thống kê từng cá nhân cho Kế toán)
   const [activeSubTab, setActiveSubTab] = useState(canViewAll ? 'ACCOUNTING' : 'DAILY');
 
+  // Chuẩn hóa ngày và tháng hiện tại theo giờ Việt Nam (Asia/Ho_Chi_Minh)
+  const todayStr = useMemo(() => {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+  }, []);
+  const currentMonthKey = useMemo(() => todayStr.slice(0, 7), [todayStr]);
+
   // Daily check-in terminal state
   const [selectedUser, setSelectedUser] = useState(users[0]?.id || 'usr_1');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState('');
   const [categoriesDept, setCategoriesDept] = useState([]);
+  const [dailyLogFilter, setDailyLogFilter] = useState('TODAY'); // 'TODAY' | 'MONTH' | 'ALL'
 
-  // Accounting filter state
-  const [selectedMonth, setSelectedMonth] = useState('ALL');
+  // Accounting filter state - MẶC ĐỊNH LÀ THÁNG HIỆN TẠI (tính độc lập từng kỳ, không cộng dồn tháng cũ)
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [searchEmployee, setSearchEmployee] = useState('');
   const [detailUser, setDetailUser] = useState(null); // Selected user for deep-dive timesheet modal
@@ -67,7 +74,7 @@ export function AttendanceManager({
       return;
     }
 
-    const monthTarget = selectedMonth === 'ALL' ? new Date().toISOString().slice(0, 7) : selectedMonth;
+    const monthTarget = selectedMonth === 'ALL' ? currentMonthKey : selectedMonth;
     const confirmSend = window.confirm(
       `Gửi phiếu báo cáo công tháng ${monthTarget} đến email: ${item.user.email} (${item.user.name})?`
     );
@@ -145,25 +152,34 @@ export function AttendanceManager({
     ABSENT: { label: 'Vắng mặt', variant: 'danger', dot: 'bg-rose-500' },
   };
 
-  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
   const selectedUserTodayRecord = attendanceList.find(
     (att) => att.user_id === selectedUser && att.date === todayStr
   );
   const isCheckedIn = !!selectedUserTodayRecord?.check_in;
   const isCheckedOut = !!selectedUserTodayRecord?.check_out;
 
-  // Extract distinct available months from attendanceList
+  // Extract distinct available months from attendanceList (luôn đảm bảo có kỳ hiện tại)
   const availableMonths = useMemo(() => {
     const months = new Set();
+    months.add(currentMonthKey);
     attendanceList.forEach((att) => {
       if (att.date && att.date.length >= 7) {
         months.add(att.date.slice(0, 7));
       }
     });
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    months.add(currentMonth);
     return Array.from(months).sort().reverse();
-  }, [attendanceList]);
+  }, [attendanceList, currentMonthKey]);
+
+  // Bộ lọc danh sách điểm danh hàng ngày
+  const displayedDailyList = useMemo(() => {
+    if (dailyLogFilter === 'TODAY') {
+      return attendanceList.filter((att) => att.date === todayStr);
+    }
+    if (dailyLogFilter === 'MONTH') {
+      return attendanceList.filter((att) => att.date && att.date.startsWith(currentMonthKey));
+    }
+    return attendanceList;
+  }, [attendanceList, dailyLogFilter, todayStr, currentMonthKey]);
 
   useEffect(() => {
     api.getCategories('DEPARTMENT')
@@ -310,7 +326,8 @@ export function AttendanceManager({
 
   // Xuất file Excel nhật ký ngày thông thường
   const handleExportDailyExcel = () => {
-    const exportData = attendanceList.map((att) => ({
+    const listToExport = displayedDailyList.length > 0 ? displayedDailyList : attendanceList;
+    const exportData = listToExport.map((att) => ({
       'Ngày': formatDateVN(att.date),
       'Mã nhân viên': att.user_id,
       'Họ và tên': att.user_name,
@@ -321,7 +338,7 @@ export function AttendanceManager({
       'Trạng thái': statusMap[att.status]?.label || att.status,
       'Ghi chú': att.notes || ''
     }));
-    exportToExcel(exportData, 'Nhat_Ky_Diem_Danh_Hang_Ngay', 'Nhật Ký');
+    exportToExcel(exportData, `Nhat_Ky_Diem_Danh_${dailyLogFilter}`, 'Nhật Ký');
   };
 
   // Xuất bảng chấm công từng ngày trong tháng (1/10 - 31/10) chuyên nghiệp cho Kế toán
@@ -335,7 +352,7 @@ export function AttendanceManager({
     const targetMonth =
       selectedMonth !== 'ALL'
         ? selectedMonth
-        : (availableMonths[0] || new Date().toISOString().slice(0, 7));
+        : (availableMonths[0] || currentMonthKey);
 
     const [yearStr, monthStr] = targetMonth.split('-');
     const year = parseInt(yearStr, 10);
@@ -647,9 +664,14 @@ export function AttendanceManager({
           {/* Accounting KPI Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-pastel-200/90 shadow-soft card-hover">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                Nhân Sự Tính Công
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+                  Nhân Sự Tính Công
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700">
+                  {selectedMonth === 'ALL' ? 'Tất cả' : `T${selectedMonth.slice(5, 7)}`}
+                </span>
+              </div>
               <h3 className="text-2xl font-bold text-slate-800 mt-2">
                 {accountingAggregates.totalStaffCount} nhân viên
               </h3>
@@ -657,9 +679,14 @@ export function AttendanceManager({
             </div>
 
             <div className="bg-white p-5 rounded-2xl border border-pastel-200/90 shadow-soft card-hover">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                Tổng Giờ Công Toàn Doanh Nghiệp
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+                  Tổng Giờ Công Doanh Nghiệp
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700">
+                  {selectedMonth === 'ALL' ? 'Tất cả' : `T${selectedMonth.slice(5, 7)}`}
+                </span>
+              </div>
               <h3 className="text-2xl font-bold text-indigo-600 mt-2">
                 {accountingAggregates.totalCompanyHours} giờ
               </h3>
@@ -669,9 +696,14 @@ export function AttendanceManager({
             </div>
 
             <div className="bg-white p-5 rounded-2xl border border-pastel-200/90 shadow-soft card-hover">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                Tổng Ngày Có Mặt Làm Việc
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+                  Tổng Ngày Có Mặt Làm Việc
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700">
+                  {selectedMonth === 'ALL' ? 'Tất cả' : `T${selectedMonth.slice(5, 7)}`}
+                </span>
+              </div>
               <h3 className="text-2xl font-bold text-emerald-600 mt-2">
                 {accountingAggregates.totalCompanyDays} lượt
               </h3>
@@ -681,9 +713,14 @@ export function AttendanceManager({
             </div>
 
             <div className="bg-white p-5 rounded-2xl border border-pastel-200/90 shadow-soft card-hover">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                Cảnh Báo Đi Muộn / Kỷ Luật
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+                  Cảnh Báo Đi Muộn / Kỷ Luật
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700">
+                  {selectedMonth === 'ALL' ? 'Tất cả' : `T${selectedMonth.slice(5, 7)}`}
+                </span>
+              </div>
               <h3 className="text-2xl font-bold text-amber-600 mt-2">
                 {accountingAggregates.totalLateIncidents} lần
               </h3>
@@ -698,19 +735,19 @@ export function AttendanceManager({
               <div className="flex flex-wrap items-center gap-2.5">
                 {/* Month Picker */}
                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-                  <Calendar size={14} className="text-slate-400 shrink-0" />
+                  <Calendar size={14} className="text-pastel-600 shrink-0" />
                   <span className="font-semibold text-slate-600">Kỳ chấm công:</span>
                   <select
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
                     className="bg-transparent font-bold text-pastel-700 focus:outline-none cursor-pointer"
                   >
-                    <option value="ALL">Toàn bộ thời gian</option>
                     {availableMonths.map((m) => (
                       <option key={m} value={m}>
-                        Tháng {m.slice(5, 7)}/{m.slice(0, 4)}
+                        Tháng {m.slice(5, 7)}/{m.slice(0, 4)} {m === currentMonthKey ? '(Tháng này)' : ''}
                       </option>
                     ))}
+                    <option value="ALL">Toàn bộ thời gian (Lũy kế)</option>
                   </select>
                 </div>
 
@@ -753,7 +790,7 @@ export function AttendanceManager({
               <div className="flex items-center gap-2">
                 <FileSpreadsheet size={18} className="text-pastel-600" />
                 <h3 className="text-sm font-bold text-slate-800">
-                  Bảng Tổng Hợp Ngày Công & Giờ Làm Nhân Sự Cho Kế Toán
+                  Bảng Tổng Hợp Công Nhân Sự — {selectedMonth === 'ALL' ? 'Lũy Kế Toàn Bộ Thời Gian' : `Tháng ${selectedMonth.slice(5, 7)}/${selectedMonth.slice(0, 4)}`}
                 </h3>
               </div>
               <div className="flex items-center gap-2">
@@ -1120,10 +1157,47 @@ export function AttendanceManager({
 
           {/* Attendance History Table Card */}
           <div className="bg-white rounded-3xl border border-pastel-200/80 shadow-soft overflow-hidden">
-            <div className="p-4 sm:p-5 border-b border-pastel-100 flex items-center justify-between bg-pastel-50/40">
-              <h3 className="text-sm font-bold text-slate-800">Nhật Ký Điểm Danh Gần Đây</h3>
-              <span className="text-xs text-pastel-700 font-semibold bg-pastel-100 px-3 py-1 rounded-full">
-                Hôm nay: {new Date().toLocaleDateString('vi-VN')}
+            <div className="p-4 sm:p-5 border-b border-pastel-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-pastel-50/40">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h3 className="text-sm font-bold text-slate-800">Nhật Ký Điểm Danh</h3>
+                <div className="flex items-center bg-white rounded-xl p-0.5 border border-slate-200 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setDailyLogFilter('TODAY')}
+                    className={`px-3 py-1 rounded-lg transition-colors ${
+                      dailyLogFilter === 'TODAY'
+                        ? 'bg-pastel-600 text-white shadow-xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Hôm nay ({attendanceList.filter((a) => a.date === todayStr).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDailyLogFilter('MONTH')}
+                    className={`px-3 py-1 rounded-lg transition-colors ${
+                      dailyLogFilter === 'MONTH'
+                        ? 'bg-pastel-600 text-white shadow-xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Tháng này ({attendanceList.filter((a) => a.date && a.date.startsWith(currentMonthKey)).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDailyLogFilter('ALL')}
+                    className={`px-3 py-1 rounded-lg transition-colors ${
+                      dailyLogFilter === 'ALL'
+                        ? 'bg-pastel-600 text-white shadow-xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Tất cả ({attendanceList.length})
+                  </button>
+                </div>
+              </div>
+              <span className="text-xs text-pastel-700 font-semibold bg-pastel-100 px-3 py-1 rounded-full self-start sm:self-auto">
+                Hôm nay: {formatDateVN(todayStr)}
               </span>
             </div>
 
@@ -1143,14 +1217,18 @@ export function AttendanceManager({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {attendanceList.length === 0 ? (
+                  {displayedDailyList.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-slate-400">
-                        Chưa có lượt điểm danh nào được ghi nhận hôm nay.
+                        {dailyLogFilter === 'TODAY'
+                          ? `Chưa có lượt điểm danh nào được ghi nhận hôm nay (${formatDateVN(todayStr)}).`
+                          : dailyLogFilter === 'MONTH'
+                            ? `Chưa có lượt điểm danh nào trong tháng này (Tháng ${currentMonthKey.slice(5, 7)}/${currentMonthKey.slice(0, 4)}).`
+                            : 'Chưa có lượt điểm danh nào.'}
                       </td>
                     </tr>
                   ) : (
-                    attendanceList.map((att) => {
+                    displayedDailyList.map((att) => {
                       const st = statusMap[att.status] || { label: att.status, variant: 'default' };
                       return (
                         <tr key={att.id} className="hover:bg-pastel-50/40 transition-colors">
@@ -1203,7 +1281,7 @@ export function AttendanceManager({
         <Modal
           isOpen={!!detailUser}
           onClose={() => setDetailUser(null)}
-          title={`Chi Tiết Bảng Công Nhân Sự: ${detailUser.user.name}`}
+          title={`Chi Tiết Bảng Công: ${detailUser.user.name} — ${selectedMonth === 'ALL' ? 'Lũy Kế Toàn Bộ Thời Gian' : `Tháng ${selectedMonth.slice(5, 7)}/${selectedMonth.slice(0, 4)}`}`}
           maxWidth="max-w-3xl"
         >
           <div className="space-y-5 text-xs">
@@ -1283,7 +1361,7 @@ export function AttendanceManager({
             {/* Records Log Table for this User */}
             <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
               <div className="p-3 bg-slate-50 font-bold text-slate-700 border-b border-slate-200 flex items-center justify-between">
-                <span>Nhật Ký Các Ngày Điểm Danh Trong Kỳ</span>
+                <span>Nhật Ký Điểm Danh Trong {selectedMonth === 'ALL' ? 'Toàn Bộ Thời Gian' : `Tháng ${selectedMonth.slice(5, 7)}/${selectedMonth.slice(0, 4)}`}</span>
                 <span className="font-normal text-slate-400 text-[11px]">
                   Tổng {detailUser.records.length} bản ghi
                 </span>
