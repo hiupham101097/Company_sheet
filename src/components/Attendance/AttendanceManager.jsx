@@ -331,6 +331,33 @@ export function AttendanceManager({
       const earlyLeaveDays = userRecords.filter((r) => r.status === 'EARLY_LEAVE').length;
       const missingCheckoutDays = userRecords.filter((r) => r.check_in && !r.check_out && r.date < todayStr).length;
 
+      // Tính số ca tăng ca (OT) và số giờ tăng ca (sau 17:30 hoặc ca trên 8 tiếng hoặc ghi chú có OT/tăng ca)
+      let overtimeCount = 0;
+      let overtimeHours = 0;
+      userRecords.forEach((r) => {
+        if (!r.check_out) return;
+        const [outH, outM] = r.check_out.includes(':') ? r.check_out.split(':').map(Number) : [17, 30];
+        const outMinutes = outH * 60 + outM;
+        const stdEndMinutes = 17 * 60 + 30; // 17:30
+        const isAfterHours = outMinutes > stdEndMinutes;
+        const isHoursOver8 = Number(r.total_hours) > 8.0;
+        const hasOtNote = r.notes && (r.notes.toLowerCase().includes('tăng ca') || r.notes.toLowerCase().includes('ot'));
+
+        if (isAfterHours || isHoursOver8 || hasOtNote) {
+          overtimeCount++;
+          let otH = 0;
+          if (isAfterHours) {
+            otH = (outMinutes - stdEndMinutes) / 60;
+          } else if (isHoursOver8) {
+            otH = Number(r.total_hours) - 8.0;
+          }
+          if (otH > 0) {
+            overtimeHours += otH;
+          }
+        }
+      });
+      overtimeHours = Math.round(overtimeHours * 10) / 10;
+
       // Punctuality rate % (Tỷ lệ chuyên cần đúng giờ)
       const punctualityRate = totalDaysWorked > 0 ? Math.round((onTimeDays / totalDaysWorked) * 100) : 0;
 
@@ -344,6 +371,8 @@ export function AttendanceManager({
         lateDays,
         earlyLeaveDays,
         missingCheckoutDays,
+        overtimeCount,
+        overtimeHours,
         punctualityRate
       };
     });
@@ -384,6 +413,10 @@ export function AttendanceManager({
     ) / 10;
     const totalLateIncidents = filteredEmployeeTimesheets.reduce((sum, item) => sum + item.lateDays, 0);
     const totalMissingCheckouts = filteredEmployeeTimesheets.reduce((sum, item) => sum + item.missingCheckoutDays, 0);
+    const totalOvertimeCount = filteredEmployeeTimesheets.reduce((sum, item) => sum + item.overtimeCount, 0);
+    const totalOvertimeHours = Math.round(
+      filteredEmployeeTimesheets.reduce((sum, item) => sum + item.overtimeHours, 0) * 10
+    ) / 10;
     const avgPunctuality = totalStaffCount > 0
       ? Math.round(filteredEmployeeTimesheets.reduce((sum, item) => sum + item.punctualityRate, 0) / totalStaffCount)
       : 100;
@@ -395,6 +428,8 @@ export function AttendanceManager({
       totalCompanyStandardDays,
       totalLateIncidents,
       totalMissingCheckouts,
+      totalOvertimeCount,
+      totalOvertimeHours,
       avgPunctuality
     };
   }, [filteredEmployeeTimesheets]);
@@ -581,6 +616,9 @@ export function AttendanceManager({
       row['Số Công Chuẩn (h/8)'] = standardDays;
       row['Số Lần Đi Trễ (Lần)'] = lateCount;
       row['Số Lần Về Sớm (Lần)'] = earlyLeaveCount;
+      row['Số Lần Quên Ra Ca (Lần)'] = item.missingCheckoutDays;
+      row['Số Lần Tăng Ca (Lần)'] = item.overtimeCount;
+      row['Tổng Giờ Tăng Ca OT (Giờ)'] = item.overtimeHours;
       row['Tỷ Lệ Chuyên Cần (%)'] = `${punctualityRate}%`;
       row['Đánh Giá Kế Toán'] =
         lateCount === 0 && daysWorkedCount > 0
@@ -626,6 +664,9 @@ export function AttendanceManager({
         'Đúng Giờ (Ngày)': onTime,
         'Số Lần Đi Trễ (Lần)': late,
         'Số Lần Về Sớm (Lần)': early,
+        'Số Lần Quên Ra Ca (Lần)': item.missingCheckoutDays,
+        'Số Lần Tăng Ca (Lần)': item.overtimeCount,
+        'Tổng Giờ Tăng Ca OT (Giờ)': item.overtimeHours,
         'Tỷ Lệ Đúng Giờ (%)': `${pRate}%`,
         'Xếp Loại Kế Toán':
           late === 0 && daysWorked > 0
@@ -971,7 +1012,7 @@ export function AttendanceManager({
             )}
 
             <div className="w-full overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '950px' }}>
+              <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '1050px' }}>
                 <thead className="bg-slate-50/80 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
                   <tr>
                     <th className="py-3.5 px-4 font-bold whitespace-nowrap">Nhân Viên</th>
@@ -983,6 +1024,8 @@ export function AttendanceManager({
                     </th>
                     <th className="py-3.5 px-4 font-bold whitespace-nowrap text-center">Đúng Giờ</th>
                     <th className="py-3.5 px-4 font-bold whitespace-nowrap text-center">Đi Muộn</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap text-center text-rose-700 bg-rose-50/50">Quên Ra Ca</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap text-center text-indigo-700 bg-indigo-50/50">Tăng Ca (OT)</th>
                     <th className="py-3.5 px-4 font-bold whitespace-nowrap text-center">Chuyên Cần</th>
                     <th className="py-3.5 px-4 font-bold text-center whitespace-nowrap">Thao Tác</th>
                   </tr>
@@ -990,7 +1033,7 @@ export function AttendanceManager({
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {filteredEmployeeTimesheets.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-slate-400">
+                      <td colSpan={11} className="py-12 text-center text-slate-400">
                         Không tìm thấy nhân viên nào phù hợp với bộ lọc.
                       </td>
                     </tr>
@@ -1048,28 +1091,51 @@ export function AttendanceManager({
                           {item.onTimeDays}
                         </td>
 
-                        {/* Đi Muộn & Thiếu Giờ Ra */}
+                        {/* Đi Muộn */}
                         <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                          <div className="flex flex-col items-center gap-1">
-                            {item.lateDays > 0 ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[11px] border border-amber-200">
-                                <AlertCircle size={11} className="text-amber-600" />
-                                <span>{item.lateDays} lần trễ</span>
+                          {item.lateDays > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-xs border border-amber-200">
+                              <AlertCircle size={11} className="text-amber-600" />
+                              <span>{item.lateDays} lần</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-xs">0</span>
+                          )}
+                        </td>
+
+                        {/* Quên Ra Ca (Thiếu Check-out) */}
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap bg-rose-50/20">
+                          {item.missingCheckoutDays > 0 ? (
+                            <button
+                              onClick={() => setDetailUser(item)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs border border-rose-300 transition-colors shadow-xs"
+                              title="Bấm để mở bảng công và bổ sung giờ ra ca hoặc chốt ca"
+                            >
+                              <AlertTriangle size={12} className="text-rose-600" />
+                              <span>{item.missingCheckoutDays} lần</span>
+                            </button>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-xs font-semibold">0</span>
+                          )}
+                        </td>
+
+                        {/* Số Lần Tăng Ca (OT) */}
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap bg-indigo-50/20">
+                          {item.overtimeCount > 0 ? (
+                            <div className="inline-flex flex-col items-center">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold text-xs border border-indigo-200 shadow-xs">
+                                <Clock size={11} className="text-indigo-600" />
+                                <span>{item.overtimeCount} lần</span>
                               </span>
-                            ) : (
-                              <span className="text-slate-400 font-mono text-xs">0 trễ</span>
-                            )}
-                            {item.missingCheckoutDays > 0 && (
-                              <button
-                                onClick={() => setDetailUser(item)}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[10px] border border-rose-300 transition-colors"
-                                title="Bấm xem chi tiết để bổ sung giờ ra ca hoặc duyệt tăng ca"
-                              >
-                                <AlertTriangle size={10} className="text-rose-600" />
-                                <span>{item.missingCheckoutDays} thiếu giờ ra</span>
-                              </button>
-                            )}
-                          </div>
+                              {item.overtimeHours > 0 && (
+                                <span className="text-[10px] font-bold text-indigo-700 font-mono mt-0.5">
+                                  +{item.overtimeHours}h OT
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-xs font-semibold">0</span>
+                          )}
                         </td>
 
                         {/* Chuyên Cần */}
@@ -1502,7 +1568,7 @@ export function AttendanceManager({
             </div>
 
             {/* Quick KPI Stat Chips */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
               <div className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs text-center">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                   Số Ngày Đi Làm
@@ -1543,17 +1609,35 @@ export function AttendanceManager({
                 </span>
               </div>
 
-              <div className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs text-center col-span-2 sm:col-span-4 lg:col-span-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Thiếu Giờ Ra
+              <div className="p-3 bg-rose-50/60 rounded-xl border border-rose-200/70 shadow-xs text-center">
+                <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">
+                  Quên Ra Ca
                 </span>
                 <span
                   className={`text-lg font-bold font-mono mt-0.5 block ${
-                    detailUser.missingCheckoutDays > 0 ? 'text-rose-600 font-bold' : 'text-emerald-600'
+                    detailUser.missingCheckoutDays > 0 ? 'text-rose-600 font-bold' : 'text-slate-400'
                   }`}
                 >
-                  {detailUser.missingCheckoutDays > 0 ? `${detailUser.missingCheckoutDays} ca` : '0'}
+                  {detailUser.missingCheckoutDays > 0 ? `${detailUser.missingCheckoutDays} lần` : '0'}
                 </span>
+              </div>
+
+              <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-200/70 shadow-xs text-center">
+                <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block">
+                  Tăng Ca (OT)
+                </span>
+                <span
+                  className={`text-lg font-bold font-mono mt-0.5 block ${
+                    detailUser.overtimeCount > 0 ? 'text-indigo-700 font-bold' : 'text-slate-400'
+                  }`}
+                >
+                  {detailUser.overtimeCount > 0 ? `${detailUser.overtimeCount} lần` : '0'}
+                </span>
+                {detailUser.overtimeHours > 0 && (
+                  <span className="text-[10px] font-bold text-indigo-600 font-mono block">
+                    +{detailUser.overtimeHours}h OT
+                  </span>
+                )}
               </div>
             </div>
 
