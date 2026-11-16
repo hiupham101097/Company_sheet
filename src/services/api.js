@@ -101,6 +101,7 @@ export const api = {
   getAttendance: () => request('/attendance'),
   getAttendanceSummary: () => request('/attendance/summary'),
   checkAttendance: (data) => request('/attendance/check', { method: 'POST', body: JSON.stringify(data) }),
+  updateAttendance: (id, data) => request(`/attendance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // Người dùng
   getUsers: () => request('/users'),

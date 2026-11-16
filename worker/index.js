@@ -2909,6 +2909,68 @@ app.post('/api/attendance/check', async (c) => {
   }
 });
 
+// Cập nhật bản ghi chấm công (bổ sung giờ ra, duyệt tăng ca OT, chốt ca quên checkout)
+app.put('/api/attendance/:id', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const { companyId, isSuperAdmin } = await getTenantContext(c);
+    const body = await c.req.json().catch(() => ({}));
+    let { check_in, check_out, total_hours, notes, status } = body;
+
+    let query = 'SELECT * FROM attendance WHERE id = ? AND company_id = ?';
+    let params = [id, companyId];
+    if (isSuperAdmin && companyId === 'ALL') {
+      query = 'SELECT * FROM attendance WHERE id = ?';
+      params = [id];
+    }
+    const existing = await c.env.DB.prepare(query).bind(...params).first();
+    if (!existing) {
+      return c.json({ success: false, message: 'Không tìm thấy bản ghi chấm công cần cập nhật' }, 404);
+    }
+
+    const finalCheckIn = check_in !== undefined ? check_in : existing.check_in;
+    const finalCheckOut = check_out !== undefined ? check_out : existing.check_out;
+
+    // Tự động tính số giờ làm nếu có đủ check_in và check_out mà total_hours chưa có
+    let finalHours = total_hours;
+    if ((finalHours === undefined || finalHours === null) && finalCheckIn && finalCheckOut) {
+      const [inH, inM] = finalCheckIn.includes(':') ? finalCheckIn.split(':').map(Number) : [8, 30];
+      const [outH, outM] = finalCheckOut.includes(':') ? finalCheckOut.split(':').map(Number) : [17, 30];
+      const totalMinutes = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
+      finalHours = Number((totalMinutes / 60).toFixed(1));
+    } else if (finalHours === undefined || finalHours === null) {
+      finalHours = existing.total_hours || 0;
+    } else {
+      finalHours = Number(finalHours);
+    }
+
+    const finalNotes = notes !== undefined ? notes : existing.notes;
+    let finalStatus = status !== undefined ? status : existing.status;
+    if (!finalStatus) finalStatus = existing.status || 'ON_TIME';
+
+    await c.env.DB.prepare(`
+      UPDATE attendance
+      SET check_in = ?, check_out = ?, total_hours = ?, notes = ?, status = ?
+      WHERE id = ?
+    `).bind(finalCheckIn, finalCheckOut, finalHours, finalNotes, finalStatus, id).run();
+
+    return c.json({
+      success: true,
+      message: 'Cập nhật bản ghi chấm công thành công!',
+      data: {
+        id,
+        check_in: finalCheckIn,
+        check_out: finalCheckOut,
+        total_hours: finalHours,
+        notes: finalNotes,
+        status: finalStatus
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, message: err.message || 'Lỗi cập nhật chấm công' }, 500);
+  }
+});
+
 app.get('/api/attendance/summary', async (c) => {
   try {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());

@@ -100,6 +100,46 @@ router.post('/check', async (req, res) => {
   }
 });
 
+// Cập nhật bản ghi chấm công (bổ sung giờ ra, duyệt tăng ca, chốt ca quên checkout)
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { check_in, check_out, total_hours, notes, status } = req.body;
+    const attendances = await db.getCollection('attendance');
+    const existing = attendances.find((a) => a.id === id);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy bản ghi chấm công' });
+    }
+
+    const finalCheckIn = check_in !== undefined ? check_in : existing.check_in;
+    const finalCheckOut = check_out !== undefined ? check_out : existing.check_out;
+
+    let finalHours = total_hours;
+    if ((finalHours === undefined || finalHours === null) && finalCheckIn && finalCheckOut) {
+      const [inH, inM] = finalCheckIn.includes(':') ? finalCheckIn.split(':').map(Number) : [8, 30];
+      const [outH, outM] = finalCheckOut.includes(':') ? finalCheckOut.split(':').map(Number) : [17, 30];
+      const totalMinutes = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
+      finalHours = Number((totalMinutes / 60).toFixed(1));
+    } else if (finalHours === undefined || finalHours === null) {
+      finalHours = existing.total_hours || 0;
+    } else {
+      finalHours = Number(finalHours);
+    }
+
+    const updated = await db.update('attendance', id, {
+      check_in: finalCheckIn,
+      check_out: finalCheckOut,
+      total_hours: finalHours,
+      notes: notes !== undefined ? notes : existing.notes,
+      status: status !== undefined ? status : existing.status
+    });
+
+    res.json({ success: true, message: 'Cập nhật chấm công thành công', data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Thống kê chấm công tháng
 router.get('/summary', async (req, res) => {
   try {

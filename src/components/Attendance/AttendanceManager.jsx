@@ -6,6 +6,8 @@ import {
   UserCheck,
   FileSpreadsheet,
   AlertCircle,
+  AlertTriangle,
+  Edit3,
   Timer,
   Users,
   Search,
@@ -40,6 +42,7 @@ export function AttendanceManager({
   const canCheckin = hasPermission(currentUser, companySettings, 'attendance_checkin') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
   const canViewAll = hasPermission(currentUser, companySettings, 'attendance_view_all') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
   const canSendTimesheet = hasPermission(currentUser, companySettings, 'attendance_send_timesheet') || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canEditAttendance = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'MANAGER' || hasPermission(currentUser, companySettings, 'attendance_edit');
 
   // Navigation sub-tab: 'DAILY' (Điểm danh & Nhật ký) vs 'ACCOUNTING' (Thống kê từng cá nhân cho Kế toán)
   const [activeSubTab, setActiveSubTab] = useState(canViewAll ? 'ACCOUNTING' : 'DAILY');
@@ -63,6 +66,100 @@ export function AttendanceManager({
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [searchEmployee, setSearchEmployee] = useState('');
   const [detailUser, setDetailUser] = useState(null); // Selected user for deep-dive timesheet modal
+
+  // State modal bổ sung / sửa giờ ra ca & duyệt tăng ca OT
+  const [resolveModalRecord, setResolveModalRecord] = useState(null);
+  const [resolveCheckOutTime, setResolveCheckOutTime] = useState('17:30');
+  const [resolveNotes, setResolveNotes] = useState('');
+  const [isSubmittingResolve, setIsSubmittingResolve] = useState(false);
+
+  const handleOpenResolveModal = (record) => {
+    setResolveModalRecord(record);
+    setResolveCheckOutTime(record.check_out || '17:30');
+    setResolveNotes(record.notes || '');
+  };
+
+  const handleQuickResolveStandard = async (record) => {
+    const confirmQuick = window.confirm(
+      `Xác nhận chốt giờ ra chuẩn 17:30 (8.0 giờ công) cho nhân viên "${record.user_name || 'này'}" ngày ${formatDateVN(record.date)}?`
+    );
+    if (!confirmQuick) return;
+
+    try {
+      setLoading(true);
+      const [inH, inM] = (record.check_in || '08:30').split(':').map(Number);
+      const totalMin = Math.max(0, (17 * 60 + 30) - (inH * 60 + inM));
+      const hours = Number((totalMin / 60).toFixed(1));
+      const appendNote = record.notes ? `${record.notes} - Chốt ca 17:30` : 'Bổ sung giờ ra 17:30 (Quên bấm tan ca)';
+
+      const res = await api.updateAttendance(record.id, {
+        check_out: '17:30',
+        total_hours: hours,
+        notes: appendNote
+      });
+
+      if (res.success) {
+        setEmailFeedback({
+          type: 'success',
+          text: `Đã chốt giờ ra 17:30 thành công cho ${record.user_name} (${hours}h)!`
+        });
+        setTimeout(() => setEmailFeedback(null), 4000);
+        if (onRefresh) onRefresh();
+      } else {
+        alert(res.message || 'Lỗi cập nhật');
+      }
+    } catch (err) {
+      alert(err.message || 'Lỗi khi chốt giờ ra');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveResolveModal = async (e) => {
+    if (e) e.preventDefault();
+    if (!resolveModalRecord || !resolveCheckOutTime) return;
+
+    try {
+      setIsSubmittingResolve(true);
+      const [inH, inM] = (resolveModalRecord.check_in || '08:30').split(':').map(Number);
+      const [outH, outM] = resolveCheckOutTime.split(':').map(Number);
+      const totalMin = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
+      const hours = Number((totalMin / 60).toFixed(1));
+
+      // Tính giờ OT nếu tan ca sau 17:30
+      const stdEndMin = 17 * 60 + 30;
+      const curOutMin = outH * 60 + outM;
+      const otMin = Math.max(0, curOutMin - stdEndMin);
+      const otHours = otMin > 0 ? Number((otMin / 60).toFixed(1)) : 0;
+
+      let finalNote = resolveNotes.trim();
+      if (otHours > 0 && !finalNote.includes('OT') && !finalNote.includes('tăng ca') && !finalNote.includes('Tăng ca')) {
+        finalNote = finalNote ? `${finalNote} (Tăng ca ${otHours}h)` : `Tăng ca ${otHours}h sau 17:30`;
+      }
+
+      const res = await api.updateAttendance(resolveModalRecord.id, {
+        check_out: resolveCheckOutTime,
+        total_hours: hours,
+        notes: finalNote
+      });
+
+      if (res.success) {
+        setEmailFeedback({
+          type: 'success',
+          text: `Đã cập nhật giờ ra ${resolveCheckOutTime} cho ${resolveModalRecord.user_name} thành công (${hours}h${otHours > 0 ? ` • Có ${otHours}h tăng ca OT` : ''})!`
+        });
+        setTimeout(() => setEmailFeedback(null), 5000);
+        setResolveModalRecord(null);
+        if (onRefresh) onRefresh();
+      } else {
+        alert(res.message || 'Lỗi khi cập nhật giờ ra ca');
+      }
+    } catch (err) {
+      alert(err.message || 'Lỗi cập nhật');
+    } finally {
+      setIsSubmittingResolve(false);
+    }
+  };
 
   // Email timesheet state
   const [sendingEmailUserId, setSendingEmailUserId] = useState(null);
@@ -150,6 +247,17 @@ export function AttendanceManager({
     LATE: { label: 'Đi muộn', variant: 'warning', dot: 'bg-amber-500' },
     EARLY_LEAVE: { label: 'Về sớm', variant: 'info', dot: 'bg-sky-500' },
     ABSENT: { label: 'Vắng mặt', variant: 'danger', dot: 'bg-rose-500' },
+    MISSING_OUT: { label: 'Thiếu giờ ra', variant: 'warning', dot: 'bg-amber-500' },
+  };
+
+  const getRecordStatus = (r) => {
+    if (r.check_in && !r.check_out && r.date < todayStr) {
+      return { label: 'Thiếu giờ ra', variant: 'warning', dot: 'bg-amber-500', isMissingOut: true };
+    }
+    if (r.check_in && !r.check_out && r.date === todayStr) {
+      return { label: 'Đang trong ca', variant: 'info', dot: 'bg-sky-500', isPending: true };
+    }
+    return statusMap[r.status] || { label: r.status, variant: 'default', dot: 'bg-slate-400' };
   };
 
   const selectedUserTodayRecord = attendanceList.find(
@@ -221,6 +329,7 @@ export function AttendanceManager({
       const onTimeDays = userRecords.filter((r) => r.status === 'ON_TIME').length;
       const lateDays = userRecords.filter((r) => r.status === 'LATE').length;
       const earlyLeaveDays = userRecords.filter((r) => r.status === 'EARLY_LEAVE').length;
+      const missingCheckoutDays = userRecords.filter((r) => r.check_in && !r.check_out && r.date < todayStr).length;
 
       // Punctuality rate % (Tỷ lệ chuyên cần đúng giờ)
       const punctualityRate = totalDaysWorked > 0 ? Math.round((onTimeDays / totalDaysWorked) * 100) : 0;
@@ -234,10 +343,19 @@ export function AttendanceManager({
         onTimeDays,
         lateDays,
         earlyLeaveDays,
+        missingCheckoutDays,
         punctualityRate
       };
     });
-  }, [users, attendanceList, selectedMonth]);
+  }, [users, attendanceList, selectedMonth, todayStr]);
+
+  // Đồng bộ lại detailUser khi attendanceList hoặc employeeTimesheets thay đổi
+  useEffect(() => {
+    if (detailUser) {
+      const refreshed = employeeTimesheets.find((t) => t.user.id === detailUser.user.id);
+      if (refreshed) setDetailUser(refreshed);
+    }
+  }, [employeeTimesheets]);
 
   // Filter employee timesheets by department and search query
   const filteredEmployeeTimesheets = useMemo(() => {
@@ -265,6 +383,7 @@ export function AttendanceManager({
       filteredEmployeeTimesheets.reduce((sum, item) => sum + item.standardWorkDays, 0) * 10
     ) / 10;
     const totalLateIncidents = filteredEmployeeTimesheets.reduce((sum, item) => sum + item.lateDays, 0);
+    const totalMissingCheckouts = filteredEmployeeTimesheets.reduce((sum, item) => sum + item.missingCheckoutDays, 0);
     const avgPunctuality = totalStaffCount > 0
       ? Math.round(filteredEmployeeTimesheets.reduce((sum, item) => sum + item.punctualityRate, 0) / totalStaffCount)
       : 100;
@@ -275,6 +394,7 @@ export function AttendanceManager({
       totalCompanyHours,
       totalCompanyStandardDays,
       totalLateIncidents,
+      totalMissingCheckouts,
       avgPunctuality
     };
   }, [filteredEmployeeTimesheets]);
@@ -715,16 +835,31 @@ export function AttendanceManager({
             <div className="bg-white p-5 rounded-2xl border border-pastel-200/90 shadow-soft card-hover">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                  Cảnh Báo Đi Muộn / Kỷ Luật
+                  Cảnh Báo Quên Ra / Đi Muộn
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700">
                   {selectedMonth === 'ALL' ? 'Tất cả' : `T${selectedMonth.slice(5, 7)}`}
                 </span>
               </div>
-              <h3 className="text-2xl font-bold text-amber-600 mt-2">
-                {accountingAggregates.totalLateIncidents} lần
+              <h3 className="text-2xl font-bold mt-2">
+                {accountingAggregates.totalMissingCheckouts > 0 ? (
+                  <span className="text-rose-600 font-bold">
+                    {accountingAggregates.totalMissingCheckouts} quên ra
+                  </span>
+                ) : (
+                  <span className="text-emerald-600 font-bold">0 quên ra</span>
+                )}
+                <span className="text-xs font-normal text-slate-400 ml-2">
+                  • {accountingAggregates.totalLateIncidents} trễ
+                </span>
               </h3>
-              <p className="text-xs text-slate-400 mt-1">Căn cứ trừ thưởng chuyên cần</p>
+              <p className="text-xs font-medium mt-1">
+                {accountingAggregates.totalMissingCheckouts > 0 ? (
+                  <span className="text-rose-500 font-semibold">Cần chốt giờ ra hoặc duyệt tăng ca OT</span>
+                ) : (
+                  <span className="text-slate-400">Không có ca thiếu giờ ra ca</span>
+                )}
+              </p>
             </div>
           </div>
 
@@ -913,16 +1048,28 @@ export function AttendanceManager({
                           {item.onTimeDays}
                         </td>
 
-                        {/* Đi Muộn */}
+                        {/* Đi Muộn & Thiếu Giờ Ra */}
                         <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                          {item.lateDays > 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[11px] border border-amber-200">
-                              <AlertCircle size={11} className="text-amber-600" />
-                              <span>{item.lateDays} lần</span>
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 font-mono">0</span>
-                          )}
+                          <div className="flex flex-col items-center gap-1">
+                            {item.lateDays > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[11px] border border-amber-200">
+                                <AlertCircle size={11} className="text-amber-600" />
+                                <span>{item.lateDays} lần trễ</span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-mono text-xs">0 trễ</span>
+                            )}
+                            {item.missingCheckoutDays > 0 && (
+                              <button
+                                onClick={() => setDetailUser(item)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[10px] border border-rose-300 transition-colors"
+                                title="Bấm xem chi tiết để bổ sung giờ ra ca hoặc duyệt tăng ca"
+                              >
+                                <AlertTriangle size={10} className="text-rose-600" />
+                                <span>{item.missingCheckoutDays} thiếu giờ ra</span>
+                              </button>
+                            )}
+                          </div>
                         </td>
 
                         {/* Chuyên Cần */}
@@ -1203,7 +1350,7 @@ export function AttendanceManager({
 
             {/* Desktop View: Full Table */}
             <div className="w-full overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '850px' }}>
+              <table className="w-full text-left text-xs text-slate-600" style={{ minWidth: '920px' }}>
                 <thead className="bg-pastel-50/70 text-slate-700 font-bold uppercase text-[11px] tracking-wider border-b border-pastel-100">
                   <tr>
                     <th className="py-3.5 px-4 font-bold whitespace-nowrap">Ngày</th>
@@ -1214,12 +1361,13 @@ export function AttendanceManager({
                     <th className="py-3.5 px-4 font-bold whitespace-nowrap text-center">Tổng Giờ Làm</th>
                     <th className="py-3.5 px-4 font-bold whitespace-nowrap">Trạng Thái</th>
                     <th className="py-3.5 px-4 font-bold">Ghi Chú</th>
+                    <th className="py-3.5 px-4 font-bold whitespace-nowrap text-right">Thao Tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {displayedDailyList.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                      <td colSpan={9} className="py-12 text-center text-slate-400">
                         {dailyLogFilter === 'TODAY'
                           ? `Chưa có lượt điểm danh nào được ghi nhận hôm nay (${formatDateVN(todayStr)}).`
                           : dailyLogFilter === 'MONTH'
@@ -1229,7 +1377,7 @@ export function AttendanceManager({
                     </tr>
                   ) : (
                     displayedDailyList.map((att) => {
-                      const st = statusMap[att.status] || { label: att.status, variant: 'default' };
+                      const st = getRecordStatus(att);
                       return (
                         <tr key={att.id} className="hover:bg-pastel-50/40 transition-colors">
                           <td className="py-3.5 px-4 font-mono text-slate-600 font-medium whitespace-nowrap">
@@ -1244,13 +1392,29 @@ export function AttendanceManager({
                           <td className="py-3.5 px-4 font-mono font-bold text-pastel-700 whitespace-nowrap">
                             {att.check_in || '--:--'}
                           </td>
-                          <td className="py-3.5 px-4 font-mono font-bold text-slate-600 whitespace-nowrap">
-                            {att.check_out || '--:--'}
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {att.check_out ? (
+                              <span className="font-mono font-bold text-slate-700">{att.check_out}</span>
+                            ) : att.date < todayStr ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold text-[11px] border border-amber-200">
+                                <AlertTriangle size={11} className="text-amber-500" />
+                                <span>Quên ra ca</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 font-medium text-[11px] border border-sky-200">
+                                <Clock size={11} className="text-sky-500" />
+                                <span>Đang trong ca</span>
+                              </span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 font-bold text-slate-700 text-center whitespace-nowrap">
                             {att.total_hours > 0 ? (
                               <span className="px-2 py-0.5 rounded-md bg-pastel-100 text-pastel-800 text-[11px] whitespace-nowrap font-mono">
                                 {att.total_hours}h
+                              </span>
+                            ) : att.check_in && !att.check_out && att.date < todayStr ? (
+                              <span className="text-[11px] font-semibold text-rose-500">
+                                0h (Chờ chốt)
                               </span>
                             ) : (
                               '-'
@@ -1263,6 +1427,28 @@ export function AttendanceManager({
                             </Badge>
                           </td>
                           <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">{att.notes || '-'}</td>
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            {canEditAttendance && (
+                              <div className="flex items-center justify-end gap-1.5">
+                                {!att.check_out && (
+                                  <button
+                                    onClick={() => handleQuickResolveStandard(att)}
+                                    className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold shadow-xs transition-colors"
+                                    title="Chốt nhanh ca chuẩn 17:30 (8.0 giờ công)"
+                                  >
+                                    Chốt 17:30
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleOpenResolveModal(att)}
+                                  className="px-2.5 py-1 rounded-lg bg-pastel-50 hover:bg-pastel-100 text-pastel-700 border border-pastel-200 text-[11px] font-bold shadow-xs transition-colors"
+                                  title="Bổ sung giờ ra ca hoặc duyệt tăng ca (OT)"
+                                >
+                                  {att.check_out ? 'Sửa giờ ra' : 'Bổ sung giờ ra / OT'}
+                                </button>
+                              </div>
+                            )}
+                          </td>
                         </tr>
                       );
                     })
@@ -1316,7 +1502,7 @@ export function AttendanceManager({
             </div>
 
             {/* Quick KPI Stat Chips */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
               <div className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs text-center">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                   Số Ngày Đi Làm
@@ -1356,6 +1542,19 @@ export function AttendanceManager({
                   {detailUser.lateDays} lần
                 </span>
               </div>
+
+              <div className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs text-center col-span-2 sm:col-span-4 lg:col-span-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Thiếu Giờ Ra
+                </span>
+                <span
+                  className={`text-lg font-bold font-mono mt-0.5 block ${
+                    detailUser.missingCheckoutDays > 0 ? 'text-rose-600 font-bold' : 'text-emerald-600'
+                  }`}
+                >
+                  {detailUser.missingCheckoutDays > 0 ? `${detailUser.missingCheckoutDays} ca` : '0'}
+                </span>
+              </div>
             </div>
 
             {/* Records Log Table for this User */}
@@ -1377,18 +1576,19 @@ export function AttendanceManager({
                       <th className="py-2.5 px-3 text-center">Số Giờ</th>
                       <th className="py-2.5 px-3">Trạng Thái</th>
                       <th className="py-2.5 px-3">Ghi Chú</th>
+                      <th className="py-2.5 px-3 text-right">Thao Tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {detailUser.records.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400">
+                        <td colSpan={7} className="py-8 text-center text-slate-400">
                           Chưa có lịch sử chấm công nào trong kỳ này.
                         </td>
                       </tr>
                     ) : (
                       detailUser.records.map((r) => {
-                        const st = statusMap[r.status] || { label: r.status, variant: 'default' };
+                        const st = getRecordStatus(r);
                         return (
                           <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
                             <td className="py-2.5 px-3 font-mono font-medium text-slate-700">
@@ -1397,11 +1597,29 @@ export function AttendanceManager({
                             <td className="py-2.5 px-3 font-mono font-bold text-pastel-700">
                               {r.check_in || '--:--'}
                             </td>
-                            <td className="py-2.5 px-3 font-mono font-bold text-slate-600">
-                              {r.check_out || '--:--'}
+                            <td className="py-2.5 px-3 whitespace-nowrap">
+                              {r.check_out ? (
+                                <span className="font-mono font-bold text-slate-700">{r.check_out}</span>
+                              ) : r.date < todayStr ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold text-[10px] border border-amber-200">
+                                  <AlertTriangle size={10} className="text-amber-500" />
+                                  <span>Chưa chấm ra</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 font-medium text-[10px] border border-sky-200">
+                                  <Clock size={10} className="text-sky-500" />
+                                  <span>Đang trong ca</span>
+                                </span>
+                              )}
                             </td>
-                            <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-800">
-                              {r.total_hours > 0 ? `${r.total_hours}h` : '-'}
+                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                              {r.total_hours > 0 ? (
+                                <span className="font-mono font-bold text-slate-800">{r.total_hours}h</span>
+                              ) : r.check_in && !r.check_out && r.date < todayStr ? (
+                                <span className="text-[10px] font-semibold text-rose-500">0h (Chờ chốt)</span>
+                              ) : (
+                                '-'
+                              )}
                             </td>
                             <td className="py-2.5 px-3">
                               <Badge variant={st.variant} className="gap-1 text-[10px] py-0.5">
@@ -1410,6 +1628,28 @@ export function AttendanceManager({
                               </Badge>
                             </td>
                             <td className="py-2.5 px-3 text-slate-500 truncate max-w-xs">{r.notes || '-'}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                              {canEditAttendance && (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {!r.check_out && (
+                                    <button
+                                      onClick={() => handleQuickResolveStandard(r)}
+                                      className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] font-bold shadow-xs transition-colors"
+                                      title="Chốt nhanh ca chuẩn 17:30 (8.0 giờ công)"
+                                    >
+                                      Chốt 17:30
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleOpenResolveModal(r)}
+                                    className="px-2 py-1 rounded-lg bg-pastel-50 hover:bg-pastel-100 text-pastel-700 border border-pastel-200 text-[10px] font-bold shadow-xs transition-colors"
+                                    title="Bổ sung giờ ra hoặc duyệt tăng ca (OT)"
+                                  >
+                                    {r.check_out ? 'Sửa' : 'Bổ sung giờ ra / OT'}
+                                  </button>
+                                </div>
+                              )}
+                            </td>
                           </tr>
                         );
                       })
@@ -1448,6 +1688,162 @@ export function AttendanceManager({
               </button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: BỔ SUNG GIỜ RA / DUYỆT TĂNG CA (OVERTIME) */}
+      {/* ======================================================== */}
+      {resolveModalRecord && (
+        <Modal
+          isOpen={!!resolveModalRecord}
+          onClose={() => setResolveModalRecord(null)}
+          title={`Bổ Sung Giờ Ra / Xác Nhận Tăng Ca: ${resolveModalRecord.user_name || 'Nhân sự'}`}
+          maxWidth="max-w-md"
+        >
+          <form onSubmit={handleSaveResolveModal} className="space-y-4 text-xs">
+            <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/90 text-amber-900 space-y-1.5">
+              <div className="flex items-center gap-2 font-bold text-amber-800">
+                <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                <span>Bổ sung giờ ra cho ngày {formatDateVN(resolveModalRecord.date)}</span>
+              </div>
+              <p className="text-[11px] text-amber-700 leading-relaxed">
+                Nhân viên đã vào ca lúc <strong>{resolveModalRecord.check_in || '08:30'}</strong>. Vui lòng nhập giờ tan ca thực tế hoặc chọn mức tăng ca (OT) để hệ thống tự động tính đủ công và quyền lợi.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-slate-700 font-bold text-xs">
+                Giờ Tan Ca Thực Tế (Giờ ra) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="time"
+                required
+                value={resolveCheckOutTime}
+                onChange={(e) => setResolveCheckOutTime(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pastel-400 font-mono font-bold text-slate-800 text-sm shadow-xs"
+              />
+
+              {/* Quick Preset Buttons */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-slate-400 font-semibold">Chọn nhanh:</span>
+                <button
+                  type="button"
+                  onClick={() => setResolveCheckOutTime('17:30')}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all ${
+                    resolveCheckOutTime === '17:30'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  17:30 (Chuẩn)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResolveCheckOutTime('19:00')}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all ${
+                    resolveCheckOutTime === '19:00'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  19:00 (+1.5h OT)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResolveCheckOutTime('20:00')}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all ${
+                    resolveCheckOutTime === '20:00'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  20:00 (+2.5h OT)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResolveCheckOutTime('21:00')}
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all ${
+                    resolveCheckOutTime === '21:00'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  21:00 (+3.5h OT)
+                </button>
+              </div>
+            </div>
+
+            {/* Live Calculation Preview Card */}
+            {(() => {
+              const [inH, inM] = (resolveModalRecord.check_in || '08:30').split(':').map(Number);
+              const [outH, outM] = (resolveCheckOutTime || '17:30').split(':').map(Number);
+              const totalMin = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
+              const totalHours = Number((totalMin / 60).toFixed(1));
+              const stdDays = Number((totalHours / 8).toFixed(1));
+              const otMin = Math.max(0, (outH * 60 + outM) - (17 * 60 + 30));
+              const otHours = otMin > 0 ? Number((otMin / 60).toFixed(1)) : 0;
+
+              return (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/90 grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-semibold uppercase">Tổng Giờ Làm</span>
+                    <span className="text-sm font-bold text-slate-800 font-mono mt-0.5 block">{totalHours}h</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-semibold uppercase">Quy Đổi Công</span>
+                    <span className="text-sm font-bold text-indigo-700 font-mono mt-0.5 block">{stdDays} công</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-semibold uppercase">Giờ Tăng Ca (OT)</span>
+                    <span className={`text-sm font-bold font-mono mt-0.5 block ${otHours > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {otHours > 0 ? `+${otHours}h` : '0h'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="space-y-1.5">
+              <label className="block text-slate-700 font-bold text-xs">
+                Lý Do / Ghi Chú Tăng Ca (Tùy chọn)
+              </label>
+              <input
+                type="text"
+                placeholder="Ví dụ: Tăng ca dự án, hoàn thành hợp đồng gấp..."
+                value={resolveNotes}
+                onChange={(e) => setResolveNotes(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pastel-400 text-slate-800 text-xs shadow-xs"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setResolveModalRecord(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmittingResolve}
+                className="px-5 py-2 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-soft transition-all disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isSubmittingResolve ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Đang lưu...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={14} />
+                    <span>Lưu Giờ Ra & Tính Công</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>
